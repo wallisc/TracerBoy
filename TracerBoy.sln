@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2046
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TracerBoy", "TracerBoy\TracerBoy.vcxproj", "{32B71B8B-05B2-4031-B851-99105CE7CEBB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF} = {96C26196-C35E-49C8-928F-4CB9AB83E8FF}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PBRTParser", "PBRTParser\PBRTParser.vcxproj", "{96C26196-C35E-49C8-928F-4CB9AB83E8FF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Debug|x64.ActiveCfg = Debug|x64
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Debug|x64.Build.0 = Debug|x64
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Debug|x86.ActiveCfg = Debug|Win32
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Debug|x86.Build.0 = Debug|Win32
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Release|x64.ActiveCfg = Release|x64
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Release|x64.Build.0 = Release|x64
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Release|x86.ActiveCfg = Release|Win32
+		{32B71B8B-05B2-4031-B851-99105CE7CEBB}.Release|x86.Build.0 = Release|Win32
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Debug|x64.ActiveCfg = Debug|x64
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Debug|x64.Build.0 = Debug|x64
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Debug|x86.ActiveCfg = Debug|Win32
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Debug|x86.Build.0 = Debug|Win32
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Release|x64.ActiveCfg = Release|x64
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Release|x64.Build.0 = Release|x64
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Release|x86.ActiveCfg = Release|Win32
+		{96C26196-C35E-49C8-928F-4CB9AB83E8FF}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {BBAF2308-99BD-43D5-B7D4-0A688A7F6EF1}
+	EndGlobalSection
+EndGlobal
