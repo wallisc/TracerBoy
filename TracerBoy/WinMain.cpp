@@ -6,7 +6,22 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	switch (message)
 	{
 	case WM_KEYDOWN:
+		{
+			TCHAR wchar = wParam;
+			if (wchar < CHAR_MAX)
+			{
+				g_pD3D12App->KeyDownEvent(wchar);
+			}
+		}
+		return 0;
 	case WM_KEYUP:
+		{
+			TCHAR wchar = wParam;
+			if (wchar < CHAR_MAX)
+			{
+				g_pD3D12App->KeyUpEvent(wchar);
+			}
+		}
 		return 0;
 	case WM_PAINT:
 		g_pD3D12App->Render();

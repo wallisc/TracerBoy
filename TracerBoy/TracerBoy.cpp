@@ -14,6 +14,13 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	m_mouseX(0),
 	m_mouseY(0)
 {
+	m_camera.Position = Vector3(0.0, 2.0, 3.5);
+	m_camera.LookAt = Vector3(0.0, 1.0, 0.0);
+	m_camera.Up = Vector3(0.0, 1.0, 0.0);
+	m_camera.Right = Vector3(1.0, 0.0, 0.0);
+	m_camera.LensHeight = 2.0;
+	m_camera.FocalDistance = 7.0;
+
 	VERIFY_HRESULT(m_pCommandQueue->GetDevice(IID_PPV_ARGS(&m_pDevice)));
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options;
@@ -377,7 +384,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 
 		SYSTEMTIME time;
 		GetSystemTime(&time);
-		float shaderConstants[] = { 0.0, 2.0, 3.5, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY)};
+		float shaderConstants[] = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY)};
 		commandList.SetGraphicsRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstants, ARRAYSIZE(shaderConstants), shaderConstants, 0);
 		commandList.SetGraphicsRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
 
@@ -458,6 +465,30 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	m_pConfigConstants->Map(0, nullptr, &pData);
 	memcpy(pData, configConstants, sizeof(configConstants));
 	m_pConfigConstants->Unmap(0, nullptr);
+}
+
+void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt)
+{
+	m_mouseX = mouseX;
+	m_mouseY = mouseY;
+
+	const float cameraMoveSpeed = 0.01;
+	if (keyboardInput['w'] || keyboardInput['W'])
+	{
+		m_camera.Position.z += dt * cameraMoveSpeed;
+	}
+	if (keyboardInput['s'] || keyboardInput['S'])
+	{
+		m_camera.Position.z += dt * cameraMoveSpeed;
+	}
+	if (keyboardInput['a'] || keyboardInput['A'])
+	{
+		m_camera.Position.x += dt * cameraMoveSpeed;
+	}
+	if (keyboardInput['D'] || keyboardInput['D'])
+	{
+		m_camera.Position.x -= dt * cameraMoveSpeed;
+	}
 }
 
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)

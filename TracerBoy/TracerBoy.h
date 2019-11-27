@@ -1,5 +1,20 @@
 #pragma once
 
+struct Vector3
+{
+	Vector3(float nX = 0.0f, float nY = 0.0f, float nZ = 0.0f) : x(nX), y(nY), z(nZ) {}
+	float x, y, z;
+};
+
+struct Camera
+{
+	Vector3 Position;
+	Vector3 LookAt;
+	Vector3 Right;
+	Vector3 Up;
+	float LensHeight;
+	float FocalDistance;
+};
 class TracerBoy
 {
 public:
@@ -7,11 +22,7 @@ public:
 	~TracerBoy() { WaitForGPUIdle(); }
 	void Render(ID3D12Resource *pBackBuffer);
 
-	void UpdateMouseInput(int x, int y)
-	{
-		m_mouseX = x;
-		m_mouseY = y;
-	}
+	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
 
 private:
 	UINT64 SignalFence();
@@ -86,4 +97,6 @@ private:
 		NumReservedViewSlots,
 		NumTotalViews = 1024
 	};
+
+	Camera m_camera;
 };

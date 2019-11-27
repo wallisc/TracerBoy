@@ -1,7 +1,8 @@
 #include "pch.h"
 
-D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine)
+D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) : m_mouseX(0), m_mouseY(0)
 {
+	ZeroMemory(m_inputArray, sizeof(m_inputArray));
 #ifdef DEBUG
 	CComPtr<ID3D12Debug> debugController;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
@@ -41,11 +42,20 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine)
 
 void D3D12App::UpdateMousePosition(int x, int y)
 {
-	m_pTracerBoy->UpdateMouseInput(x, y);
+	m_mouseX = x;
+	m_mouseY = y;
 }
 
 void D3D12App::Render()
 {
+	const bool bFirstUpdateCall = m_LastUpdateTime == std::chrono::steady_clock::time_point();
+	std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
+	float timeSinceLastUpdate = bFirstUpdateCall ? 0.0f : 
+		std::chrono::duration_cast<std::chrono::milliseconds>(m_LastUpdateTime - currentTime).count();
+	m_LastUpdateTime = std::chrono::steady_clock::now();
+
+	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate);
+
 	CComPtr<ID3D12Resource> pBackBuffer;
 	m_pSwapChain->GetBuffer(m_pSwapChain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&pBackBuffer));
 
