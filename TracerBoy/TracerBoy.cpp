@@ -450,11 +450,11 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	float configConstants[] = {
 		backBufferWidth,
 		backBufferHeight,
-		7.0f,
-		2.0f,
-		0.0f, 1.0f, 0.0f, padding, // lookAt 
-		1.0f, 0.0f, 0.0f, padding, // right
-		0.0f, 1.0f, 0.0f, padding // up
+		m_camera.FocalDistance,
+		m_camera.LensHeight,
+		m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, padding, // lookAt 
+		m_camera.Right.x, m_camera.Right.y, m_camera.Right.z, padding, // right
+		m_camera.Up.x, m_camera.Up.y, m_camera.Up.z, padding // up
 	};
 	if (!m_pConfigConstants)
 	{
