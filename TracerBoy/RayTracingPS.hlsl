@@ -1,10 +1,27 @@
 #define IS_SHADER_TOY 0
-cbuffer Constants : register(b0)
+cbuffer PerFrameConstants : register(b0)
 {
-	float2 Mouse;
-	float2 Resolution;
+	float3 CameraPosition;
 	float Time;
+	float2 Mouse;
 }
+
+cbuffer ConfigConstants : register(b1)
+{
+	float2 Resolution;
+	float FocalDistance;
+	float CameraLensHeight;
+	float3 CameraLookAt;
+	float3 CameraRight;
+	float3 CameraUp;
+}
+
+float3 GetCameraPosition() { return CameraPosition; }
+float3 GetCameraLookAt() { return CameraLookAt; }
+float3 GetCameraUp() { return CameraUp; }
+float3 GetCameraRight() { return CameraRight; }
+float GetCameraLensHeight() { return CameraLensHeight; }
+float GetCameraFocalDistance() { return FocalDistance; }
 
 Texture2D LastFrameTexture : register(t0);
 //RaytracingAccelerationStructure AS : register(t1);

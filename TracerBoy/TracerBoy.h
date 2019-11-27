@@ -17,6 +17,7 @@ private:
 	UINT64 SignalFence();
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
 	void WaitForGPUIdle();
+	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
 
 	typedef std::pair<CComPtr<ID3D12GraphicsCommandList>, CComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair);
@@ -34,6 +35,7 @@ private:
 
 	CComPtr<ID3D12Resource> m_pBottomLevelAS;
 	CComPtr<ID3D12Resource> m_pTopLevelAS;
+	CComPtr<ID3D12Resource> m_pConfigConstants;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	enum RenderTargets
@@ -47,7 +49,8 @@ private:
 
 	enum RayTracingRootSignatureParameters
 	{
-		RootConstants = 0,
+		PerFrameConstants = 0,
+		ConfigConstants,
 		LastFrameSRV,
 		AccelerationStructureRootSRV,
 		NumRayTracingParameters

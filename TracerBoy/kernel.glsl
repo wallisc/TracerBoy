@@ -21,6 +21,13 @@ vec3 GetResoultion() { return iResolution; }
 vec3 mul(vec3 v, mat3 m) { return v * m; }
 vec4 GetAccumulatedColor(vec2 uv) { return texture(iChannel0, uv); }
 vec4 GetLastFrameData() { return texture(iChannel0, vec2(0.0)); }
+
+vec3 GetCameraPosition() { return vec3(0.0, 2.0, 3.5); }
+vec3 GetCameraLookAt() { return vec3(0.0, 1.0, 0.0); }
+vec3 GetCameraUp() { return vec3(0.0, 1.0, 0.0); }
+vec3 GetCameraRight() { return vec3(1.0, 0.0, 0.0); }
+float GetCameraLensHeight() { return 2.0; }
+float GetCameraFocalDistance() { return 7.0; }
 #endif 
 
 // Rand taken from https://www.shadertoy.com/view/4sfGDB
@@ -477,23 +484,12 @@ float SpecularBTDF(
 
 struct Scene 
 {
-    CameraDescription camera;    
     BoundedPlane BoundedPlanes[numBoundedPlanes];
     Sphere Spheres[numSpheres];
 };
 
 #if IS_SHADER_TOY
-// Cornell Box
-Scene CurrentScene = Scene(
-    CameraDescription(
-        vec3(0.0, 2.0, 3.5), // position
-        vec3(0.0, 1.0, 0.0), // lookAt
-        vec3(0.0, 1.0, 0.0), // up
-        vec3(1.0, 0.0, 0.0), // right
-        2.0,                 // lensHeight
-        7.0                  // focalDistance 
-    ),
-    
+Scene CurrentScene = Scene(   
     // Scene Geometry
     BoundedPlane[numBoundedPlanes](
        BoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(10,0,0), vec3(0,0,10), FLOOR_MATERIAL_ID), // Bottom wall
@@ -547,13 +543,6 @@ Scene CurrentScene = Scene(
 GLOBAL Scene CurrentScene;
 void InitializeScene()
 {
-	CurrentScene.camera.position = vec3(0.0, 2.0, 3.5);
-	CurrentScene.camera.lookAt = vec3(0.0, 1.0, 0.0);
-	CurrentScene.camera.up = vec3(0.0, 1.0, 0.0);
-	CurrentScene.camera.right = vec3(1.0, 0.0, 0.0);
-	CurrentScene.camera.lensHeight = 2.0;
-	CurrentScene.camera.focalDistance = 7.0;
-
 	CurrentScene.BoundedPlanes[0] = NewBoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(10,0,0), vec3(0,0,10), FLOOR_MATERIAL_ID);
 	CurrentScene.BoundedPlanes[1] = NewBoundedPlane(vec3(0.0, 2.0, -0.5), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID);
 	
@@ -1333,8 +1322,8 @@ vec4 PathTrace(in vec2 pixelCoord)
     uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResoultion().xy;
     
     float aspectRatio = GetResoultion().x / GetResoultion().y ; 
-    vec3 focalPoint = CurrentScene.camera.position - CurrentScene.camera.focalDistance * normalize(CurrentScene.camera.lookAt - CurrentScene.camera.position);
-    vec3 lensPoint = CurrentScene.camera.position;
+    vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
+    vec3 lensPoint = GetCameraPosition();
     
     if(HasSceneChanged)
     {
@@ -1342,9 +1331,9 @@ vec4 PathTrace(in vec2 pixelCoord)
         accumulatedColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
     
-    float lensWidth = CurrentScene.camera.lensHeight * aspectRatio;
-    lensPoint += CurrentScene.camera.right * (uv.x * 2.0 - 1.0) * lensWidth / 2.0;
-    lensPoint += CurrentScene.camera.up * (uv.y * 2.0 - 1.0) * CurrentScene.camera.lensHeight / 2.0;
+    float lensWidth = GetCameraLensHeight() * aspectRatio;
+    lensPoint += GetCameraRight() * (uv.x * 2.0 - 1.0) * lensWidth / 2.0;
+    lensPoint += GetCameraUp() * (uv.y * 2.0 - 1.0) * GetCameraLensHeight() / 2.0;
     
     mat3 viewMatrix = GetViewMatrix(rotationFactor);
     lensPoint = mul(lensPoint, viewMatrix);
@@ -1358,8 +1347,8 @@ vec4 PathTrace(in vec2 pixelCoord)
     
     float ApertureWidth = 0.075;
     vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5)) * ApertureWidth;
-    cameraRay.origin += FocalJitter.x * CurrentScene.camera.right;
-    cameraRay.origin += FocalJitter.y * CurrentScene.camera.up;
+    cameraRay.origin += FocalJitter.x * GetCameraRight();
+    cameraRay.origin += FocalJitter.y * GetCameraUp();
     
     cameraRay.direction = normalize(FocusPoint - cameraRay.origin);
 #endif
