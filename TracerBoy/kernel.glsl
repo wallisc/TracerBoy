@@ -653,7 +653,8 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
     PrimitiveID = uint(-1);
     float intersect;
     
-    for (int i = 0; i < numSpheres; i++)
+	int i;
+    for (i = 0; i < numSpheres; i++)
     {
         vec3 sphereNormal;
         intersect = SphereIntersection(ray, CurrentScene.Spheres[i], sphereNormal);
@@ -667,7 +668,7 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
         PrimitiveIDIterator++;
     }
     
-    for (int i = 0; i < numBoundedPlanes; i++)
+    for (i = 0; i < numBoundedPlanes; i++)
     {
         intersect = BoundedPlaneIntersection(ray, CurrentScene.BoundedPlanes[i]);
         if(intersect > 0.0 && t > intersect)

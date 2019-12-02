@@ -1,10 +1,17 @@
 #pragma once
-
 struct Vector3
 {
 	Vector3(float nX = 0.0f, float nY = 0.0f, float nZ = 0.0f) : x(nX), y(nY), z(nZ) {}
 	float x, y, z;
 };
+
+inline Vector3 Cross(const Vector3& a, const Vector3& b)
+{
+	return Vector3(
+		a.y * b.z - a.z * b.y,
+		a.z * b.x - a.x * b.z,
+		a.x * b.y - a.y * b.x);
+}
 
 struct Camera
 {
@@ -15,6 +22,7 @@ struct Camera
 	float LensHeight;
 	float FocalDistance;
 };
+
 class TracerBoy
 {
 public:
@@ -23,7 +31,6 @@ public:
 	void Render(ID3D12Resource *pBackBuffer);
 
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
-
 private:
 	UINT64 SignalFence();
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
@@ -63,11 +70,22 @@ private:
 		PerFrameConstants = 0,
 		ConfigConstants,
 		LastFrameSRV,
+		OutputUAV,
 		AccelerationStructureRootSRV,
 		NumRayTracingParameters
 	};
+	
+	CComPtr<ID3D12RootSignature> m_pNullRootSignature;
+
 	CComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
 	CComPtr<ID3D12PipelineState> m_pRayTracingPSO;
+
+	CComPtr<ID3D12StateObject> m_pRayTracingStateObject;
+
+	CComPtr<ID3D12Resource> m_pRayGenShaderTable;
+	CComPtr<ID3D12Resource> m_pHitGroupShaderTable;
+	CComPtr<ID3D12Resource> m_pMissShaderTable;
+
 
 	enum PostProcessRootSignatureParameters
 	{

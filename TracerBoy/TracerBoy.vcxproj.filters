@@ -44,6 +44,9 @@
     <ClInclude Include="GLSLCompat.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="SharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="RayTracingPS.hlsl">
@@ -53,6 +56,15 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="PostProcessCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="RayGen.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Miss.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="ClosestHit.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

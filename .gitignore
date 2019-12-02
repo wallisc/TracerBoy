@@ -17,3 +17,6 @@
 *.ipdb
 *.iobj
 x64
+*.user
+*.user
+TracerBoy/TracerBoy.vcxproj.user
