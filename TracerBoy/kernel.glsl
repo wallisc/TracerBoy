@@ -28,16 +28,17 @@ vec3 GetCameraUp() { return vec3(0.0, 1.0, 0.0); }
 vec3 GetCameraRight() { return vec3(1.0, 0.0, 0.0); }
 float GetCameraLensHeight() { return 2.0; }
 float GetCameraFocalDistance() { return 7.0; }
-#endif 
 
-// Rand taken from https://www.shadertoy.com/view/4sfGDB
-GLOBAL float seed = 0.;
-float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
 struct Ray
 { 
     vec3 origin; 
     vec3 direction; 
 };
+#endif 
+
+// Rand taken from https://www.shadertoy.com/view/4sfGDB
+GLOBAL float seed = 0.;
+float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
 
 Ray NewRay(vec3 origin, vec3 direction)
 {
@@ -644,6 +645,7 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
     return direction.x * xAxis + direction.y * normal + direction.z * zAxis;
 }
 
+#if IS_SHADER_TOY
 vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
 {
     float t = 999999.0;
@@ -683,6 +685,7 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
 
     return vec2(t, materialID);
 }
+#endif
 
 float atan2(float x, float y)
 {
@@ -974,7 +977,6 @@ vec4 Trace(Ray ray)
         vec3 normal;
         uint PrimitiveID;
         vec2 result = Intersect(ray, normal, PrimitiveID);
-        
         if(i == 0)
         {
             FirstPrimitiveID = PrimitiveID;
@@ -1013,7 +1015,7 @@ vec4 Trace(Ray ray)
 
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
-              
+            
             float CurrentIOR = IsInsidePrimitve ? material.IOR : AIR_IOR;
             float NewIOR = IsInsidePrimitve ? AIR_IOR : material.IOR;
             
@@ -1062,8 +1064,8 @@ vec4 Trace(Ray ray)
             }
             
             vec3 lightPosition, lightColor;
-            GetAreaLightSample(lightPosition, lightColor);
-                
+            //GetAreaLightSample(lightPosition, lightColor);
+              lightPosition = vec3(0.0, 2.0, -0.5); lightColor = float3(0.7, 0.7, 0.7);  
                 if(IsSubsurfaceScattering(material) && !bSpecularRay)
                 {
                     // Hack required to avoid black edges on translucent spheres
@@ -1315,10 +1317,12 @@ vec4 PathTrace(in vec2 pixelCoord)
         float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
         return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
     }
-    CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
+
+    //CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
     
     seed = GetTime() + GetResoultion().y * pixelCoord.x / GetResoultion().x + pixelCoord.y / GetResoultion().y;
-    vec4 accumulatedColor = GetAccumulatedColor(uv);
+
+	vec4 accumulatedColor = GetAccumulatedColor(uv);
     // Add some jitter for anti-aliasing
     uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResoultion().xy;
     
@@ -1357,6 +1361,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay);
+	
     return vec4(accumulatedColor.rgb + result.rgb, result.w);
 }
 

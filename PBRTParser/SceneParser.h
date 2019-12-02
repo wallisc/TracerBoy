@@ -94,8 +94,8 @@ namespace SceneParser
 
     struct Vertex
     {
+		Vector3 Position;
         Vector3 Normal;
-        Vector3 Position;
         Vector3 Tangents;
         Vector2 UV;
     };

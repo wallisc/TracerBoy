@@ -45,6 +45,29 @@ float4 GetAccumulatedColor(float2 uv) {
 }
 bool NeedsToSaveLastFrameData() { return false; } // HAndled by the CPU
 
+struct Ray
+{
+	float3 origin;
+	float3 direction;
+};
+float2 Intersect(Ray ray, out float3 normal, out uint PrimitiveID)
+{
+	RayDesc dxrRay;
+	dxrRay.Origin = ray.origin;
+	dxrRay.Direction = ray.direction;
+	dxrRay.TMin = 0.001;
+	dxrRay.TMax = 10000.0;
+
+	float bigNumber = 9999.0f;
+	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, dxrRay, payload);
+
+	float2 result;
+	result.x = payload.hitT;
+	result.y = result.x < bigNumber ? 0 : -1;
+	PrimitiveID = 0;
+	return result;
+}
+
 #include "GLSLCompat.h"
 #include "kernel.glsl"
 #include "FullScreenPlaneVS.hlsl"
@@ -76,7 +99,6 @@ float4 PathTrace2(in vec2 pixelCoord)
 	ray.Direction = cameraRay.direction;
 	ray.TMin = 0.001;
 	ray.TMax = 10000.0;
-	RayPayload payload = { float2(0, 0), uint(-1) };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
 
 	return vec4(payload.barycentrics, 0, 1);

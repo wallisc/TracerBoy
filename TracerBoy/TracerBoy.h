@@ -41,10 +41,13 @@ private:
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair);
 	void ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
 
+	void InitializeLocalRootSignature();
+
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
 
-	void AllocateUploadBuffer(UINT bufferSize, CComPtr<ID3D12Resource> &pBuffer);
+	void AllocateUploadBuffer(UINT bufferSize, CComPtr<ID3D12Resource>& pBuffer);
+	void AllocateBufferWithData(void *pData, UINT dataSize, CComPtr<ID3D12Resource> &pBuffer);
 
 	CComPtr<ID3D12Device5> m_pDevice;
 	CComPtr<ID3D12CommandQueue> m_pCommandQueue;
@@ -54,6 +57,8 @@ private:
 	CComPtr<ID3D12Resource> m_pBottomLevelAS;
 	CComPtr<ID3D12Resource> m_pTopLevelAS;
 	CComPtr<ID3D12Resource> m_pConfigConstants;
+
+	std::vector<CComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	enum RenderTargets
@@ -65,6 +70,14 @@ private:
 	CComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[RenderTargets::NumRTVs];
 	UINT8 m_ActivePathTraceOutputIndex;
 
+	enum LocalRayTracingRootSignatureParameters
+	{
+		GeometryIndexRootConstant = 0,
+		IndexBufferSRV,
+		VertexBufferSRV,
+		NumLocalRayTracingParameters
+	};
+
 	enum RayTracingRootSignatureParameters
 	{
 		PerFrameConstants = 0,
@@ -75,7 +88,7 @@ private:
 		NumRayTracingParameters
 	};
 	
-	CComPtr<ID3D12RootSignature> m_pNullRootSignature;
+	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 
 	CComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
 	CComPtr<ID3D12PipelineState> m_pRayTracingPSO;

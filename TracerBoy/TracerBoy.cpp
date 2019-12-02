@@ -16,6 +16,16 @@
 
 #define USE_DXR 1
 
+struct HitGroupShaderRecord
+{
+	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
+	UINT GeometryIndex;
+	UINT Padding1;
+	D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer;
+	D3D12_GPU_VIRTUAL_ADDRESS VertexBuffer;
+	BYTE Padding2[8];
+};
+
 TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileName) : 
 	m_pCommandQueue(pQueue), 
 	m_SignalValue(1), 
@@ -44,15 +54,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&viewDescriptorHeapDesc, IID_PPV_ARGS(&m_pViewDescriptorHeap)));
 	}
 
-	{
-		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
-
-		CComPtr<ID3DBlob> pRootSignatureBlob;
-		VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
-		VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_pNullRootSignature)));
-	}
+	InitializeLocalRootSignature();
 
 	{
 		CD3DX12_ROOT_PARAMETER1 Parameters[RayTracingRootSignatureParameters::NumRayTracingParameters];
@@ -137,7 +139,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		hitGroup->SetHitGroupExport(L"HitGroup");
 
 		raytracingPipeline.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pRayTracingRootSignature);
-		raytracingPipeline.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pNullRootSignature);
+		raytracingPipeline.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pLocalRootSignature);
 
 		raytracingPipeline.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>()->Config(sizeof(RayPayload), 8);
 		raytracingPipeline.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>()->Config(1);
@@ -157,18 +159,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		memcpy(pData, pRayGenShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
 		m_pRayGenShaderTable->Unmap(0, nullptr);
-	}
-
-	{
-		AllocateUploadBuffer(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_pHitGroupShaderTable);
-
-		void* pData;
-		m_pHitGroupShaderTable->Map(0, nullptr, &pData);
-
-		void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
-		memcpy(pData, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-		m_pHitGroupShaderTable->Unmap(0, nullptr);
 	}
 
 	{
@@ -246,12 +236,18 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		m_camera.FocalDistance = 7.0;
 #endif
 
+
+
+		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<CComPtr<ID3D12Resource>> stagingResources;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
-		for (auto &mesh : Scene.m_Meshes)
+
+		void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
+		for (UINT geometryIndex = 0; geometryIndex < Scene.m_Meshes.size(); geometryIndex++)
 		{
+			auto& mesh = Scene.m_Meshes[geometryIndex];
 			CComPtr<ID3D12Resource> pVertexBuffer;
-			UINT vertexSize = sizeof(float) * 3;
+			UINT vertexSize = sizeof(SceneParser::Vertex);
 			UINT vertexBufferSize = static_cast<UINT>(mesh.m_VertexBuffer.size() * vertexSize);
 			{
 				AllocateUploadBuffer(vertexBufferSize, pVertexBuffer);
@@ -260,7 +256,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 				for (UINT v = 0; v < mesh.m_VertexBuffer.size(); v++)
 				{
 					const SceneParser::Vertex &vertex = mesh.m_VertexBuffer[v];
-					memcpy(pVertexBufferData + vertexSize * v, &vertex.Position, vertexSize);
+					memcpy(pVertexBufferData + vertexSize * v, &vertex, vertexSize);
 				}
 			}
 			
@@ -287,16 +283,27 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 			geometryDesc.Triangles.IndexFormat = indexSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
 			geometryDesc.Triangles.Transform3x4 = 0;
 			geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-			geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / (sizeof(float) * 3);
+			geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / vertexSize;
 			geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress();
-			geometryDesc.Triangles.VertexBuffer.StrideInBytes = (sizeof(float) * 3);
+			geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
 			geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 			geometryDescs.push_back(geometryDesc);
 
-			stagingResources.push_back(pVertexBuffer);
-			stagingResources.push_back(pIndexBuffer);
+			HitGroupShaderRecord shaderRecord = {};
+			shaderRecord.GeometryIndex = geometryIndex;
+			shaderRecord.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
+			shaderRecord.VertexBuffer = pVertexBuffer->GetGPUVirtualAddress();
 
+			memcpy(shaderRecord.ShaderIdentifier, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+			hitGroupShaderTable.push_back(shaderRecord);
+
+			m_pBuffers.push_back(pIndexBuffer);
+			m_pBuffers.push_back(pVertexBuffer);
 		}
+
+		AllocateBufferWithData(hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable);
+
 		CommandListAllocatorPair commandListAllocatorPair;
 		AcquireCommandListAllocatorPair(commandListAllocatorPair);
 
@@ -399,6 +406,25 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	}
 }
 
+void TracerBoy::InitializeLocalRootSignature()
+{
+	CD3DX12_ROOT_PARAMETER1 Parameters[LocalRayTracingRootSignatureParameters::NumLocalRayTracingParameters];
+	Parameters[LocalRayTracingRootSignatureParameters::GeometryIndexRootConstant].InitAsConstants(1, 2);
+	Parameters[LocalRayTracingRootSignatureParameters::IndexBufferSRV].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
+	Parameters[LocalRayTracingRootSignatureParameters::VertexBufferSRV].InitAsShaderResourceView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
+
+	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+	rootSignatureDesc.pParameters = Parameters;
+	rootSignatureDesc.NumParameters = ARRAYSIZE(Parameters);
+	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
+
+	CComPtr<ID3DBlob> pRootSignatureBlob;
+	VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
+	VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_pLocalRootSignature)));
+}
+
+
 UINT64 TracerBoy::SignalFence()
 {
 	UINT64 signalledValue = m_SignalValue;
@@ -470,6 +496,15 @@ void TracerBoy::AllocateUploadBuffer(UINT bufferSize, CComPtr<ID3D12Resource> &p
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&pBuffer)));
+}
+
+void TracerBoy::AllocateBufferWithData(void* pData, UINT dataSize, CComPtr<ID3D12Resource>& pBuffer)
+{
+	AllocateUploadBuffer(dataSize, pBuffer);
+	void* pMappedData;
+	pBuffer->Map(0, nullptr, &pMappedData);
+	memcpy(pMappedData, pData, dataSize);
+	pBuffer->Unmap(0, nullptr);
 }
 
 
@@ -549,8 +584,8 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 		dispatchDesc.RayGenerationShaderRecord.StartAddress = m_pRayGenShaderTable->GetGPUVirtualAddress();
 		dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 		dispatchDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
-		dispatchDesc.HitGroupTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-		dispatchDesc.HitGroupTable.StrideInBytes = 0; // Only 1 entry
+		dispatchDesc.HitGroupTable.SizeInBytes = m_pHitGroupShaderTable->GetDesc().Width;
+		dispatchDesc.HitGroupTable.StrideInBytes = sizeof(HitGroupShaderRecord);
 		dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
 		dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 		dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry

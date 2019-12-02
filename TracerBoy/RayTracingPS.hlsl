@@ -41,6 +41,20 @@ float4 GetAccumulatedColor(float2 uv) {
 }
 bool NeedsToSaveLastFrameData() { return false; } // HAndled by the CPU
 
+
+struct Ray
+{
+	float3 origin;
+	float3 direction;
+};
+
+float2 Intersect(Ray ray, out float3 normal, out uint PrimitiveID)
+{
+	normal = float3(0, 0, 0);
+	PrimitiveID = 0;
+	return float2(0, 0);
+}
+
 #include "GLSLCompat.h"
 #include "kernel.glsl"
 #include "FullScreenPlaneVS.hlsl"
