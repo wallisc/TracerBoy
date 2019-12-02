@@ -59,12 +59,14 @@ float2 Intersect(Ray ray, out float3 normal, out uint PrimitiveID)
 	dxrRay.TMax = 10000.0;
 
 	float bigNumber = 9999.0f;
+	RayPayload payload = { float2(0, 0), uint(-1), bigNumber, float3(0, 0, 0) };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, dxrRay, payload);
 
 	float2 result;
 	result.x = payload.hitT;
 	result.y = result.x < bigNumber ? 0 : -1;
 	PrimitiveID = 0;
+	normal = payload.normal;
 	return result;
 }
 
@@ -99,6 +101,7 @@ float4 PathTrace2(in vec2 pixelCoord)
 	ray.Direction = cameraRay.direction;
 	ray.TMin = 0.001;
 	ray.TMax = 10000.0;
+	RayPayload payload = { float2(0, 0), uint(-1), 0.0, float3(0, 0, 0) };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
 
 	return vec4(payload.barycentrics, 0, 1);
