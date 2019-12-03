@@ -39,12 +39,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(options)));
 	VERIFY_HRESULT(m_pDevice->CreateFence(m_SignalValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
-	{
-		D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
-		rtvDescriptorHeapDesc.NumDescriptors = RenderTargets::NumRTVs;
-		rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&rtvDescriptorHeapDesc, IID_PPV_ARGS(&m_pRTVDescriptorHeap)));
-	}
 
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC viewDescriptorHeapDesc = {};
@@ -99,23 +93,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		CComPtr<ID3DBlob> pRootSignatureBlob;
 		VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
 		VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_pRayTracingRootSignature)));
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
-		psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(CD3DX12_DEFAULT());
-		psoDesc.DepthStencilState.DepthEnable = false;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT());
-		psoDesc.RasterizerState.DepthClipEnable = false;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.RTVFormats[0] = RayTracingOutputFormat;
-		psoDesc.SampleDesc.Count = 1;
-		psoDesc.pRootSignature = m_pRayTracingRootSignature;
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_FullScreenPlaneVS, ARRAYSIZE(g_FullScreenPlaneVS));
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_RayTracingPS, ARRAYSIZE(g_RayTracingPS));
-
-		VERIFY_HRESULT(m_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pRayTracingPSO)));
 	}
 
 	{
@@ -520,79 +497,53 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	ID3D12DescriptorHeap *pDescriptorHeaps[] = { m_pViewDescriptorHeap };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
-	bool bDispatchRays = USE_DXR;
-	if(!bDispatchRays)
-	{
-		D3D12_RESOURCE_BARRIER preDrawBarriers[] =
-		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		};
-		commandList.ResourceBarrier(ARRAYSIZE(preDrawBarriers), preDrawBarriers);
+	commandList.SetComputeRootSignature(m_pRayTracingRootSignature);
 
-		commandList.SetGraphicsRootSignature(m_pRayTracingRootSignature);
-		commandList.SetPipelineState(m_pRayTracingPSO);
-		commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]);
-		commandList.RSSetViewports(1, &viewport);
+	CComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
+	commandList.QueryInterface(&pRaytracingCommandList);
+	pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject);
 
-		D3D12_RECT outputRect = CD3DX12_RECT(0, 0, static_cast<LONG>(viewport.Width), static_cast<LONG>(viewport.Height));
-		commandList.RSSetScissorRects(1, &outputRect);
-
-		SYSTEMTIME time;
-		GetSystemTime(&time);
-		float shaderConstants[] = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
-		commandList.SetGraphicsRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstants, ARRAYSIZE(shaderConstants), shaderConstants, 0);
-		commandList.SetGraphicsRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
-		UINT LastFrameBufferSRVIndex = m_ActivePathTraceOutputIndex == 0 ? ARRAYSIZE(m_pAccumulatedPathTracerOutput) - 1 : m_ActivePathTraceOutputIndex - 1;
-		commandList.SetGraphicsRootDescriptorTable(RayTracingRootSignatureParameters::LastFrameSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + LastFrameBufferSRVIndex));
-
-		D3D12_CPU_DESCRIPTOR_HANDLE pRTVs[] = { GetCPUDescriptorHandle(m_pRTVDescriptorHeap, m_ActivePathTraceOutputIndex) };
-		commandList.OMSetRenderTargets(ARRAYSIZE(pRTVs), pRTVs, true, nullptr);
-		commandList.DrawInstanced(3, 1, 0, 0);
-
-		D3D12_RESOURCE_BARRIER postDrawBarriers[] =
-		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		};
-		commandList.ResourceBarrier(ARRAYSIZE(postDrawBarriers), postDrawBarriers);
-
-	}
-	else
-	{
-		commandList.SetComputeRootSignature(m_pRayTracingRootSignature);
-
-		CComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
-		commandList.QueryInterface(&pRaytracingCommandList);
-		pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject);
-
-		D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]);
-		SYSTEMTIME time;
-		GetSystemTime(&time);
-		float shaderConstants[] = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
-		commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstants, ARRAYSIZE(shaderConstants), shaderConstants, 0);
-		commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
+	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]);
+	SYSTEMTIME time;
+	GetSystemTime(&time);
+	float shaderConstants[] = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
+	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstants, ARRAYSIZE(shaderConstants), shaderConstants, 0);
+	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
 		
-		commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
-		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PostProcessOutputUAV));
+	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
+	
+	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
+	{
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+	};
+	commandList.ResourceBarrier(ARRAYSIZE(preDispatchRaysBarrier), preDispatchRaysBarrier);
 
-		D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]->GetDesc();
+	UINT LastFrameBufferSRVIndex = m_ActivePathTraceOutputIndex == 0 ? ARRAYSIZE(m_pAccumulatedPathTracerOutput) - 1 : m_ActivePathTraceOutputIndex - 1;
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LastFrameSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + LastFrameBufferSRVIndex));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActivePathTraceOutputIndex));
 
-		D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-		dispatchDesc.Width =  static_cast<UINT>(viewport.Width);
-		dispatchDesc.Height = static_cast<UINT>(viewport.Height);
-		dispatchDesc.Depth = 1;
-		dispatchDesc.RayGenerationShaderRecord.StartAddress = m_pRayGenShaderTable->GetGPUVirtualAddress();
-		dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-		dispatchDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
-		dispatchDesc.HitGroupTable.SizeInBytes = m_pHitGroupShaderTable->GetDesc().Width;
-		dispatchDesc.HitGroupTable.StrideInBytes = sizeof(HitGroupShaderRecord);
-		dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
-		dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-		dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry
-		pRaytracingCommandList->DispatchRays(&dispatchDesc);
-	}
+	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]->GetDesc();
 
-	if(!bDispatchRays)
+	D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
+	dispatchDesc.Width =  static_cast<UINT>(viewport.Width);
+	dispatchDesc.Height = static_cast<UINT>(viewport.Height);
+	dispatchDesc.Depth = 1;
+	dispatchDesc.RayGenerationShaderRecord.StartAddress = m_pRayGenShaderTable->GetGPUVirtualAddress();
+	dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+	dispatchDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
+	dispatchDesc.HitGroupTable.SizeInBytes = m_pHitGroupShaderTable->GetDesc().Width;
+	dispatchDesc.HitGroupTable.StrideInBytes = sizeof(HitGroupShaderRecord);
+	dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
+	dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+	dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry
+	pRaytracingCommandList->DispatchRays(&dispatchDesc);
+
+	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
+	{
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+	};
+	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
+
 	{
 		commandList.SetComputeRootSignature(m_pPostProcessRootSignature);
 		commandList.SetPipelineState(m_pPostProcessPSO);
@@ -707,25 +658,21 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			backBufferDesc.Width,
 			backBufferDesc.Height,
 			1, 1, 1, 0,
-			D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+			D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 		for (UINT i = 0; i < ARRAYSIZE(m_pAccumulatedPathTracerOutput); i++)
 		{
-			const float Black[4] = {};
-			const D3D12_CLEAR_VALUE ClearValue = CD3DX12_CLEAR_VALUE(pathTracerOutput.Format, Black);
 			auto &pResource = m_pAccumulatedPathTracerOutput[i];
 			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
 				&defaultHeapDesc, 
 				D3D12_HEAP_FLAG_NONE,
 				&pathTracerOutput, 
-				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-				&ClearValue, 
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+				nullptr, 
 				IID_PPV_ARGS(&pResource)));
 
-			auto rtvDescriptorHeapBase = m_pRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-			auto rtvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-			m_pDevice->CreateRenderTargetView(pResource, nullptr, CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvDescriptorHeapBase, i, rtvDescriptorSize));
 			m_pDevice->CreateShaderResourceView(pResource, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + i));
+			m_pDevice->CreateUnorderedAccessView(pResource, nullptr, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + i));
 		}
 
 		{

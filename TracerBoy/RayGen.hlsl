@@ -43,7 +43,7 @@ float4 GetAccumulatedColor(float2 uv) {
 	uv.y = 1.0 - uv.y;
 	return LastFrameTexture.SampleLevel(PointSampler, uv, 0);
 }
-bool NeedsToSaveLastFrameData() { return false; } // HAndled by the CPU
+bool NeedsToSaveLastFrameData() { return false; } // Handled by the CPU
 
 struct Ray
 {
@@ -64,7 +64,22 @@ float2 Intersect(Ray ray, out float3 normal, out uint PrimitiveID)
 
 	float2 result;
 	result.x = payload.hitT;
-	result.y = result.x < bigNumber ? 0 : -1;
+	bool hitFound = result.x < bigNumber;
+	if (hitFound)
+	{
+		if (payload.objectIndex > 0)
+		{
+			result.y = 9;
+		}
+		else
+		{
+			result.y = 32;
+		}
+	}
+	else
+	{
+		result.y = -1;
+	}
 	PrimitiveID = 0;
 	normal = payload.normal;
 	return result;
@@ -74,47 +89,11 @@ float2 Intersect(Ray ray, out float3 normal, out uint PrimitiveID)
 #include "kernel.glsl"
 #include "FullScreenPlaneVS.hlsl"
 
-float4 PathTrace2(in vec2 pixelCoord)
-{
-	vec2 uv = pixelCoord.xy / GetResoultion().xy;
-	float rotationFactor = GetRotationFactor();
-	LightPositionYOffset = GetLightYOffset();
-
-	vec4 lastFrameData = GetLastFrameData();
-
-	float aspectRatio = GetResoultion().x / GetResoultion().y;
-	vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
-	vec3 lensPoint = GetCameraPosition();
-
-	float lensWidth = GetCameraLensHeight() * aspectRatio;
-	lensPoint += GetCameraRight() * (uv.x * 2.0 - 1.0) * lensWidth / 2.0;
-	lensPoint += GetCameraUp() * (uv.y * 2.0 - 1.0) * GetCameraLensHeight() / 2.0;
-
-	mat3 viewMatrix = GetViewMatrix(rotationFactor);
-	lensPoint = mul(lensPoint, viewMatrix);
-	focalPoint = mul(focalPoint, viewMatrix);
-
-	Ray cameraRay = NewRay(focalPoint, normalize(lensPoint - focalPoint));
-
-	RayDesc ray;
-	ray.Origin = cameraRay.origin;
-	ray.Direction = cameraRay.direction;
-	ray.TMin = 0.001;
-	ray.TMax = 10000.0;
-	RayPayload payload = { float2(0, 0), uint(-1), 0.0, float3(0, 0, 0) };
-	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
-
-	return vec4(payload.barycentrics, 0, 1);
-}
-
 [shader("raygeneration")]
 void RayGen()
 {
-	OutputTexture[DispatchRaysIndex().xy] = float4(1, 1, 0, 1);
-
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 	
-	//OutputTexture[DispatchRaysIndex().xy] = PathTrace2(uv * GetResoultion());
 	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResoultion());
 }

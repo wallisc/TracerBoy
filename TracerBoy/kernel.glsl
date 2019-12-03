@@ -998,7 +998,7 @@ vec4 Trace(Ray ray)
 #if IS_SHADER_TOY
             accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * texture(iChannel1, ray.direction).xyz;
 #else
-            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * vec3(0.75, 0.2, 0.75);
+            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * vec3(0.75, 0.75, 0.75);
 #endif
             break;
         }
@@ -1065,7 +1065,7 @@ vec4 Trace(Ray ray)
             
             vec3 lightPosition, lightColor;
             //GetAreaLightSample(lightPosition, lightColor);
-              lightPosition = vec3(0.0, 2.0, -0.5); lightColor = float3(0.7, 0.7, 0.7);  
+              lightPosition = vec3(0.0, 10.0, -0.5); lightColor = float3(0.7, 0.7, 0.7);  
                 if(IsSubsurfaceScattering(material) && !bSpecularRay)
                 {
                     // Hack required to avoid black edges on translucent spheres
@@ -1158,7 +1158,7 @@ vec4 Trace(Ray ray)
             	float lightDistance = length(lightDirection);
             	lightDirection = lightDirection / lightDistance;
             	    
-                #define SHADOW_BOUNCES 1
+                #define SHADOW_BOUNCES 0
                 vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
                 Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
                 for(int i = 0; i < SHADOW_BOUNCES; i++)

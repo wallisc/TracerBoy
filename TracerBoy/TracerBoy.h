@@ -52,7 +52,6 @@ private:
 	CComPtr<ID3D12Device5> m_pDevice;
 	CComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	CComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
-	CComPtr<ID3D12DescriptorHeap> m_pRTVDescriptorHeap;
 
 	CComPtr<ID3D12Resource> m_pBottomLevelAS;
 	CComPtr<ID3D12Resource> m_pTopLevelAS;
@@ -61,13 +60,13 @@ private:
 	std::vector<CComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	enum RenderTargets
+	enum OutputUAVs
 	{
-		RTV0 = 0,
-		RTV1,
-		NumRTVs
+		PathTracerOutputUAV0 = 0,
+		PathTracerOutputUAV1,
+		NumPathTracerOutputUAVs
 	};
-	CComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[RenderTargets::NumRTVs];
+	CComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[OutputUAVs::NumPathTracerOutputUAVs];
 	UINT8 m_ActivePathTraceOutputIndex;
 
 	enum LocalRayTracingRootSignatureParameters
@@ -91,8 +90,6 @@ private:
 	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 
 	CComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
-	CComPtr<ID3D12PipelineState> m_pRayTracingPSO;
-
 	CComPtr<ID3D12StateObject> m_pRayTracingStateObject;
 
 	CComPtr<ID3D12Resource> m_pRayGenShaderTable;
@@ -124,7 +121,9 @@ private:
 	{
 		PostProcessOutputUAV = 0,
 		PathTracerOutputSRVBaseSlot,
-		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + RenderTargets::NumRTVs - 1,
+		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
+		PathTracerOutputUAVBaseSlot,
+		PathTracerOutputUAVLastSlot = PathTracerOutputUAVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		NumReservedViewSlots,
 		NumTotalViews = 1024
 	};

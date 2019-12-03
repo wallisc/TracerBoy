@@ -151,15 +151,20 @@ namespace PBRTParser
             &outputScene.m_Film.m_ResolutionY,
             fileName, ARRAYSIZE(fileName));
 
-        ThrowIfTrue(argCount != 3, "Film arguments not formatted correctly");
+        ThrowIfTrue(argCount < 2, "Film arguments not formatted correctly");
 
         // Sometimes scanf pulls more than it needs to, make sure to clean up 
         // any extra characters on the file name
-        string correctedFileName(fileName);
-        if (correctedFileName[correctedFileName.size() - 1] == '"')
-        {
-            correctedFileName = correctedFileName.substr(0, correctedFileName.size() - 1);
-        }
+        string correctedFileName;
+		if (argCount > 2)
+		{
+			correctedFileName = string(fileName);
+			if (correctedFileName[correctedFileName.size() - 1] == '"')
+			{
+				correctedFileName = correctedFileName.substr(0, correctedFileName.size() - 1);
+			}
+		}
+
 
         outputScene.m_Film.m_Filename = correctedFileName;
     }
