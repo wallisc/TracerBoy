@@ -2,12 +2,13 @@
 #define EPSILON 0.0001
 #define PI 3.14
 #define LARGE_NUMBER 1e20
-
+#define SMALL_NUMBER 0.01
 #define AIR_IOR 1.0
 #define PLASTIC_IOR 1.46f
 #define FLOOR_IOR 1.0;
 
 #define USE_DOF 0
+#define USE_FOG 0
 
 #ifndef IS_SHADER_TOY
 #define IS_SHADER_TOY 1
@@ -72,7 +73,7 @@ struct Material
     vec3 emissive;
     
     float absorption;    
-    float scattering; // TODO should come from IOR
+    float scattering;
     int Flags;
 };
     
@@ -84,6 +85,11 @@ bool IsMetallic(Material material)
 bool IsSubsurfaceScattering(Material material)
 {
     return (material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
+}
+
+bool UsePerfectSpecularOptimization(float roughness)
+{
+    return roughness < 0.05f;
 }
 
 float GetDiffuseMultiplier(Material material)
@@ -287,7 +293,7 @@ float BoxIntersection(Ray ray, Box box, out vec3 normal)
     
     
     boxPlanes[5] = boxPlanes[4];
-    boxPlanes[5].origin = box.origin - box.Axis3;
+    boxPlanes[5].origin = box.origin + box.Axis3;
     boxPlanes[5].normal = -boxPlanes[4].normal;
     
     float t = 999999.9f;
@@ -317,6 +323,19 @@ float FresnelFactor(
     return ReflectionCoefficient + (1.0 - ReflectionCoefficient) * pow(1.0 - dot(Normal, -RayDirection), 5.0); 
 }
 
+float BlinnPhongNormalDistributionFunction(
+    vec3 Normal,
+    vec3 HalfVector,
+    float RoughnessSquared)
+{
+    float RoughnessPow4 = RoughnessSquared * RoughnessSquared;
+    float nDotH = dot(Normal, HalfVector);
+    
+	float numerator = pow(nDotH, (2.0 / RoughnessPow4) - 2.0);
+    float denominator = PI * RoughnessPow4;
+    return numerator / denominator;
+}
+
 float GGXNormalDistributionFunction(
     vec3 Normal,
     vec3 HalfVector,
@@ -336,7 +355,14 @@ float NormalDistributionFunction(
     vec3 HalfVector,
     float RoughnessSquared)
 {
-   return GGXNormalDistributionFunction(Normal, HalfVector, RoughnessSquared);  
+   return BlinnPhongNormalDistributionFunction(Normal, HalfVector, RoughnessSquared);  
+}
+
+float ImplicitGeometricShadowing(
+    float nDotV,    
+    float nDotL)
+{
+    return nDotL * nDotV;
 }
 
 float GGXGeometricShadowing(
@@ -350,12 +376,13 @@ float GGXGeometricShadowing(
 }
 
 float GeometricShadowing(
-    float nDotV,
+    float nDotV,    
+    float nDotL,
     float RoughnessSquared)
 {
-    return GGXGeometricShadowing(
+    return ImplicitGeometricShadowing(
         nDotV,
-        RoughnessSquared);
+        nDotL);
 }
 
 float SpecularBRDF(
@@ -370,7 +397,7 @@ float SpecularBRDF(
     float nDotV = dot(Normal, ViewDirection);
     float nDotL = dot(Normal, LightDirection);
     
-    if(nDotV < EPSILON || nDotL < EPSILON)
+    if(nDotV < SMALL_NUMBER || nDotL < SMALL_NUMBER)
     {
         return 0.0;
     }
@@ -378,8 +405,8 @@ float SpecularBRDF(
     // Note that fresnel is omitted because this is already accounted for 
     // when calculating whether the chance whether a ray should be specular or
     // diffuse
-    float Numerator = NormalDistributionFunction(Normal, HalfVector, RoughnessSquared) *
-                      GeometricShadowing(nDotV, RoughnessSquared);
+    float Numerator = NormalDistributionFunction(Normal, HalfVector, RoughnessSquared)  *
+                      GeometricShadowing(nDotV, nDotL, RoughnessSquared);
     float Denominator = (4.0 * nDotL * nDotV);
     return Numerator / Denominator;
 }
@@ -439,13 +466,12 @@ float SpecularBTDF(
     
     float oDotH = dot(OutgoingDirection, halfVector);
 
-    //Spectrum F = fresnel.Evaluate(Dot(wo, wh));
- 	//float factor = (mode == TransportMode::Radiance) ? (1 / eta) : 1;
     float factor = 1.0;
     float sqrtDenom = dot(OutgoingDirection, halfVector) + eta * dot(IncomingDirection, halfVector);
 
-    return abs(//NormalDistributionFunction(Normal, halfVector, RoughnessSquared) * 
-               GeometricShadowing(IsInsidePrimitive ? -nDotIncoming : nDotIncoming, RoughnessSquared) * 
+    return 1.0;
+    return abs(NormalDistributionFunction(Normal, halfVector, RoughnessSquared) * 
+              GeometricShadowing(nDotIncoming, nDotOutgoing, RoughnessSquared) *
                eta * eta *
                abs(dot(IncomingDirection, halfVector)) * abs(dot(OutgoingDirection, halfVector)) * factor * factor /
                     (nDotIncoming * nDotOutgoing * sqrtDenom * sqrtDenom));
@@ -462,8 +488,9 @@ float SpecularBTDF(
 #define WAX_MATERIAL_ID 7
 #define GLASS_MATERIAL_ID 8
 #define ICE_MATERIAL_ID 9
-#define AREA_LIGHT_MATERIAL_ID 10
-#define NUM_MATERIALS 11
+#define GOLD_MATERIAL_ID 10
+#define AREA_LIGHT_MATERIAL_ID 11
+#define NUM_MATERIALS 12
 
 // Materials with custom functions
 #define FLOOR_MATERIAL_ID 32
@@ -473,69 +500,89 @@ float SpecularBTDF(
 #define CUSTOM_SCATTERING_MATERIAL_ID 36
 
 #define USE_LARGE_SCENE 1
+#define USE_FOG_SCENE 1
 
 #define numBoundedPlanes  2
 #define AreaLightIndex (numBoundedPlanes - 1)
-#define numBoxes 0
+#if USE_FOG_SCENE
+#define numBoxes 4
+#else
+#define numBoxes 1
+#endif
 #if USE_LARGE_SCENE
-#define numSpheres 25
+#define numSpheres 19
 #else
 #define numSpheres 10
 #endif
 
 struct Scene 
 {
+    CameraDescription camera;    
     BoundedPlane BoundedPlanes[numBoundedPlanes];
+    Box Boxes[numBoxes];
     Sphere Spheres[numSpheres];
 };
 
 #if IS_SHADER_TOY
-Scene CurrentScene = Scene(   
+// Cornell Box
+Scene CurrentScene = Scene(
+    CameraDescription(
+        vec3(0.0, 1.3, 1.8), // position
+        vec3(0.0, 1.0, 0.0), // lookAt
+        vec3(0.0, 1.0, 0.0), // up
+        vec3(1.0, 0.0, 0.0), // right
+        2.0,                 // lensHeight
+        3.5                  // focalDistance 
+    ),
+    
     // Scene Geometry
     BoundedPlane[numBoundedPlanes](
        BoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(10,0,0), vec3(0,0,10), FLOOR_MATERIAL_ID), // Bottom wall
-       BoundedPlane(vec3(0.0, 2.0, -0.5), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID)
+       BoundedPlane(vec3(0.0, 2.0, 6.5), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID)
     ),
         
+   Box[numBoxes](
+#if USE_FOG_SCENE
+       Box(vec3( 6.2, 0.6, 2.0), vec3(0, 4.0, 0), vec3(-2.0, 0., 0), vec3(0., 0., -2.0), DEFAULT_WALL_MATERIAL_ID),
+       Box(vec3( 2.6, 0.6, 2.0), vec3(0, 1.05, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID),
+       Box(vec3( 0.0, 0.6, 2.0), vec3(0, 2.0, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID),
+       Box(vec3(-2.6, 0.6, 2.0), vec3(0, 1.35, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID)
+#else
+       Box(vec3(0.0, 0.6, -1.5), vec3(0, 0.6, 0), vec3(-0.285, 0., 0.09), vec3(-0.09, 0., -0.29), DEFAULT_WALL_MATERIAL_ID)
+#endif
+   ),
+   
     Sphere[numSpheres](
         // Front Row
-        Sphere(vec3(-2.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, 0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, 0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
+        Sphere(vec3(2.0, 0.4,  0.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID),
+        Sphere(vec3(1.0, 0.4,  0.5), 0.4f, ICE_MATERIAL_ID),
+        Sphere(vec3(0.0, 0.4,  0.5), 0.4f, WOOD_MATERIAL_ID),
+        Sphere(vec3(-1.0, 0.4, 0.5), 0.4f, REFRACTIVE_MATERIAL_ID),
+        Sphere(vec3(-2.0, 0.4, 0.5), 0.4f, GLASS_PEBBLE_MATERIAL_ID),
         
         // Second Row
-        Sphere(vec3(-2.0, 0.4, -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4, -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID)
+        Sphere(vec3(-2.0, 0.4, -1.5), 0.4f, GLASS_MATERIAL_ID),
+        Sphere(vec3(-1.0, 0.4, -1.5), 0.4f, CHECKER_MATERIAL_ID),
+        Sphere(vec3(2.0, 0.4,  -1.5), 0.4f, BLUE_PLASTIC_MATERIAL_ID),
+        Sphere(vec3(1.0, 0.4,  -1.5), 0.4f, MIRROR_MATERIAL_ID)
         
 
         #if USE_LARGE_SCENE
         ,
         
         // Third Row
-        Sphere(vec3(-2.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
+        Sphere(vec3(2.0, 0.4,  -3.5), 0.4f, RADIOACTIVE_MATERIAL_ID),
+        Sphere(vec3(1.0, 0.4,  -3.5), 0.4f, GLASS_PEBBLE_MATERIAL_ID),
+        Sphere(vec3(0.0, 0.4,  -3.5), 0.4f, WAX_MATERIAL_ID),
+        Sphere(vec3(-1.0, 0.4, -3.5), 0.4f, DEFAULT_WALL_MATERIAL_ID),
+        Sphere(vec3(-2.0, 0.4, -3.5), 0.4f, CHECKER_MATERIAL_ID),
         
         // Fourth Row
-        Sphere(vec3(-2.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        
-        // Fifth Row
-        Sphere(vec3(-2.0, 0.4,-7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,-7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID)
+        Sphere(vec3(2.0, 0.4,  -5.5), 0.4f, DEFAULT_WALL_MATERIAL_ID),
+        Sphere(vec3(1.0, 0.4,  -5.5), 0.4f, WOOD_MATERIAL_ID),
+        Sphere(vec3(0.0, 0.4,  -5.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID),
+        Sphere(vec3(-1.0, 0.4, -5.5), 0.4f, GOLD_MATERIAL_ID),
+        Sphere(vec3(-2.0, 0.4, -5.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID)
         #endif
         
     )
@@ -552,53 +599,7 @@ void InitializeScene()
 	CurrentScene.Spheres[2] = NewSphere(vec3( 0.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
 	CurrentScene.Spheres[3] = NewSphere(vec3( 1.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
 	CurrentScene.Spheres[4] = NewSphere(vec3( 2.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-
-	#if 0 
-
-    Sphere[numSpheres](
-        // Front Row
-        Sphere(vec3(-2.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, 0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, 0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        
-        // Second Row
-        Sphere(vec3(-2.0, 0.4, -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4, -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4,  -1.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID)
-        
-
-        #if USE_LARGE_SCENE
-        ,
-        
-        // Third Row
-        Sphere(vec3(-2.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -3.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        
-        // Fourth Row
-        Sphere(vec3(-2.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4,  -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -5.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        
-        // Fifth Row
-        Sphere(vec3(-2.0, 0.4,-7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(-1.0, 0.4,-7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(0.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID),
-        Sphere(vec3(2.0, 0.4, -7.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID)
-        #endif
-    )
-	#endif
 };
-// TODO intialize
 #endif
 
 vec3 GenerateRandomDirection()
@@ -655,8 +656,7 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
     PrimitiveID = uint(-1);
     float intersect;
     
-	int i;
-    for (i = 0; i < numSpheres; i++)
+    for (int i = 0; i < numSpheres; i++)
     {
         vec3 sphereNormal;
         intersect = SphereIntersection(ray, CurrentScene.Spheres[i], sphereNormal);
@@ -670,7 +670,7 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
         PrimitiveIDIterator++;
     }
     
-    for (i = 0; i < numBoundedPlanes; i++)
+    for (int i = 0; i < numBoundedPlanes; i++)
     {
         intersect = BoundedPlaneIntersection(ray, CurrentScene.BoundedPlanes[i]);
         if(intersect > 0.0 && t > intersect)
@@ -678,6 +678,20 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
             t = intersect;
             materialID = float(CurrentScene.BoundedPlanes[i].materialID);
             normal = CurrentScene.BoundedPlanes[i].normal;
+            PrimitiveID = PrimitiveIDIterator;
+        }
+        PrimitiveIDIterator++;
+    }
+    
+    for (int i = 0; i < numBoxes; i++)
+    {
+        vec3 boxNormal;
+        intersect = BoxIntersection(ray, CurrentScene.Boxes[i], boxNormal);
+        if(intersect > 0.0 && t > intersect)
+        {
+            t = intersect;
+            materialID = float(CurrentScene.Boxes[i].materialID);
+            normal = boxNormal;
             PrimitiveID = PrimitiveIDIterator;
         }
         PrimitiveIDIterator++;
@@ -710,6 +724,17 @@ void GetPrimitiveAttributes(
     out vec2 uv) 
 {
     uint PrimitiveIDIterator = 0u;
+    
+    if(primitiveID < PrimitiveIDIterator + uint(numSpheres))
+    {
+        uint SphereIndex = primitiveID - PrimitiveIDIterator;
+        GetSphereAttributes(worldPosition, 
+                            CurrentScene.Spheres[SphereIndex],
+                            uv);
+        return;
+    }
+    PrimitiveIDIterator += uint(numSpheres);
+    
     if(primitiveID < PrimitiveIDIterator + uint(numBoundedPlanes))
     {
         // not supporting UVs for bounded planes
@@ -723,16 +748,6 @@ void GetPrimitiveAttributes(
         return;
     }
     PrimitiveIDIterator += uint(numBoxes);
- 
-    if(primitiveID < PrimitiveIDIterator + uint(numSpheres))
-    {
-        uint SphereIndex = primitiveID - PrimitiveIDIterator;
-        GetSphereAttributes(worldPosition, 
-                            CurrentScene.Spheres[SphereIndex],
-                            uv);
-        return;
-    }
-    PrimitiveIDIterator += uint(numSpheres);
 }
 
 Material GetCustomScatteringMaterial(uint PrimitiveID)
@@ -772,7 +787,7 @@ Material GetGlassPebbleMaterial(uint PrimitiveID, vec3 WorldPosition)
 	vec3 albedo = vec3(1, 1, 1);
 #endif
     albedo = albedo.bgr;
-    return SubsurfaceScatterMaterial(albedo, 0.0, 1.05, 0.1, 0.4);
+    return SubsurfaceScatterMaterial(albedo, 0.35, 1.05, 3.0, 0.0);
 }
 
 
@@ -852,23 +867,22 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     {
 		return GetCustomScatteringMaterial(PrimitiveID);
     }
-    //Material SubsurfaceScatterMaterial(vec3 albedo, float roughness, float IOR, float absorption, float transmittance)
-
     
     Material materials[NUM_MATERIALS];
     materials[WAX_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.725, .1, .1), 0.2, 1.05, 0.2, 5.0);
     materials[DEFAULT_WALL_MATERIAL_ID] = PlasticMaterial(vec3(0.725, .71, .68));
-    materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.6);
+    materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
+    materials[GOLD_MATERIAL_ID] = MetalMaterial(vec3(0.65, .5, .075), 1.18, 0.15);
     materials[BLUE_PLASTIC_MATERIAL_ID] = PlasticMaterial(vec3(.05, .05, .55));
     materials[RADIOACTIVE_MATERIAL_ID] = EmissiveMaterial(vec3(.05, .45, .05), vec3(0.0, .6, 0.0));
     materials[MIRROR_MATERIAL_ID] = ReflectiveMaterial();    
     materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
     materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
     
-    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.6, 0.6, 0.8), 0.0, 1.1, 0.0, 1.2); // ice
+    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 3.0, 0.2); // ice
     
     materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
-    materials[AREA_LIGHT_MATERIAL_ID] = PlasticMaterial(vec3(0.7, 0.7, 0.7));
+    materials[AREA_LIGHT_MATERIAL_ID] = PlasticMaterial(vec3(0.45, 0.45, 0.45));
     
     return materials[MaterialID];
 }
@@ -899,12 +913,18 @@ Material GetAreaLightMaterial()
 
 void GetAreaLightSample(out vec3 LightPosition, out vec3 LightColor)
 {
+#if IS_SHADER_TOY
     vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
     LightPosition = CurrentScene.BoundedPlanes[AreaLightIndex].origin +
         CurrentScene.BoundedPlanes[AreaLightIndex].Axis1 * areaLightUV.x +
         CurrentScene.BoundedPlanes[AreaLightIndex].Axis2 * areaLightUV.y;
-
     LightColor = GetAreaLightMaterial().albedo;
+#else
+	LightPosition = vec3(0.0, 10.0, -0.5); 
+	LightColor = float3(0.7, 0.7, 0.7);  
+#endif
+
+
 }
 
 struct Intersection
@@ -972,11 +992,59 @@ vec4 Trace(Ray ray)
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
     uint FirstPrimitiveID = uint(-1); 
+    
+    vec3 lightPosition, lightColor;
+    GetAreaLightSample(lightPosition, lightColor);
+    
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
         vec3 normal;
         uint PrimitiveID;
         vec2 result = Intersect(ray, normal, PrimitiveID);
+        
+#if USE_FOG
+        float distanceTravelled = result.x;
+        bool hitNotFound = int(result.y) == INVALID_MATERIAL_ID;
+        vec3 fogColor = vec3(0.375, 0.25, 0.3) * 1.1;
+        float fogAbsorption = 0.15;        
+        float distancePerFogScatterEvent = 2.0;
+        vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - fogColor;
+
+        if(hitNotFound)
+        {
+            distanceTravelled = 20.0;
+        }
+        
+        #define MAX_FOG_SHADOW_CASTS 5
+        float distanceMarched = 0.0;
+        for(int i = 0; i < MAX_FOG_SHADOW_CASTS; i++)
+        {
+            float marchDistance = max(-log(rand()), 0.1) * distancePerFogScatterEvent;
+			if(distanceMarched + marchDistance > distanceTravelled)
+            {
+            	break;    
+            }
+            distanceMarched += marchDistance;
+            
+            vec3 currentPosition = GetRayPoint(ray, distanceMarched);
+            vec3 lightDirection = normalize(lightPosition - currentPosition);
+            Ray shadowFeeler = NewRay(currentPosition, lightDirection);
+            vec3 shadowNormal;
+            uint shadowPrimitiveID;
+            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID); 
+
+            int materialID = int(shadowResult.y);
+            vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
+            Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
+            if(materialID == AREA_LIGHT_MATERIAL_ID)
+            {
+                accumulatedColor += fogColor * accumulatedIndirectLightMultiplier * GetAreaLightMaterial().albedo;
+            }
+            
+            accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * marchDistance * fogAbsorption);
+        }
+#endif
+        
         if(i == 0)
         {
             FirstPrimitiveID = PrimitiveID;
@@ -994,11 +1062,11 @@ vec4 Trace(Ray ray)
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
             // Dial down the cube map intensity
-            const float EnvironmentLightMultipier = 0.35;
+            const float EnvironmentLightMultipier = 0.15;
 #if IS_SHADER_TOY
             accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * texture(iChannel1, ray.direction).xyz;
 #else
-            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * vec3(0.75, 0.75, 0.75);
+            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * vec3(0.75, 0.2, 0.75);
 #endif
             break;
         }
@@ -1015,7 +1083,7 @@ vec4 Trace(Ray ray)
 
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
-            
+              
             float CurrentIOR = IsInsidePrimitve ? material.IOR : AIR_IOR;
             float NewIOR = IsInsidePrimitve ? AIR_IOR : material.IOR;
             
@@ -1039,8 +1107,27 @@ vec4 Trace(Ray ray)
             {
                 float PDFValue;
                 vec3 ReflectedDirection = reflect(ray.direction, normal);
-                ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
-                //accumulatedIndirectLightMultiplier /= PDFValue;
+                if(UsePerfectSpecularOptimization(material.roughness))
+                {
+                    ray.direction = ReflectedDirection;
+                }
+                else
+                {
+                    ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
+                    if(PDFValue < EPSILON)
+                    {
+                        // This ray is satistically not relevant, attempt to find a better ray
+                        ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
+                        
+                        if(PDFValue < EPSILON)
+                        {
+                            // Still no luck, call it quits
+                            break;
+                        }
+                    }
+                    accumulatedIndirectLightMultiplier /= PDFValue;
+
+                }
             }
             else
             {
@@ -1050,7 +1137,30 @@ vec4 Trace(Ray ray)
                     float discriminant = 1.0 - nr * nr * (1.0 - RayDirectionDotN * RayDirectionDotN);
                     if (discriminant > EPSILON) 
                     {
-                        ray.direction = normalize( nr * (ray.direction - normal * RayDirectionDotN) - normal * sqrt(discriminant));
+                        vec3 refractionDirection = normalize( nr * (ray.direction - normal * RayDirectionDotN) - normal * sqrt(discriminant));
+                        if(UsePerfectSpecularOptimization(material.roughness))
+                        {
+                            ray.direction = refractionDirection;
+                        }
+                        else
+                        {
+                            float PDFValue;
+                            ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
+                            if(PDFValue < EPSILON)
+                            {
+                                // This ray is satistically not relevant, attempt to find a better ray
+                                ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
+                                if(PDFValue < EPSILON)
+                                {
+                                    // Still no luck, call it quits
+                                    break;
+                                }
+                            }
+                            
+                            // TODO: Overly darkens rough refractions for some reason
+                            // accumulatedIndirectLightMultiplier /= PDFValue;
+                        }
+
                     }
                     else
                     {
@@ -1064,8 +1174,8 @@ vec4 Trace(Ray ray)
             }
             
             vec3 lightPosition, lightColor;
-            //GetAreaLightSample(lightPosition, lightColor);
-              lightPosition = vec3(0.0, 10.0, -0.5); lightColor = float3(0.7, 0.7, 0.7);  
+            GetAreaLightSample(lightPosition, lightColor);
+                
                 if(IsSubsurfaceScattering(material) && !bSpecularRay)
                 {
                     // Hack required to avoid black edges on translucent spheres
@@ -1158,7 +1268,7 @@ vec4 Trace(Ray ray)
             	float lightDistance = length(lightDirection);
             	lightDirection = lightDirection / lightDistance;
             	    
-                #define SHADOW_BOUNCES 0
+                #define SHADOW_BOUNCES 1
                 vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
                 Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
                 for(int i = 0; i < SHADOW_BOUNCES; i++)
@@ -1170,7 +1280,12 @@ vec4 Trace(Ray ray)
                      
                     int materialID = int(shadowResult.y);
                     Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
+
+					#if IS_SHADER_TOY
                     if(materialID == AREA_LIGHT_MATERIAL_ID)
+					#else
+                    if(materialID == AREA_LIGHT_MATERIAL_ID || materialID == INVALID_MATERIAL_ID )
+					#endif
                     {
                         break;
                     }
@@ -1212,9 +1327,16 @@ vec4 Trace(Ray ray)
                 
                 // TODO: Should be checking the environment light also
                 float nDotL = dot(lightDirection, normal);
-            	float lightMultiplier = IsSubsurfaceScattering(material) ?
-                    GetDiffuseMultiplier(material) * nDotL : //SpecularBTDF(-previousDirection, material.IOR, ray.direction, AIR_IOR, normal, material.roughness) :
-            		nDotL;
+            	float lightMultiplier = nDotL;
+                if(IsSubsurfaceScattering(material))
+                {
+                    lightMultiplier = GetDiffuseMultiplier(material) * nDotL;
+                    if(!UsePerfectSpecularOptimization(material.roughness))
+                    {
+                        lightMultiplier *= SpecularBTDF(-previousDirection, material.IOR, ray.direction, AIR_IOR, normal, material.roughness);
+                    }
+
+                }
                 accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor + material.emissive;
                 if(bSpecularRay)
                 {
@@ -1223,7 +1345,10 @@ vec4 Trace(Ray ray)
                         accumulatedIndirectLightMultiplier *= material.albedo;
                     }
                     
-                    if(false)
+                    // Perfectly specular surfaces don't need to do the BRDF
+                    // because they only trace the reflected ray
+                    // and would result in a BRDF value of 1
+                    if(!UsePerfectSpecularOptimization(material.roughness))
                     {
                         accumulatedIndirectLightMultiplier *= SpecularBRDF(
                             -previousDirection,
@@ -1266,7 +1391,7 @@ float GetLightYOffset()
         // Default value when shader is initially loaded up
         return 1.0f;
     }
-    return mix(-2.0, 2.0, GetMouse().y / GetResoultion().y);
+    return mix(-2.0, 3.0, GetMouse().y / GetResoultion().y);
 }
 
 float GetLastFrameRotationFactor(vec4 lastFrameData)
@@ -1317,12 +1442,10 @@ vec4 PathTrace(in vec2 pixelCoord)
         float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
         return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
     }
-
     //CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
     
     seed = GetTime() + GetResoultion().y * pixelCoord.x / GetResoultion().x + pixelCoord.y / GetResoultion().y;
-
-	vec4 accumulatedColor = GetAccumulatedColor(uv);
+    vec4 accumulatedColor = GetAccumulatedColor(uv);
     // Add some jitter for anti-aliasing
     uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResoultion().xy;
     
@@ -1351,7 +1474,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     vec3 FocusPoint = GetRayPoint(cameraRay, FocusDistance);
     
     float ApertureWidth = 0.075;
-    vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5)) * ApertureWidth;
+    vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5, 0.5)) * ApertureWidth;
     cameraRay.origin += FocalJitter.x * GetCameraRight();
     cameraRay.origin += FocalJitter.y * GetCameraUp();
     
@@ -1361,7 +1484,6 @@ vec4 PathTrace(in vec2 pixelCoord)
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay);
-	
     return vec4(accumulatedColor.rgb + result.rgb, result.w);
 }
 
