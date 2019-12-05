@@ -29,12 +29,19 @@ vec3 GetCameraUp() { return vec3(0.0, 1.0, 0.0); }
 vec3 GetCameraRight() { return vec3(1.0, 0.0, 0.0); }
 float GetCameraLensHeight() { return 2.0; }
 float GetCameraFocalDistance() { return 7.0; }
+bool ShouldInvalidateHistory() { return false; }
 
 struct Ray
 { 
     vec3 origin; 
     vec3 direction; 
 };
+
+float3 SampleEnvironmentMap(float3 v)
+{
+    const float EnvironmentLightMultipier = 0.15;
+	return EnvironmentLightMultipier * texture(iChannel1, v).xyz;
+}
 #endif 
 
 // Rand taken from https://www.shadertoy.com/view/4sfGDB
@@ -647,7 +654,7 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
 }
 
 #if IS_SHADER_TOY
-vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
+vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out uint PrimitiveID)
 {
     float t = 999999.0;
     float materialID = float(INVALID_MATERIAL_ID);
@@ -700,6 +707,10 @@ vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
     return vec2(t, materialID);
 }
 #endif
+vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
+{
+	return IntersectWithMaxDistance(ray, 999999.0, normal, PrimitiveID);
+}
 
 float atan2(float x, float y)
 {
@@ -796,10 +807,10 @@ Material GetFloorMaterial(vec3 WorldPosition)
     // Checker board pattern 
     
     // Use this to scale the size of the checker board tiling
-    const float ScaleMultiplier = 0.1;
+    const float ScaleMultiplier = 0.001;
     
-    float IOR = 2.0;
-    float roughness = 0.0;
+    float IOR = 1.5;
+    float roughness = 0.1;
     Material Mat0 = NormalMaterial(vec3(0.725, .71, .68), IOR, roughness);
     Material Mat1 = NormalMaterial(vec3(0.73, .35, .15), IOR, roughness);
     if(uint(fract(WorldPosition.x * ScaleMultiplier) * 10.0) % 2u == 0u)
@@ -879,7 +890,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
     materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
     
-    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 3.0, 0.2); // ice
+    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.2, 0.8); // ice
     
     materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
     materials[AREA_LIGHT_MATERIAL_ID] = PlasticMaterial(vec3(0.45, 0.45, 0.45));
@@ -1062,12 +1073,7 @@ vec4 Trace(Ray ray)
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
             // Dial down the cube map intensity
-            const float EnvironmentLightMultipier = 0.15;
-#if IS_SHADER_TOY
-            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * texture(iChannel1, ray.direction).xyz;
-#else
-            accumulatedColor += accumulatedIndirectLightMultiplier * EnvironmentLightMultipier * vec3(0.75, 0.2, 0.75);
-#endif
+            accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
             break;
         }
         else if(int(result.y) == AREA_LIGHT_MATERIAL_ID)
@@ -1217,16 +1223,17 @@ vec4 Trace(Ray ray)
                             }
                         }
                         
-                        
-                        ray.origin += ray.direction * EPSILON * 4.0;
+                        float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
+
+                        ray.origin += ray.direction * EPSILON;
                         uint unusedPrimitiveID;
                         result = Intersect(ray, normal, unusedPrimitiveID);
                         
-                        float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
                         result.x = min(travelDistance, result.x);
                         float distanceTravelledBeforeScatter = result.x;
                         
                         exittingPrimitive = result.x < travelDistance || noScatter;
+
                         bool lastRay = (i == MAX_SSS_BOUNCES - 1);
                         if(lastRay && !exittingPrimitive)
                         {
@@ -1268,7 +1275,7 @@ vec4 Trace(Ray ray)
             	float lightDistance = length(lightDirection);
             	lightDirection = lightDirection / lightDistance;
             	    
-                #define SHADOW_BOUNCES 1
+                #define SHADOW_BOUNCES 0
                 vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
                 Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
                 for(int i = 0; i < SHADOW_BOUNCES; i++)
@@ -1281,11 +1288,7 @@ vec4 Trace(Ray ray)
                     int materialID = int(shadowResult.y);
                     Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
 
-					#if IS_SHADER_TOY
                     if(materialID == AREA_LIGHT_MATERIAL_ID)
-					#else
-                    if(materialID == AREA_LIGHT_MATERIAL_ID || materialID == INVALID_MATERIAL_ID )
-					#endif
                     {
                         break;
                     }
@@ -1414,12 +1417,12 @@ bool HasCameraMoved(float lastFrameRotationFactor, float rotationFactor)
     return !areFloatsEqual(lastFrameRotationFactor, rotationFactor);
 }
 
-mat3 GetViewMatrix(float rotationFactor)
+mat3 GetViewMatrix(float xRotationFactor)
 { 
-   float rotation = ((1.0 - rotationFactor) - 0.5) * PI * 1.75;
-   return mat3( cos(rotation), 0.0, sin(rotation),
+   float xRotation = ((1.0 - xRotationFactor) - 0.5) * PI * 1.75;
+   return mat3( cos(xRotation), 0.0, sin(xRotation),
                 0.0,           1.0, 0.0,    
-                -sin(rotation),0.0, cos(rotation));
+                -sin(xRotation),0.0, cos(xRotation));
 }
 
 vec4 PathTrace(in vec2 pixelCoord)
@@ -1434,7 +1437,8 @@ vec4 PathTrace(in vec2 pixelCoord)
 #endif
 
     bool HasSceneChanged = HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor) ||
-      !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset);
+      !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset) ||
+	  ShouldInvalidateHistory();
 
     // Sacrifice the top left pixel to store previous frame meta-data
     if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)

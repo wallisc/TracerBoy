@@ -3,6 +3,39 @@ struct Vector3
 {
 	Vector3(float nX = 0.0f, float nY = 0.0f, float nZ = 0.0f) : x(nX), y(nY), z(nZ) {}
 	float x, y, z;
+
+	Vector3 operator*(float scale)
+	{
+		return { x * scale, y * scale, z * scale };
+	}
+
+	Vector3 operator+=(const Vector3& v)
+	{
+		*this = v + *this;
+		return *this;
+	}
+
+	Vector3 operator-=(const Vector3& v)
+	{
+		*this = *this - v;
+		return *this;
+	}
+
+	Vector3 operator+(const Vector3 &v) const
+	{
+		return { x + v.x, y + v.y, z + v.z };
+	}
+
+	Vector3 operator-(const Vector3& v) const
+	{
+		return { x - v.x, y - v.y, z - v.z };
+	}
+
+	Vector3 Normalize() const
+	{
+		float length = sqrt(x * x + y * y + z * z);
+		return { x / length, y / length, z / length };
+	}
 };
 
 inline Vector3 Cross(const Vector3& a, const Vector3& b)
@@ -57,6 +90,8 @@ private:
 	CComPtr<ID3D12Resource> m_pTopLevelAS;
 	CComPtr<ID3D12Resource> m_pConfigConstants;
 
+	CComPtr<ID3D12Resource> m_pEnvironmentMap;
+
 	std::vector<CComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -79,8 +114,9 @@ private:
 
 	enum RayTracingRootSignatureParameters
 	{
-		PerFrameConstants = 0,
+		PerFrameConstantsParam = 0,
 		ConfigConstants,
+		EnvironmentMapSRV,
 		LastFrameSRV,
 		OutputUAV,
 		AccelerationStructureRootSRV,
@@ -111,6 +147,7 @@ private:
 
 	UINT32 m_mouseX, m_mouseY;
 	UINT m_FramesRendered;
+	bool m_bInvalidateHistory;
 
 	CComPtr<ID3D12Fence> m_pFence;
 	UINT64 m_SignalValue;
@@ -120,6 +157,7 @@ private:
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
+		EnvironmentMapSRVSlot,
 		PathTracerOutputSRVBaseSlot,
 		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		PathTracerOutputUAVBaseSlot,

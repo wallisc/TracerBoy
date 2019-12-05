@@ -11,3 +11,12 @@ struct RayPayload
 	float hitT;
 	float3 normal;
 };
+
+struct PerFrameConstants
+{
+	float3 CameraPosition;
+	float Time;
+	float3 CameraLookAt;
+	uint InvalidateHistory;
+	float2 Mouse;
+};

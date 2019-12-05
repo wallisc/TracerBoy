@@ -49,12 +49,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="RayTracingPS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="FullScreenPlaneVS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="PostProcessCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>

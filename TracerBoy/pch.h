@@ -16,6 +16,8 @@
 #include <atlbase.h>
 #include "d3dx12.h"
 
+#include "directxtex.h"
+
 #define HANDLE_FAILURE() throw -1;
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))

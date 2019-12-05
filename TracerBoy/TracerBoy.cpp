@@ -1,7 +1,5 @@
 #include "pch.h"
 
-#include "FullscreenPlaneVS.h"
-#include "RayTracingPS.h"
 #include "PostProcessCS.h"
 #include "RayGen.h"
 #include "ClosestHit.h"
@@ -26,13 +24,63 @@ struct HitGroupShaderRecord
 	BYTE Padding2[8];
 };
 
+//------------------------------------------------------------------------------------------------
+// Heap-allocating UpdateSubresources implementation
+inline UINT64 UpdateSubresourcesHelper(
+	ID3D12Device* pDevice,
+	_In_ ID3D12GraphicsCommandList* pCmdList,
+	_In_ ID3D12Resource* pDestinationResource,
+	_In_ ID3D12Resource* pIntermediate,
+	UINT64 IntermediateOffset,
+	_In_range_(0, D3D12_REQ_SUBRESOURCES) UINT FirstSubresource,
+	_In_range_(0, D3D12_REQ_SUBRESOURCES - FirstSubresource) UINT NumSubresources,
+	_In_reads_(NumSubresources) D3D12_SUBRESOURCE_DATA* pSrcData)
+{
+	UINT64 RequiredSize = 0;
+	UINT64 MemToAlloc = static_cast<UINT64>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64))* NumSubresources;
+	if (MemToAlloc > SIZE_MAX)
+	{
+		return 0;
+	}
+	void* pMem = HeapAlloc(GetProcessHeap(), 0, static_cast<SIZE_T>(MemToAlloc));
+	if (pMem == nullptr)
+	{
+		return 0;
+	}
+	auto pLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(pMem);
+	UINT64* pRowSizesInBytes = reinterpret_cast<UINT64*>(pLayouts + NumSubresources);
+	UINT* pNumRows = reinterpret_cast<UINT*>(pRowSizesInBytes + NumSubresources);
+
+	auto Desc = pDestinationResource->GetDesc();
+	pDevice->GetCopyableFootprints(&Desc, FirstSubresource, NumSubresources, IntermediateOffset, pLayouts, pNumRows, pRowSizesInBytes, &RequiredSize);
+
+	UINT64 Result = UpdateSubresources(pCmdList, pDestinationResource, pIntermediate, FirstSubresource, NumSubresources, RequiredSize, pLayouts, pNumRows, pRowSizesInBytes, pSrcData);
+	HeapFree(GetProcessHeap(), 0, pMem);
+	return Result;
+}
+
+inline UINT64 GetRequiredIntermediateSizeHelper(
+	ID3D12Device *pDevice,
+	_In_ ID3D12Resource* pDestinationResource,
+	_In_range_(0, D3D12_REQ_SUBRESOURCES) UINT FirstSubresource,
+	_In_range_(0, D3D12_REQ_SUBRESOURCES - FirstSubresource) UINT NumSubresources)
+{
+	auto Desc = pDestinationResource->GetDesc();
+	UINT64 RequiredSize = 0;
+
+	pDevice->GetCopyableFootprints(&Desc, FirstSubresource, NumSubresources, 0, nullptr, nullptr, nullptr, &RequiredSize);
+
+	return RequiredSize;
+}
+
 TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileName) : 
 	m_pCommandQueue(pQueue), 
 	m_SignalValue(1), 
 	m_ActivePathTraceOutputIndex(0), 
 	m_FramesRendered(0),
 	m_mouseX(0),
-	m_mouseY(0)
+	m_mouseY(0),
+	m_bInvalidateHistory(false)
 {
 	VERIFY_HRESULT(m_pCommandQueue->GetDevice(IID_PPV_ARGS(&m_pDevice)));
 
@@ -52,13 +100,17 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 	{
 		CD3DX12_ROOT_PARAMETER1 Parameters[RayTracingRootSignatureParameters::NumRayTracingParameters];
-		Parameters[RayTracingRootSignatureParameters::PerFrameConstants].InitAsConstants(6, 0);
+		Parameters[RayTracingRootSignatureParameters::PerFrameConstantsParam].InitAsConstants(sizeof(PerFrameConstants) / sizeof(UINT32), 0);
 		Parameters[RayTracingRootSignatureParameters::ConfigConstants].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
 
 		CD3DX12_DESCRIPTOR_RANGE1 LastFrameSRVDescriptor;
 		LastFrameSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 		Parameters[RayTracingRootSignatureParameters::LastFrameSRV].InitAsDescriptorTable(1, &LastFrameSRVDescriptor);
 		
+		CD3DX12_DESCRIPTOR_RANGE1 EnvironmentMapSRVDescriptor;
+		EnvironmentMapSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
+		Parameters[RayTracingRootSignatureParameters::EnvironmentMapSRV].InitAsDescriptorTable(1, &EnvironmentMapSRVDescriptor);
+
 		CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
 		OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[RayTracingRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
@@ -126,28 +178,15 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 	CComPtr<ID3D12StateObjectProperties> pStateObjectProperties;
 	m_pRayTracingStateObject->QueryInterface(&pStateObjectProperties);
+	
 	{
-		AllocateUploadBuffer(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_pRayGenShaderTable);
-
-		void* pData;
-		m_pRayGenShaderTable->Map(0, nullptr, &pData);
-
 		void *pRayGenShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"RayGen");
-		memcpy(pData, pRayGenShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-		m_pRayGenShaderTable->Unmap(0, nullptr);
+		AllocateBufferWithData(pRayGenShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_pRayGenShaderTable);
 	}
 
 	{
-		AllocateUploadBuffer(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_pMissShaderTable);
-
-		void* pData;
-		m_pMissShaderTable->Map(0, nullptr, &pData);
-
 		void* pMissShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"Miss");
-		memcpy(pData, pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-		m_pMissShaderTable->Unmap(0, nullptr);
+		AllocateBufferWithData(pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_pMissShaderTable);
 	}
 
 	{
@@ -287,6 +326,32 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		CComPtr<ID3D12GraphicsCommandList4> pCommandList;
 		commandListAllocatorPair.first->QueryInterface(&pCommandList);
 
+
+		DirectX::TexMetadata texMetaData;
+		DirectX::ScratchImage scratchImage;
+		VERIFY_HRESULT(DirectX::LoadFromHDRFile(L"..\\Scenes\\Teapot\\textures\\envmap.hdr", &texMetaData, scratchImage));
+		VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice, texMetaData, D3D12_RESOURCE_FLAG_NONE, false, &m_pEnvironmentMap));
+		m_pDevice->CreateShaderResourceView(m_pEnvironmentMap, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
+
+		std::vector < D3D12_SUBRESOURCE_DATA> subresources;
+		VERIFY_HRESULT(PrepareUpload(m_pDevice, scratchImage.GetImages(), scratchImage.GetImageCount(), texMetaData, subresources));
+
+		const UINT64 uploadBufferSize = GetRequiredIntermediateSizeHelper(m_pDevice, m_pEnvironmentMap, 0, 1);
+
+		CComPtr<ID3D12Resource> textureUploadHeap;
+		AllocateUploadBuffer(uploadBufferSize, textureUploadHeap);
+
+		UpdateSubresourcesHelper(m_pDevice, pCommandList,
+			m_pEnvironmentMap, textureUploadHeap,
+			0, 0, static_cast<unsigned int>(subresources.size()),
+			subresources.data());
+
+		D3D12_RESOURCE_BARRIER barriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pEnvironmentMap, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		pCommandList->ResourceBarrier(ARRAYSIZE(barriers), barriers);
+
 		const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 		{
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildBottomLevelDesc = {};
@@ -330,9 +395,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		{
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
 			instanceDesc.AccelerationStructure = m_pBottomLevelAS->GetGPUVirtualAddress();
-			instanceDesc.Transform[0][0] = 1.0;
-			instanceDesc.Transform[1][1] = 1.0;
-			instanceDesc.Transform[2][2] = 1.0;
+			instanceDesc.Transform[0][0] = 4.0;
+			instanceDesc.Transform[1][1] = 4.0;
+			instanceDesc.Transform[2][2] = 4.0;
 			instanceDesc.InstanceMask = 1;
 			CComPtr<ID3D12Resource> pInstanceDescBuffer;
 
@@ -506,8 +571,13 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]);
 	SYSTEMTIME time;
 	GetSystemTime(&time);
-	float shaderConstants[] = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, static_cast<float>(time.wMilliseconds) / 1000.0f, static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
-	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstants, ARRAYSIZE(shaderConstants), shaderConstants, 0);
+	PerFrameConstants constants;
+	constants.CameraPosition = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z };
+	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
+	constants.InvalidateHistory = m_bInvalidateHistory;
+	constants.Mouse = { static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
+	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
+	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
 		
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
@@ -520,6 +590,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 
 	UINT LastFrameBufferSRVIndex = m_ActivePathTraceOutputIndex == 0 ? ARRAYSIZE(m_pAccumulatedPathTracerOutput) - 1 : m_ActivePathTraceOutputIndex - 1;
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LastFrameSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + LastFrameBufferSRVIndex));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::EnvironmentMapSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap, ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActivePathTraceOutputIndex));
 
 	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]->GetDesc();
@@ -583,6 +654,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 
 	VERIFY_HRESULT(commandListAllocatorPair.first->Close());
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
+	m_bInvalidateHistory = false;
 }
 
 
@@ -614,22 +686,49 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	m_mouseX = mouseX;
 	m_mouseY = mouseY;
 
-	const float cameraMoveSpeed = 0.01f;
+	bool bCameraMoved  = false;
+	const float cameraMoveSpeed = 0.07f;
+	Vector3 ViewDir = (m_camera.LookAt - m_camera.Position).Normalize();
 	if (keyboardInput['w'] || keyboardInput['W'])
 	{
-		m_camera.Position.z += dt * cameraMoveSpeed;
+		m_camera.Position += ViewDir * (dt * cameraMoveSpeed);
+		m_camera.LookAt += ViewDir * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
 	}
 	if (keyboardInput['s'] || keyboardInput['S'])
 	{
-		m_camera.Position.z += dt * cameraMoveSpeed;
+		m_camera.Position -= ViewDir * (dt * cameraMoveSpeed);
+		m_camera.LookAt -= ViewDir * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
 	}
 	if (keyboardInput['a'] || keyboardInput['A'])
 	{
-		m_camera.Position.x += dt * cameraMoveSpeed;
+		m_camera.Position -= m_camera.Right * (dt * cameraMoveSpeed);
+		m_camera.LookAt -= m_camera.Right * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
 	}
-	if (keyboardInput['D'] || keyboardInput['D'])
+	if (keyboardInput['D'] || keyboardInput['d'])
 	{
-		m_camera.Position.x -= dt * cameraMoveSpeed;
+		m_camera.Position += m_camera.Right * (dt * cameraMoveSpeed);
+		m_camera.LookAt += m_camera.Right * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
+	}
+	if (keyboardInput['Q'] || keyboardInput['q'])
+	{
+		m_camera.Position += m_camera.Up * (dt * cameraMoveSpeed);
+		m_camera.LookAt += m_camera.Up * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
+	}
+	if (keyboardInput['E'] || keyboardInput['e'])
+	{
+		m_camera.Position -= m_camera.Up * (dt * cameraMoveSpeed);
+		m_camera.LookAt -= m_camera.Up * (dt * cameraMoveSpeed);
+		bCameraMoved = true;
+	}
+
+	if (bCameraMoved)
+	{
+		m_bInvalidateHistory = true;
 	}
 }
 

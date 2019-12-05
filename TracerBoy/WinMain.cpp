@@ -54,7 +54,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	windowClass.lpszClassName = WindowName;
 	RegisterClassEx(&windowClass);
 
-	RECT windowRect = { 0, 0, 512, 512 };
+	RECT windowRect = { 0, 0, 800, 600 };
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	HWND hwnd = CreateWindow(
