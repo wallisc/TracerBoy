@@ -596,17 +596,6 @@ Scene CurrentScene = Scene(
 );
 #else
 GLOBAL Scene CurrentScene;
-void InitializeScene()
-{
-	CurrentScene.BoundedPlanes[0] = NewBoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(10,0,0), vec3(0,0,10), FLOOR_MATERIAL_ID);
-	CurrentScene.BoundedPlanes[1] = NewBoundedPlane(vec3(0.0, 2.0, -0.5), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID);
-	
-	CurrentScene.Spheres[0] = NewSphere(vec3(-2.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-	CurrentScene.Spheres[1] = NewSphere(vec3(-1.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-	CurrentScene.Spheres[2] = NewSphere(vec3( 0.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-	CurrentScene.Spheres[3] = NewSphere(vec3( 1.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-	CurrentScene.Spheres[4] = NewSphere(vec3( 2.0, 0.4,  0.5), 0.4f, CUSTOM_SCATTERING_MATERIAL_ID);
-};
 #endif
 
 vec3 GenerateRandomDirection()
@@ -1432,10 +1421,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     LightPositionYOffset = GetLightYOffset();
     
     vec4 lastFrameData = GetLastFrameData();
-#if !IS_SHADER_TOY
-	InitializeScene();
-#endif
-
+    
     bool HasSceneChanged = HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor) ||
       !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset) ||
 	  ShouldInvalidateHistory();

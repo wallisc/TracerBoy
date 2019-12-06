@@ -27,54 +27,54 @@
     <ClInclude Include="include\pbrtParser\math.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\3rdParty\happly.h">
+    <ClInclude Include="impl\3rdParty\happly.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.h">
-      <Filter>Source Files\Syntactic</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.h">
-      <Filter>Source Files\Syntactic</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene.h">
-      <Filter>Source Files\Syntactic</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\SemanticParser.h">
+    <ClInclude Include="impl\semantic\SemanticParser.h">
       <Filter>Source Files\Semantic</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\syntactic\Parser.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\syntactic\Scene.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\syntactic\Lexer.h">
+      <Filter>Source Files\Syntactic</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.cpp">
+    <ClCompile Include="impl\semantic\BinaryFileFormat.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Camera.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Geometry.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\importPBRT.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Lights.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Materials.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Scene.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Textures.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\syntactic\Parser.cpp">
       <Filter>Source Files\Syntactic</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.cpp">
+    <ClCompile Include="impl\syntactic\Scene2.cpp">
       <Filter>Source Files\Syntactic</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Camera.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Geometry.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\BinaryFileFormat.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\importPBRT.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Lights.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Materials.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Scene.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Textures.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene2.cpp">
+    <ClCompile Include="impl\syntactic\Lexer.cpp">
       <Filter>Source Files\Syntactic</Filter>
     </ClCompile>
   </ItemGroup>

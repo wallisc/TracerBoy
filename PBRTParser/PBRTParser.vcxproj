@@ -19,26 +19,26 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\3rdParty\happly.h" />
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\SemanticParser.h" />
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.h" />
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.h" />
-    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene.h" />
+    <ClInclude Include="impl\3rdParty\happly.h" />
+    <ClInclude Include="impl\semantic\SemanticParser.h" />
+    <ClInclude Include="impl\syntactic\Lexer.h" />
+    <ClInclude Include="impl\syntactic\Parser.h" />
+    <ClInclude Include="impl\syntactic\Scene.h" />
     <ClInclude Include="include\pbrtParser\math.h" />
     <ClInclude Include="include\pbrtParser\Scene.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\BinaryFileFormat.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Camera.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Geometry.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\importPBRT.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Lights.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Materials.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Scene.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Textures.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.cpp" />
-    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene2.cpp" />
+    <ClCompile Include="impl\semantic\BinaryFileFormat.cpp" />
+    <ClCompile Include="impl\semantic\Camera.cpp" />
+    <ClCompile Include="impl\semantic\Geometry.cpp" />
+    <ClCompile Include="impl\semantic\importPBRT.cpp" />
+    <ClCompile Include="impl\semantic\Lights.cpp" />
+    <ClCompile Include="impl\semantic\Materials.cpp" />
+    <ClCompile Include="impl\semantic\Scene.cpp" />
+    <ClCompile Include="impl\semantic\Textures.cpp" />
+    <ClCompile Include="impl\syntactic\Lexer.cpp" />
+    <ClCompile Include="impl\syntactic\Parser.cpp" />
+    <ClCompile Include="impl\syntactic\Scene2.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

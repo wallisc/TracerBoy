@@ -224,7 +224,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		pbrt::vec3f CameraPosition = pbrt::vec3f(0);
 		pbrt::vec3f CameraView = pbrt::vec3f(0.0, 0.0, 1.0);
 		CameraPosition = pCamera->frame * CameraPosition;
-		CameraView = pbrt::math::normalize(pCamera->frame * CameraView);
+		CameraView = pbrt::math::normalize(pbrt::math::xfmVector(pCamera->frame, CameraView));
 		pbrt::vec3f CameraRight = pbrt::math::cross(CameraView, pbrt::vec3f(0, 1, 0));
 		pbrt::vec3f CameraUp = pbrt::math::cross(CameraRight, CameraView);
 
@@ -233,11 +233,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 			return Vector3(v.x, v.y, v.z);
 		};
 		m_camera.Position = pfnConvertVector3(CameraPosition);
-		m_camera.LookAt = pfnConvertVector3(CameraView);
+		m_camera.LookAt = pfnConvertVector3(CameraPosition + CameraView);
 		m_camera.Right = pfnConvertVector3(CameraRight);
 		m_camera.Up = pfnConvertVector3(CameraUp);
 		m_camera.LensHeight = 2.0;
-		m_camera.FocalDistance = pCamera->focalDistance;
+		m_camera.FocalDistance = 7.0;
 ;		// TODO figure out how to convert camera
 #if 0
 		auto pfnConvertVector3 =[](const SceneParser::Vector3& v) -> Vector3
