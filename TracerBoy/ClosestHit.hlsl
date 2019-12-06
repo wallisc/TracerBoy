@@ -9,7 +9,7 @@ cbuffer LocalConstants : register(b2)
 StructuredBuffer<uint> IndexBuffer : register(t2);
 StructuredBuffer<float> VertexBuffer : register(t3);
 
-#define VertexStride 11
+#define VertexStride 6
 
 float3 GetFloat3FromVertexBuffer(uint vertexIndex, uint dataOffset)
 {

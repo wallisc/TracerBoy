@@ -13,33 +13,69 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\Syntactic">
+      <UniqueIdentifier>{077d19a8-9c1a-4f29-bc8a-6d8d775bd17c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Semantic">
+      <UniqueIdentifier>{cac385f4-53a1-46a9-a3e4-7a9449d8f179}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="PBRTParser.cpp">
+    <ClInclude Include="include\pbrtParser\Scene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\pbrtParser\math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\3rdParty\happly.h">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="PlyParser.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\SemanticParser.h">
+      <Filter>Source Files\Semantic</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="PBRTParser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="pch.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PlyParser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SceneParser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Parser.cpp">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Lexer.cpp">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Camera.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Geometry.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\BinaryFileFormat.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\importPBRT.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Lights.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Materials.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Scene.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\semantic\Textures.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Desktop\pbrt-parser-master\pbrtParser\impl\syntactic\Scene2.cpp">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

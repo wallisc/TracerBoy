@@ -1,5 +1,5 @@
 Integrator "path" "integer maxdepth" [ 65 ] 
-Transform [ 0.00552692 -0.342144 -0.939631 23.895 -0 0.939646 -0.342149 11.2207 -0.999985 -0.0018952 -0.00517328 0.0400773 0 0 0 1]
+Transform [ 0.00552692 -0.342144 -0.939631 -0 -0 0.939646 -0.342149 -0 -0.999985 -0.0018952 -0.00517328 -0 -0.0919892 -2.36787 26.2919 1]
 Sampler "sobol" "integer pixelsamples" [ 64 ] 
 PixelFilter "triangle" "float xwidth" [ 1.000000 ] "float ywidth" [ 1.000000 ] 
 Film "image" "integer xresolution" [ 1280 ] "integer yresolution" [ 720 ] "string filename" [ "teapot.png" ] 
@@ -9,10 +9,10 @@ WorldBegin
 	MakeNamedMaterial "Material" "string type" [ "substrate" ] "rgb Ks" [ 0.040000 0.040000 0.040000 ] "bool remaproughness" [ "false" ] "float uroughness" [ 0.001000 ] "float vroughness" [ 0.001000 ] "rgb Kd" [ 0.900000 0.900000 0.900000 ] 
 	MakeNamedMaterial "Floor" "string type" [ "matte" ] "texture Kd" [ "Texture01" ] 
 	NamedMaterial "Floor" 
-	Shape "trianglemesh" "integer indices" [ 0 1 2 0 2 3 ] "point P" [ 0 -9.88498e-006 79.9533 -79.9533 0 0 0 9.88498e-006 -79.9533 79.9533 0 0 ] "normal N" [ 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 ] "float uv" [ 0 0 1 0 1 1 0 1 ] 
+	Shape "trianglemesh" "integer indices" [ 0 1 2 0 2 3 ] "point P" [ 0 -9.88498e-006 79.9533 -79.9533 0 0 0 9.88498e-006 -79.9533 79.9533 0 0 ] "normal N" [ 0 -1 -1.23634e-007 0 -1 -1.23634e-007 0 -1 -1.23634e-007 0 -1 -1.23634e-007 ] "float uv" [ 0 0 1 0 1 1 0 1 ] 
 	TransformBegin
 		Transform [ -0.386527 0 0.922278 0 -0.922278 0 -0.386527 0 0 1 0 0 0 0 0 1]
-		LightSource "infinite" "string mapname" [ "textures/envmap.png" ] 
+		LightSource "infinite" "string mapname" [ "textures/envmap.pfm" ] 
 	TransformEnd
 	NamedMaterial "Material" 
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 

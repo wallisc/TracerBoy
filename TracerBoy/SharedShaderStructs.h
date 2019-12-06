@@ -20,3 +20,9 @@ struct PerFrameConstants
 	uint InvalidateHistory;
 	float2 Mouse;
 };
+
+struct Vertex
+{
+	float3 Position;
+	float3 Normal;
+};

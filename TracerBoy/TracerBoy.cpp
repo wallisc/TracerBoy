@@ -6,11 +6,12 @@
 #include "Miss.h"
 #include "SharedShaderStructs.h"
 
-#include "PBRTParser.h"
+#ifdef WIN32
+#undef min
+#undef max
+#endif
 
-// TODO: This is being pulled from PBRT parser which is a shady way to grab this...
-#include "glm/vec3.hpp"
-
+#include "PBRTParser\Scene.h"
 
 #define USE_DXR 1
 
@@ -215,18 +216,31 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	}
 
 	{
-		PBRTParser::PBRTParser SceneParser;
-		SceneParser::Scene Scene;
-		SceneParser.Parse(sceneFileName, Scene);
+		std::shared_ptr<pbrt::Scene> pScene = pbrt::importPBRT(sceneFileName);
 
-#if !USE_DXR
-		m_camera.Position = Vector3(0.0, 2.0, 3.5);
-		m_camera.LookAt = Vector3(0.0, 1.0, 0.0);
-		m_camera.Up = Vector3(0.0, 1.0, 0.0);
-		m_camera.Right = Vector3(1.0, 0.0, 0.0);
+		assert(pScene->cameras.size() > 0);
+		auto& pCamera = pScene->cameras[0];
+
+		pbrt::vec3f CameraPosition = pbrt::vec3f(0);
+		pbrt::vec3f CameraView = pbrt::vec3f(0.0, 0.0, 1.0);
+		CameraPosition = pCamera->frame * CameraPosition;
+		CameraView = pCamera->frame * CameraView;
+		CameraPosition = -pCamera->focalDistance * CameraView;
+		pbrt::vec3f CameraRight = pbrt::math::cross(CameraView, pbrt::vec3f(0, 1, 0));
+		pbrt::vec3f CameraUp = pbrt::math::cross(CameraRight, CameraView);
+
+		auto pfnConvertVector3 = [](const pbrt::vec3f& v) -> Vector3
+		{
+			return Vector3(v.x, v.y, v.z);
+		};
+		m_camera.Position = pfnConvertVector3(CameraPosition);
+		m_camera.LookAt = pfnConvertVector3(CameraView);
+		m_camera.Right = pfnConvertVector3(CameraRight);
+		m_camera.Up = pfnConvertVector3(CameraUp);
 		m_camera.LensHeight = 2.0;
-		m_camera.FocalDistance = 7.0;
-#else
+		m_camera.FocalDistance = pCamera->focalDistance;
+;		// TODO figure out how to convert camera
+#if 0
 		auto pfnConvertVector3 =[](const SceneParser::Vector3& v) -> Vector3
 		{
 			return Vector3(v.x, v.y, v.z);
@@ -252,43 +266,54 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		m_camera.FocalDistance = 7.0;
 #endif
 
-
-
 		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<CComPtr<ID3D12Resource>> stagingResources;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
 
 		void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
-		for (UINT geometryIndex = 0; geometryIndex < Scene.m_Meshes.size(); geometryIndex++)
+		UINT geometryCount = 0;
+		for (UINT geometryIndex = 0; geometryIndex < pScene->world->shapes.size(); geometryIndex++)
 		{
-			auto& mesh = Scene.m_Meshes[geometryIndex];
+			auto &pGeometry = pScene->world->shapes[geometryIndex];
+			pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
+			if (!pTriangleMesh)
+			{
+				// Only supporting triangle meshes
+				continue;
+			}
+
 			CComPtr<ID3D12Resource> pVertexBuffer;
-			UINT vertexSize = sizeof(SceneParser::Vertex);
-			UINT vertexBufferSize = static_cast<UINT>(mesh.m_VertexBuffer.size() * vertexSize);
+			UINT vertexSize = sizeof(Vertex);
+			UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
 			{
 				AllocateUploadBuffer(vertexBufferSize, pVertexBuffer);
 				BYTE *pVertexBufferData;
 				VERIFY_HRESULT(pVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
-				for (UINT v = 0; v < mesh.m_VertexBuffer.size(); v++)
+				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 				{
-					const SceneParser::Vertex &vertex = mesh.m_VertexBuffer[v];
-					memcpy(pVertexBufferData + vertexSize * v, &vertex, vertexSize);
+					auto& parserVertex = pTriangleMesh->vertex[v];
+					auto &parserNormal = pTriangleMesh->normal[v];
+					Vertex shaderVertex;
+					shaderVertex.Position = { parserVertex.x, parserVertex.y, parserVertex.z };
+					shaderVertex.Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
+					memcpy(pVertexBufferData + vertexSize * v, &shaderVertex, vertexSize);
 				}
 			}
 			
 
-			UINT indexSize = sizeof(mesh.m_IndexBuffer[0]);
-			assert(indexSize == 4 || indexSize == 2);
-			UINT indexBufferSize = static_cast<UINT>(mesh.m_IndexBuffer.size() * indexSize);
+			UINT indexSize = sizeof(UINT32);
+			UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
 			CComPtr<ID3D12Resource> pIndexBuffer;
 			{
 				AllocateUploadBuffer(indexBufferSize, pIndexBuffer);
-				BYTE *pIndexBufferData;
+				UINT32 *pIndexBufferData;
 				VERIFY_HRESULT(pIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
-				for (UINT i = 0; i < mesh.m_IndexBuffer.size(); i++)
+				for (UINT i = 0; i < pTriangleMesh->index.size(); i++)
 				{
-					auto index = mesh.m_IndexBuffer[i];
-					memcpy(pIndexBufferData + indexSize * i, &index, indexSize);
+					auto triangleIndices = pTriangleMesh->index[i];
+					pIndexBufferData[3 * i    ] = triangleIndices.x;
+					pIndexBufferData[3 * i + 1] = triangleIndices.y;
+					pIndexBufferData[3 * i + 2] = triangleIndices.z;
 				}
 			}
 
@@ -306,7 +331,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 			geometryDescs.push_back(geometryDesc);
 
 			HitGroupShaderRecord shaderRecord = {};
-			shaderRecord.GeometryIndex = geometryIndex;
+			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
 			shaderRecord.VertexBuffer = pVertexBuffer->GetGPUVirtualAddress();
 
@@ -395,9 +420,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		{
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
 			instanceDesc.AccelerationStructure = m_pBottomLevelAS->GetGPUVirtualAddress();
-			instanceDesc.Transform[0][0] = 4.0;
-			instanceDesc.Transform[1][1] = 4.0;
-			instanceDesc.Transform[2][2] = 4.0;
+			instanceDesc.Transform[0][0] = 1.0;
+			instanceDesc.Transform[1][1] = 1.0;
+			instanceDesc.Transform[2][2] = 1.0;
 			instanceDesc.InstanceMask = 1;
 			CComPtr<ID3D12Resource> pInstanceDescBuffer;
 
