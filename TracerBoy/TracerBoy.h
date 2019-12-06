@@ -33,7 +33,7 @@ struct Vector3
 
 	Vector3 Normalize() const
 	{
-		float length = sqrt(x * x + y * y + z * z);
+		float length = sqrtf(x * x + y * y + z * z);
 		return { x / length, y / length, z / length };
 	}
 };

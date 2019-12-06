@@ -1,6 +1,7 @@
 #include "pch.h"
 
 std::unique_ptr<D3D12App> g_pD3D12App;
+HWND g_hwnd;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -24,7 +25,16 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		}
 		return 0;
 	case WM_PAINT:
-		g_pD3D12App->Render();
+		{
+			std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
+			g_pD3D12App->Render();
+			std::chrono::steady_clock::time_point endTime = std::chrono::steady_clock::now();
+			float renderTime = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+			
+			char windowTitle[50];
+			snprintf(windowTitle, ARRAYSIZE(windowTitle), "TracerBoy - %.2f ms", renderTime / 1000.0f);
+			SetWindowText(g_hwnd, windowTitle);
+		}
 		return 0;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -57,7 +67,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	RECT windowRect = { 0, 0, 800, 600 };
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
-	HWND hwnd = CreateWindow(
+	g_hwnd = CreateWindow(
 		windowClass.lpszClassName,
 		WindowName,
 		WS_OVERLAPPEDWINDOW,
@@ -70,8 +80,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 		hInstance,
 		nullptr);
 
-	ShowWindow(hwnd, nCmdShow);
-	g_pD3D12App = std::unique_ptr<D3D12App>(new D3D12App(hwnd, pCommandLine));
+	ShowWindow(g_hwnd, nCmdShow);
+	g_pD3D12App = std::unique_ptr<D3D12App>(new D3D12App(g_hwnd, pCommandLine));
 
 	MSG msg = {};
 	while (msg.message != WM_QUIT)
