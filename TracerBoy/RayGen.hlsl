@@ -7,28 +7,24 @@ cbuffer PerFrameCB : register(b0)
 	PerFrameConstants perFrameConstants;
 }
 
-cbuffer ConfigConstants : register(b1)
+cbuffer ConfigCB : register(b1)
 {
-	float2 Resolution;
-	float FocalDistance;
-	float CameraLensHeight;
-	float3 CameraLookAt;
-	float3 CameraRight;
-	float3 CameraUp;
+	ConfigConstants configConstants;
 }
 
 bool ShouldInvalidateHistory() { return perFrameConstants.InvalidateHistory; }
 float3 GetCameraPosition() { return perFrameConstants.CameraPosition; }
 float3 GetCameraLookAt() { return perFrameConstants.CameraLookAt; }
-float3 GetCameraUp() { return CameraUp; }
-float3 GetCameraRight() { return CameraRight; }
-float GetCameraLensHeight() { return CameraLensHeight; }
-float GetCameraFocalDistance() { return FocalDistance; }
+float3 GetCameraUp() { return configConstants.CameraUp; }
+float3 GetCameraRight() { return configConstants.CameraRight; }
+float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
+float GetCameraFocalDistance() { return configConstants.FocalDistance; }
 
 RWTexture2D<float4> OutputTexture : register(u0);
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
+StructuredBuffer<float> RandSeedBuffer : register(t5);
 SamplerState PointSampler : register(s0);
 SamplerState BilinearSampler : register(s1);
 
@@ -41,13 +37,13 @@ float3 SampleEnvironmentMap(float3 v)
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(viewDir.y) / (3.14);
 
-	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb * 0.75;
+	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 #define GLOBAL static
 float GetTime() { return perFrameConstants.Time; }
-float3 GetResoultion() { return float3(Resolution.xy, 1.0); }
-float4 GetMouse() { return float4(perFrameConstants.Mouse.x, GetResoultion().y - perFrameConstants.Mouse.y, 0.0, 0.0); }
+float3 GetResolution() { return float3(DispatchRaysDimensions()); }
+float4 GetMouse() { return float4(perFrameConstants.Mouse.x, GetResolution().y - perFrameConstants.Mouse.y, 0.0, 0.0); }
 float4 GetLastFrameData() {
 	return LastFrameTexture.SampleLevel(PointSampler, float2(0, 1), 0);
 }
@@ -82,7 +78,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint
 	{
 		if (payload.objectIndex > 0)
 		{
-			result.y = 9;
+			result.y = 2;
 		}
 		else
 		{
@@ -104,7 +100,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint
 [shader("raygeneration")]
 void RayGen()
 {
+	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
-	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResoultion());
+	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResolution());
 }

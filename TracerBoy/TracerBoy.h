@@ -92,6 +92,9 @@ private:
 
 	CComPtr<ID3D12Resource> m_pEnvironmentMap;
 
+	CComPtr<ID3D12Resource> m_pRandSeedBuffer;
+	void UpdateRandSeedBuffer();
+
 	std::vector<CComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -115,11 +118,12 @@ private:
 	enum RayTracingRootSignatureParameters
 	{
 		PerFrameConstantsParam = 0,
-		ConfigConstants,
+		ConfigConstantsParam,
 		EnvironmentMapSRV,
 		LastFrameSRV,
 		OutputUAV,
 		AccelerationStructureRootSRV,
+		RandSeedRootSRV,
 		NumRayTracingParameters
 	};
 	

@@ -21,6 +21,14 @@ struct PerFrameConstants
 	float2 Mouse;
 };
 
+struct ConfigConstants
+{
+	float3 CameraRight;
+	float FocalDistance;
+	float3 CameraUp;
+	float CameraLensHeight;
+};
+
 struct Vertex
 {
 	float3 Position;

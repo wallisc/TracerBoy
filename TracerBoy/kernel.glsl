@@ -18,7 +18,7 @@
 #define GLOBAL
 float GetTime() { return iTime; }
 vec4 GetMouse() { return iMouse; }
-vec3 GetResoultion() { return iResolution; }
+vec3 GetResolution() { return iResolution; }
 vec3 mul(vec3 v, mat3 m) { return v * m; }
 vec4 GetAccumulatedColor(vec2 uv) { return texture(iChannel0, uv); }
 vec4 GetLastFrameData() { return texture(iChannel0, vec2(0.0)); }
@@ -44,7 +44,6 @@ float3 SampleEnvironmentMap(float3 v)
 }
 #endif 
 
-// Rand taken from https://www.shadertoy.com/view/4sfGDB
 GLOBAL float seed = 0.;
 float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
 
@@ -1373,7 +1372,7 @@ float GetRotationFactor()
         return 0.5f;
     }
     
-    return GetMouse().x / GetResoultion().x;
+    return GetMouse().x / GetResolution().x;
 }
 
 float GetLightYOffset()
@@ -1383,7 +1382,7 @@ float GetLightYOffset()
         // Default value when shader is initially loaded up
         return 1.0f;
     }
-    return mix(-2.0, 3.0, GetMouse().y / GetResoultion().y);
+    return mix(-2.0, 3.0, GetMouse().y / GetResolution().y);
 }
 
 float GetLastFrameRotationFactor(vec4 lastFrameData)
@@ -1416,7 +1415,7 @@ mat3 GetViewMatrix(float xRotationFactor)
 
 vec4 PathTrace(in vec2 pixelCoord)
 {
-    vec2 uv = pixelCoord.xy / GetResoultion().xy;
+    vec2 uv = pixelCoord.xy / GetResolution().xy;
     float rotationFactor = GetRotationFactor();
     LightPositionYOffset = GetLightYOffset();
     
@@ -1433,13 +1432,15 @@ vec4 PathTrace(in vec2 pixelCoord)
         return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
     }
     //CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
-    
-    seed = GetTime() + GetResoultion().y * pixelCoord.x / GetResoultion().x + pixelCoord.y / GetResoultion().y;
-    vec4 accumulatedColor = GetAccumulatedColor(uv);
+
+#if IS_SHADER_TOY
+    seed = GetTime() + GetResolution().y * pixelCoord.x / GetResolution().x + pixelCoord.y / GetResolution().y;
+#endif
+	vec4 accumulatedColor = GetAccumulatedColor(uv);
     // Add some jitter for anti-aliasing
-    uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResoultion().xy;
+    uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResolution().xy;
     
-    float aspectRatio = GetResoultion().x / GetResoultion().y ; 
+    float aspectRatio = GetResolution().x / GetResolution().y ; 
     vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
     vec3 lensPoint = GetCameraPosition();
     

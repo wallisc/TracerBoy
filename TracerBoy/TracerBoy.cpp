@@ -102,7 +102,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	{
 		CD3DX12_ROOT_PARAMETER1 Parameters[RayTracingRootSignatureParameters::NumRayTracingParameters];
 		Parameters[RayTracingRootSignatureParameters::PerFrameConstantsParam].InitAsConstants(sizeof(PerFrameConstants) / sizeof(UINT32), 0);
-		Parameters[RayTracingRootSignatureParameters::ConfigConstants].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
+		Parameters[RayTracingRootSignatureParameters::ConfigConstantsParam].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
 
 		CD3DX12_DESCRIPTOR_RANGE1 LastFrameSRVDescriptor;
 		LastFrameSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -118,7 +118,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
-
+		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
+		
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
 			CD3DX12_STATIC_SAMPLER_DESC(
@@ -557,6 +558,8 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
 
+	UpdateRandSeedBuffer();
+
 	CommandListAllocatorPair commandListAllocatorPair;
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
 
@@ -580,8 +583,8 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	constants.Mouse = { static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
 	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
-	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstants, m_pConfigConstants->GetGPUVirtualAddress());
-		
+	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
+	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 	
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
@@ -662,25 +665,13 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 
 void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight)
 {
-	float padding = 0.0f;
-	float configConstants[] = {
-		static_cast<float>(backBufferWidth),
-		static_cast<float>(backBufferHeight),
-		m_camera.FocalDistance,
-		m_camera.LensHeight,
-		m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, padding, // lookAt 
-		m_camera.Right.x, m_camera.Right.y, m_camera.Right.z, padding, // right
-		m_camera.Up.x, m_camera.Up.y, m_camera.Up.z, padding // up
-	};
-	if (!m_pConfigConstants)
-	{
-		AllocateUploadBuffer(sizeof(configConstants), m_pConfigConstants);
-	}
+	ConfigConstants configConstants;
+	configConstants.CameraLensHeight = m_camera.LensHeight;
+	configConstants.FocalDistance = m_camera.FocalDistance;
+	configConstants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
+	configConstants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 
-	void* pData;
-	m_pConfigConstants->Map(0, nullptr, &pData);
-	memcpy(pData, configConstants, sizeof(configConstants));
-	m_pConfigConstants->Unmap(0, nullptr);
+	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }
 
 void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt)
@@ -805,6 +796,18 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 
 		}
 
-
+		AllocateUploadBuffer(sizeof(float) * backBufferDesc.Width * backBufferDesc.Height, m_pRandSeedBuffer);
 	}
+}
+
+void TracerBoy::UpdateRandSeedBuffer()
+{
+	UINT numSeeds = m_pRandSeedBuffer->GetDesc().Width / sizeof(UINT32);
+	float* pData;
+	VERIFY_HRESULT(m_pRandSeedBuffer->Map(0, nullptr, (void**)&pData));
+	for (UINT i = 0; i < numSeeds; i++)
+	{
+		pData[i] = 10000.0f * (float)rand() / (float)RAND_MAX;
+	}
+	m_pRandSeedBuffer->Unmap(0, nullptr);
 }
