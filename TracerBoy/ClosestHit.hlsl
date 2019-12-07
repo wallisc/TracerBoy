@@ -36,10 +36,10 @@ void ClosestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttribut
 	payload.barycentrics = attr.barycentrics;
 	payload.objectIndex = GeometryIndex;
 	payload.hitT = RayTCurrent();
-	payload.normal =
-		payload.barycentrics.x * n0 +
-		payload.barycentrics.y * n1 +
-		(1.0 - payload.barycentrics.x - payload.barycentrics.y) * n2;
+	payload.normal = normalize(
+		(1.0 - payload.barycentrics.x - payload.barycentrics.y) * n0 +
+		payload.barycentrics.x * n1 +
+		payload.barycentrics.y * n2);
 }
 
 

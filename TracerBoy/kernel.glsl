@@ -1,5 +1,5 @@
 #define MAX_BOUNCES 6
-#define EPSILON 0.0001
+#define EPSILON 0.000001
 #define PI 3.14
 #define LARGE_NUMBER 1e20
 #define SMALL_NUMBER 0.01
@@ -37,7 +37,7 @@ struct Ray
     vec3 direction; 
 };
 
-float3 SampleEnvironmentMap(float3 v)
+vec3 SampleEnvironmentMap(vec3 v)
 {
     const float EnvironmentLightMultipier = 0.15;
 	return EnvironmentLightMultipier * texture(iChannel1, v).xyz;
@@ -506,7 +506,7 @@ float SpecularBTDF(
 #define CUSTOM_SCATTERING_MATERIAL_ID 36
 
 #define USE_LARGE_SCENE 1
-#define USE_FOG_SCENE 1
+#define USE_FOG_SCENE 0
 
 #define numBoundedPlanes  2
 #define AreaLightIndex (numBoundedPlanes - 1)
@@ -544,7 +544,7 @@ Scene CurrentScene = Scene(
     // Scene Geometry
     BoundedPlane[numBoundedPlanes](
        BoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(10,0,0), vec3(0,0,10), FLOOR_MATERIAL_ID), // Bottom wall
-       BoundedPlane(vec3(0.0, 2.0, 6.5), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID)
+       BoundedPlane(vec3(0.0, 2.0, 0.0), vec3(0, -1, 0), vec3(0.5,0,0), vec3(0,0,.5), AREA_LIGHT_MATERIAL_ID)
     ),
         
    Box[numBoxes](
@@ -620,6 +620,33 @@ vec3 GenerateRandomDirection(vec3 normal)
     }
 }
 
+vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
+{
+    vec3 xAxis = cross(normal, vec3(1, 0, 0));
+    vec3 zAxis = cross(normal, xAxis);
+    return v.x * xAxis + v.y * normal + v.z * zAxis;
+}
+
+vec3 GenerateCosineWeightedDirection(out float pdfValue)
+{
+	float rand0 = rand();
+    float r = sqrt(rand0);
+    float theta = 2.0 * PI * rand();
+ 
+    float x = r * cos(theta);
+	float y = sqrt(max(EPSILON, 1.0 - rand0));
+    float z = r * sin(theta);
+
+	pdfValue = y / PI;
+    return vec3(x, y, z);
+}
+
+vec3 GenerateCosineWeightedDirection(vec3 normal, out float pdfValue)
+{
+	vec3 direction = GenerateCosineWeightedDirection(pdfValue);
+	return ReorientVectorAroundNormal(direction, normal);
+}
+
 vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out float PDFValue)
 { 
     float lobeMultiplier = pow(1.0 - roughness, 5.0) * 1000.0;
@@ -633,12 +660,9 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
         cos(phi),
         sin(phi) * sin(theta));
     
-    vec3 xAxis = cross(normal, vec3(1, 0, 0));
-    vec3 zAxis = cross(normal, xAxis);
-    
     PDFValue = (lobeMultiplier + 1.0) * pow(cos(phi), lobeMultiplier) / (2.0 * PI);
     
-    return direction.x * xAxis + direction.y * normal + direction.z * zAxis;
+	return ReorientVectorAroundNormal(direction, normal);
 }
 
 #if IS_SHADER_TOY
@@ -878,7 +902,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
     materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
     
-    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.2, 0.8); // ice
+    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.1, 0.2); // ice
     
     materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
     materials[AREA_LIGHT_MATERIAL_ID] = PlasticMaterial(vec3(0.45, 0.45, 0.45));
@@ -1000,7 +1024,7 @@ vec4 Trace(Ray ray)
         vec3 normal;
         uint PrimitiveID;
         vec2 result = Intersect(ray, normal, PrimitiveID);
-        
+
 #if USE_FOG
         float distanceTravelled = result.x;
         bool hitNotFound = int(result.y) == INVALID_MATERIAL_ID;
@@ -1163,7 +1187,9 @@ vec4 Trace(Ray ray)
                 } 
                 else 
                 {
-                    ray.direction = GenerateRandomDirection(normal);
+					float PDFValue;
+                    ray.direction = GenerateCosineWeightedDirection(normal, PDFValue);
+                    accumulatedIndirectLightMultiplier /= PDFValue;
                 }
             }
             
@@ -1263,7 +1289,7 @@ vec4 Trace(Ray ray)
             	float lightDistance = length(lightDirection);
             	lightDirection = lightDirection / lightDistance;
             	    
-                #define SHADOW_BOUNCES 0
+                #define SHADOW_BOUNCES 1
                 vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
                 Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
                 for(int i = 0; i < SHADOW_BOUNCES; i++)
@@ -1280,7 +1306,7 @@ vec4 Trace(Ray ray)
                     {
                         break;
                     }
-                    else if(IsSubsurfaceScattering(material))
+                    else if(false)//IsSubsurfaceScattering(material))
                     {
                        shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
                        ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
