@@ -238,32 +238,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		m_camera.Up = pfnConvertVector3(CameraUp);
 		m_camera.LensHeight = 2.0;
 		m_camera.FocalDistance = 7.0;
-;		// TODO figure out how to convert camera
-#if 0
-		auto pfnConvertVector3 =[](const SceneParser::Vector3& v) -> Vector3
-		{
-			return Vector3(v.x, v.y, v.z);
-		};
-		m_camera.Position = pfnConvertVector3(Scene.m_Camera.m_Position);
-		m_camera.LookAt = pfnConvertVector3(Scene.m_Camera.m_LookAt);
-		m_camera.Up = pfnConvertVector3(Scene.m_Camera.m_Up);
-		
-		// TODO: This is a hobby project, don't judge
-		auto pfnConvertVec3 = [](Vector3& v) -> PBRTParser::glm::vec3
-		{
-			return PBRTParser::glm::vec3(v.x, v.y, v.z);
-		};
-
-		PBRTParser::glm::vec3 position = pfnConvertVec3(m_camera.Position);
-		PBRTParser::glm::vec3 lookAt = pfnConvertVec3(m_camera.LookAt);
-		PBRTParser::glm::vec3 view = PBRTParser::glm::normalize(lookAt - position);
-		PBRTParser::glm::vec3 up = pfnConvertVec3(m_camera.Up);
-		PBRTParser::glm::vec3 right = PBRTParser::glm::cross(up, view);
-
-		m_camera.Right = Vector3(right.x, right.y, right.z);
-		m_camera.LensHeight = 2.0;
-		m_camera.FocalDistance = 7.0;
-#endif
 
 		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<CComPtr<ID3D12Resource>> stagingResources;
@@ -291,7 +265,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 				{
 					auto& parserVertex = pTriangleMesh->vertex[v];
-					auto &parserNormal = pTriangleMesh->normal[v];
+					pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
+					if (v < pTriangleMesh->normal.size())
+					{
+						parserNormal = pTriangleMesh->normal[v];
+					}
 					Vertex shaderVertex;
 					shaderVertex.Position = { parserVertex.x, parserVertex.y, parserVertex.z };
 					shaderVertex.Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
