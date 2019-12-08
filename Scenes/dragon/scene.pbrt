@@ -14,7 +14,7 @@ WorldBegin
 	MakeNamedMaterial "Deco" "string type" [ "matte" ] "rgb Kd" [ 0.793110 0.793110 0.793110 ] 
 	MakeNamedMaterial "Diamond" "string type" [ "matte" ] "rgb Kd" [ 0.793110 0.793110 0.793110 ] 
 	MakeNamedMaterial "Deco2" "string type" [ "matte" ] "rgb Kd" [ 0.793110 0.793110 0.793110 ] 
-	Shape "trianglemesh" "integer indices" [ 0 1 2 0 2 3 ] "point P" [ 0 -10 500.0 -500.0 -10 0 0 -10 -500.0 500.0 -10 0 ] "normal N" [ 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 ] "float uv" [ 0 0 1 0 1 1 0 1 ] 	
+	Shape "trianglemesh" "integer indices" [ 0 1 2 0 2 3 ] "point P" [ 0 -2 500.0 -500.0 -2 0 0 -2 -500.0 500.0 -2 0 ] "normal N" [ 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 0 1 -1.23634e-007 ] "float uv" [ 0 0 1 0 1 1 0 1 ] 	
 	NamedMaterial "GroundOuter" 
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
 	NamedMaterial "Cloth" 
