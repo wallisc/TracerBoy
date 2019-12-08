@@ -37,7 +37,13 @@ float3 SampleEnvironmentMap(float3 v)
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(viewDir.y) / (3.14);
 
-	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb * 0.1;
+	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+}
+
+void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
+{
+	LightPosition = LightColor = float3(0.0, 0.0, 0.0);
+	PDFValue = 0.0;
 }
 
 #define GLOBAL static
@@ -78,7 +84,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint
 	{
 		if (payload.objectIndex > 0)
 		{
-			result.y = 1;
+			result.y = 0;
 		}
 		else
 		{

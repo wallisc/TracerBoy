@@ -69,6 +69,7 @@ struct CameraDescription
 #define DEFAULT_MATERIAL_FLAG 0x0
 #define METALLIC_MATERIAL_FLAG 0x1
 #define SUBSURFACE_SCATTER_MATERIAL_FLAG 0x2
+#define NO_SPECULAR_MATERIAL_FLAG 0x4
     
 struct Material
 {
@@ -82,6 +83,11 @@ struct Material
     float scattering;
     int Flags;
 };
+
+bool AllowsSpecular(Material material)
+{
+    return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
+}
     
 bool IsMetallic(Material material)
 {
@@ -157,6 +163,11 @@ Material MetalMaterial(vec3 color, float IOR, float roughness)
 Material ReflectiveMaterial()
 {
     return MetalMaterial(vec3(1.0, 1.0, 1.0), 3.5, 0.0);
+}
+
+Material MatteMaterial(vec3 color)
+{
+    return NewMaterial(color, 1.0, 0.0, vec3(0.0, 0.0, 0.0), 0.0, 0.0, NO_SPECULAR_MATERIAL_FLAG);
 }
 
 struct BoundedPlane 
@@ -417,6 +428,13 @@ float SpecularBRDF(
     return Numerator / Denominator;
 }
 
+float DiffuseBRDF(
+    vec3 LightDirection,
+    vec3 Normal)
+{
+	return dot(LightDirection, Normal) / PI;
+}
+
 bool IsFloatZero(float f)
 {
     return f >= -EPSILON && f <= EPSILON;
@@ -593,6 +611,16 @@ Scene CurrentScene = Scene(
         
     )
 );
+
+void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue)
+{
+    vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
+    LightPosition = CurrentScene.BoundedPlanes[AreaLightIndex].origin +
+        CurrentScene.BoundedPlanes[AreaLightIndex].Axis1 * areaLightUV.x +
+        CurrentScene.BoundedPlanes[AreaLightIndex].Axis2 * areaLightUV.y;
+    LightColor = GetAreaLightMaterial().albedo;
+	PDFValue = 1.0
+}
 #else
 GLOBAL Scene CurrentScene;
 #endif
@@ -819,12 +847,12 @@ Material GetFloorMaterial(vec3 WorldPosition)
     // Checker board pattern 
     
     // Use this to scale the size of the checker board tiling
-    const float ScaleMultiplier = 0.001;
+    const float ScaleMultiplier = 0.01;
     
     float IOR = 1.5;
-    float roughness = 0.1;
-    Material Mat0 = NormalMaterial(vec3(0.725, .71, .68), IOR, roughness);
-    Material Mat1 = NormalMaterial(vec3(0.73, .35, .15), IOR, roughness);
+    float roughness = 1.0;
+    Material Mat0 = MatteMaterial(vec3(0.725, .71, .68));
+    Material Mat1 = MatteMaterial(vec3(0.325, .35, .25));
     if(uint(fract(WorldPosition.x * ScaleMultiplier) * 10.0) % 2u == 0u)
     {
         if(uint(fract(WorldPosition.z * ScaleMultiplier) * 10.0) % 2u == 0u)
@@ -893,7 +921,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     
     Material materials[NUM_MATERIALS];
     materials[WAX_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.725, .1, .1), 0.2, 1.05, 0.2, 5.0);
-    materials[DEFAULT_WALL_MATERIAL_ID] = PlasticMaterial(vec3(0.725, .71, .68));
+    materials[DEFAULT_WALL_MATERIAL_ID] = NormalMaterial(vec3(0.9, 0.9, 0.9), 2.2, 0.001);
     materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
     materials[GOLD_MATERIAL_ID] = MetalMaterial(vec3(0.65, .5, .075), 1.18, 0.15);
     materials[BLUE_PLASTIC_MATERIAL_ID] = PlasticMaterial(vec3(.05, .05, .55));
@@ -932,22 +960,6 @@ Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPos
 Material GetAreaLightMaterial()
 {
     return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0));
-}
-
-void GetAreaLightSample(out vec3 LightPosition, out vec3 LightColor)
-{
-#if IS_SHADER_TOY
-    vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
-    LightPosition = CurrentScene.BoundedPlanes[AreaLightIndex].origin +
-        CurrentScene.BoundedPlanes[AreaLightIndex].Axis1 * areaLightUV.x +
-        CurrentScene.BoundedPlanes[AreaLightIndex].Axis2 * areaLightUV.y;
-    LightColor = GetAreaLightMaterial().albedo;
-#else
-	LightPosition = vec3(0.0, 10.0, -0.5); 
-	LightColor = float3(0.7, 0.7, 0.7);  
-#endif
-
-
 }
 
 struct Intersection
@@ -1016,8 +1028,9 @@ vec4 Trace(Ray ray)
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
     uint FirstPrimitiveID = uint(-1); 
     
+	float lightPDF;
     vec3 lightPosition, lightColor;
-    GetAreaLightSample(lightPosition, lightColor);
+    GetOneLightSample(lightPosition, lightColor, lightPDF);
     
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
@@ -1120,7 +1133,9 @@ vec4 Trace(Ray ray)
                 ray.direction);
             
             vec3 previousDirection = ray.direction;
-            bool bSpecularRay = IsMetallic(material) || rand() < fresnelFactor;
+            bool bSpecularRay = AllowsSpecular(material) && 
+				(IsMetallic(material) || rand() < fresnelFactor);
+
             if(bSpecularRay)
             {
                 float PDFValue;
@@ -1193,8 +1208,9 @@ vec4 Trace(Ray ray)
                 }
             }
             
+			float lightPDF;
             vec3 lightPosition, lightColor;
-            GetAreaLightSample(lightPosition, lightColor);
+            GetOneLightSample(lightPosition, lightColor, lightPDF);
                 
                 if(IsSubsurfaceScattering(material) && !bSpecularRay)
                 {
@@ -1214,7 +1230,7 @@ vec4 Trace(Ray ray)
                     int NumLightSamples = 0;
                     for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
                     {
-                        if(i != 0)
+                        if(i != 0 && lightPDF > EPSILON)
                         {
                             vec3 lightDirection = normalize(lightPosition - ray.origin);
                         
@@ -1285,77 +1301,80 @@ vec4 Trace(Ray ray)
                 }
             else
             {
-            	vec3 lightDirection = lightPosition - RayPoint;
-            	float lightDistance = length(lightDirection);
-            	lightDirection = lightDirection / lightDistance;
-            	    
-                #define SHADOW_BOUNCES 1
-                vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
-                Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
-                for(int i = 0; i < SHADOW_BOUNCES; i++)
-                {
-                    vec3 shadowNormal;
-                    uint shadowPrimitiveID;
-                    vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID); 
-                    vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
+				if(lightPDF > EPSILON)
+				{
+				    vec3 lightDirection = lightPosition - RayPoint;
+            		float lightDistance = length(lightDirection);
+            		lightDirection = lightDirection / lightDistance;
+
+					#define SHADOW_BOUNCES 1
+					vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
+					Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
+					for(int i = 0; i < SHADOW_BOUNCES; i++)
+					{
+						vec3 shadowNormal;
+						uint shadowPrimitiveID;
+						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID); 
+						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
                      
-                    int materialID = int(shadowResult.y);
-                    Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
+						int materialID = int(shadowResult.y);
+						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
 
-                    if(materialID == AREA_LIGHT_MATERIAL_ID)
-                    {
-                        break;
-                    }
-                    else if(false)//IsSubsurfaceScattering(material))
-                    {
-                       shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
-                       ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
-                        AIR_IOR,
-                        material.IOR,
-                        shadowNormal,
-                        shadowFeeler.direction));
+						if(materialID == AREA_LIGHT_MATERIAL_ID)
+						{
+							break;
+						}
+						else if(false)//IsSubsurfaceScattering(material))
+						{
+						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
+						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
+							AIR_IOR,
+							material.IOR,
+							shadowNormal,
+							shadowFeeler.direction));
                         
-                       shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID);
-                       vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
-                       float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
+						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID);
+						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
+						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
                        
-                       if(material.absorption > EPSILON)
-                       {
-                           vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
-                           ShadowMultiplier *= exp(-inverseAlbedo * subsurfacePathLength * material.absorption);
-                       }
-                       float ScatterChance = min(material.scattering * subsurfacePathLength, 1.0);
+						   if(material.absorption > EPSILON)
+						   {
+							   vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
+							   ShadowMultiplier *= exp(-inverseAlbedo * subsurfacePathLength * material.absorption);
+						   }
+						   float ScatterChance = min(material.scattering * subsurfacePathLength, 1.0);
                         
-                       ShadowMultiplier *= (1.0 - ScatterChance); // Ignoring possiblity of in scattering
-                       ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
-                          material.IOR,
-                          AIR_IOR,
-                          -shadowNormal,
-                          shadowFeeler.direction));
+						   ShadowMultiplier *= (1.0 - ScatterChance); // Ignoring possiblity of in scattering
+						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
+							  material.IOR,
+							  AIR_IOR,
+							  -shadowNormal,
+							  shadowFeeler.direction));
                         
-                       shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
-                    }
-                    else
-                    {
-                        ShadowMultiplier = vec3(0.0, 0.0, 0.0);
-                        break;
-                    }
-                }
+						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
+						}
+						else
+						{
+							ShadowMultiplier = vec3(0.0, 0.0, 0.0);
+							break;
+						}
+					}
                 
-                // TODO: Should be checking the environment light also
-                float nDotL = dot(lightDirection, normal);
-            	float lightMultiplier = nDotL;
-                if(IsSubsurfaceScattering(material))
-                {
-                    lightMultiplier = GetDiffuseMultiplier(material) * nDotL;
-                    if(!UsePerfectSpecularOptimization(material.roughness))
-                    {
-                        lightMultiplier *= SpecularBTDF(-previousDirection, material.IOR, ray.direction, AIR_IOR, normal, material.roughness);
-                    }
+            		float lightMultiplier = DiffuseBRDF(lightDirection, normal);
+					if(IsSubsurfaceScattering(material))
+					{
+						// TODO: What was this trying to accomplish again?
+						float nDotL = dot(lightDirection, normal);
+						lightMultiplier = GetDiffuseMultiplier(material) * dot(lightDirection, normal);
+						if(!UsePerfectSpecularOptimization(material.roughness))
+						{
+							lightMultiplier *= SpecularBTDF(-previousDirection, material.IOR, ray.direction, AIR_IOR, normal, material.roughness);
+						}
 
+					}
+					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor + material.emissive;
                 }
-                accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor + material.emissive;
-                if(bSpecularRay)
+				if(bSpecularRay)
                 {
                     if(IsMetallic(material))
                     {
@@ -1376,7 +1395,7 @@ vec4 Trace(Ray ray)
                 }
                 else // diffuse ray
                 {
-                   accumulatedIndirectLightMultiplier *= material.albedo * dot(ray.direction, normal); 
+                   accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, normal); 
                 }
             }
         }

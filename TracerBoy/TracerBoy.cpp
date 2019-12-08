@@ -226,8 +226,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		pbrt::vec3f CameraView = pbrt::vec3f(0.0, 0.0, 1.0);
 		CameraPosition = pCamera->frame * CameraPosition;
 		CameraView = pbrt::math::normalize(pbrt::math::xfmVector(pCamera->frame, CameraView));
-		pbrt::vec3f CameraRight = pbrt::math::cross(CameraView, pbrt::vec3f(0, 1, 0));
-		pbrt::vec3f CameraUp = pbrt::math::cross(CameraRight, CameraView);
+		pbrt::vec3f CameraRight = pbrt::math::cross(pbrt::vec3f(0, 1, 0), CameraView);
+		pbrt::vec3f CameraUp = pbrt::math::cross(CameraView, CameraRight);
 
 		auto pfnConvertVector3 = [](const pbrt::vec3f& v) -> Vector3
 		{
