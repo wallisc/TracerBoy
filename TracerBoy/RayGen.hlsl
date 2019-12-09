@@ -25,6 +25,7 @@ Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
 StructuredBuffer<float> RandSeedBuffer : register(t5);
+StructuredBuffer<Material> MaterialBuffer : register(t6);
 SamplerState PointSampler : register(s0);
 SamplerState BilinearSampler : register(s1);
 
@@ -59,6 +60,30 @@ float4 GetAccumulatedColor(float2 uv) {
 }
 bool NeedsToSaveLastFrameData() { return false; } // Handled by the CPU
 
+Material GetMaterial_NonRecursive(int MaterialID)
+{
+	return MaterialBuffer[MaterialID];
+}
+
+float rand();
+
+Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition)
+{
+	Material mat = MaterialBuffer[MaterialID];
+	if ((mat.Flags & MIX_MATERIAL_FLAG) != 0)
+	{
+		if (rand() < 0.5)
+		{
+			return GetMaterial_NonRecursive(uint(mat.albedo.x));
+		}
+		else
+		{
+			return GetMaterial_NonRecursive(uint(mat.albedo.y));
+		}
+	}
+	return mat;
+}
+
 struct Ray
 {
 	float3 origin;
@@ -82,14 +107,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint
 	bool hitFound = result.x < bigNumber;
 	if (hitFound)
 	{
-		if (payload.objectIndex > 0)
-		{
-			result.y = 0;
-		}
-		else
-		{
-			result.y = 32;
-		}
+		result.y = payload.materialIndex;
 	}
 	else
 	{
@@ -109,5 +127,5 @@ void RayGen()
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
-	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResolution());
+	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResolution().xy);
 }

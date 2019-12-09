@@ -19,7 +19,7 @@ struct HitGroupShaderRecord
 {
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
 	UINT GeometryIndex;
-	UINT Padding1;
+	UINT MaterialIndex;
 	D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer;
 	D3D12_GPU_VIRTUAL_ADDRESS VertexBuffer;
 	BYTE Padding2[8];
@@ -74,6 +74,133 @@ inline UINT64 GetRequiredIntermediateSizeHelper(
 	return RequiredSize;
 }
 
+float3 ConvertFloat3 (const pbrt::vec3f& v)
+{
+	return { v.x, v.y, v.z };
+}
+
+float ChannelAverage(const pbrt::vec3f& v)
+{
+	return (v.x + v.y + v.z) / 3.0;
+}
+
+float ConvertSpecularToIOR(float specular)
+{
+	return (sqrt(specular) + 1.0) / (1.0 - sqrt(specular));
+}
+
+struct MaterialTracker
+{
+	bool Exists(std::string name)
+	{
+		const auto& iter = MaterialNameToIndex.find(name);
+		return iter != MaterialNameToIndex.end();
+	}
+
+	UINT GetMaterial(std::string name)
+	{
+		VERIFY(Exists(name));
+		return MaterialNameToIndex[name];
+	}
+
+	UINT AddMaterial(const std::string &name, const Material m)
+	{
+		UINT materialIndex = MaterialList.size();
+		MaterialNameToIndex[name] = materialIndex;
+		MaterialList.push_back(m);
+		return materialIndex;
+	}
+
+	std::vector<Material> MaterialList;
+	std::unordered_map<std::string, UINT> MaterialNameToIndex;
+};
+
+
+Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &materialTracker)
+{
+	Material material = {};
+	material.IOR = 1.5f;
+
+	pbrt::SubstrateMaterial::SP pSubstrateMaterial = std::dynamic_pointer_cast<pbrt::SubstrateMaterial>(pPbrtMaterial);
+	pbrt::UberMaterial::SP pUberMaterial = std::dynamic_pointer_cast<pbrt::UberMaterial>(pPbrtMaterial);
+	pbrt::MixMaterial::SP pMixMaterial = std::dynamic_pointer_cast<pbrt::MixMaterial>(pPbrtMaterial);
+	pbrt::MirrorMaterial::SP pMirrorMaterial = std::dynamic_pointer_cast<pbrt::MirrorMaterial>(pPbrtMaterial);
+	pbrt::MetalMaterial::SP pMetalMaterial = std::dynamic_pointer_cast<pbrt::MetalMaterial>(pPbrtMaterial);
+	pbrt::FourierMaterial::SP pFourierMaterial = std::dynamic_pointer_cast<pbrt::FourierMaterial>(pPbrtMaterial);
+	pbrt::GlassMaterial::SP pGlassMaterial = std::dynamic_pointer_cast<pbrt::GlassMaterial>(pPbrtMaterial);
+	if (pUberMaterial)
+	{
+		VERIFY(!pUberMaterial->map_kd); // Not supporting textures
+		material.albedo = ConvertFloat3(pUberMaterial->kd);
+		//material.IOR = pUberMaterial->index;
+
+		VERIFY(!pUberMaterial->map_uRoughness); // Not supporting textures
+		VERIFY(pUberMaterial->uRoughness == pUberMaterial->vRoughness); // Not supporting multi dimension rougness
+		VERIFY(pUberMaterial->uRoughness == 0.0f); // Not supporting multi dimension rougness
+		material.roughness = pUberMaterial->roughness;
+
+		material.Flags = DEFAULT_MATERIAL_FLAG;
+		VERIFY(pUberMaterial->opacity.x >= 0.99); // how to support sub surface?
+		VERIFY(pUberMaterial->opacity.y >= 0.99); // how to support sub surface?
+		VERIFY(pUberMaterial->opacity.z >= 0.99); // how to support sub surface?
+	}
+	else if (pMixMaterial)
+	{
+		UINT mat0Index = materialTracker.AddMaterial(pMixMaterial->material0->name, CreateMaterial(pMixMaterial->material0, materialTracker));
+		UINT mat1Index = materialTracker.AddMaterial(pMixMaterial->material1->name, CreateMaterial(pMixMaterial->material1, materialTracker));
+		material.Flags = MIX_MATERIAL_FLAG;
+
+		// TODO: gross
+		material.albedo = { (float)mat0Index, (float)mat1Index };
+	}
+	else if (pMirrorMaterial)
+	{
+		material.albedo = { 1.0, 1.0, 1.0 };
+		material.roughness = 0.0;
+		material.Flags = METALLIC_MATERIAL_FLAG;
+	}
+	else if (pMetalMaterial)
+	{
+		// TODO: need to support real albedo
+		material.albedo = { 1.0, 1.0, 1.0 };
+
+		VERIFY(!pMetalMaterial->map_uRoughness); // Not supporting textures
+		VERIFY(pMetalMaterial->uRoughness == pMetalMaterial->vRoughness); // Not supporting multi dimension rougness
+		material.roughness = pMetalMaterial->uRoughness;
+		material.Flags = METALLIC_MATERIAL_FLAG;
+	}
+	else if (pSubstrateMaterial)
+	{
+		VERIFY(!pSubstrateMaterial->map_kd); // Not supporting textures
+		material.albedo = ConvertFloat3(pSubstrateMaterial->kd);
+		//material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
+
+		// not supporting different roughness
+		VERIFY(pSubstrateMaterial->uRoughness == pSubstrateMaterial->vRoughness);
+		material.roughness = pSubstrateMaterial->uRoughness;
+	}
+	else if (pGlassMaterial)
+	{
+		// TODO properly support transmission/absorption
+		material.Flags = DEFAULT_MATERIAL_FLAG;
+		material.albedo = { };
+		//material.absorption = pGlassMaterial->kr.x;
+		//material.scattering = pGlassMaterial->kt.x;
+	}
+	else if (pFourierMaterial)
+	{
+		// Not suppported
+		material.albedo = { 0.6, 0.6, 0.6 };
+		material.roughness = 0.2;
+	}
+	else
+	{
+		assert(false);
+	}
+
+	return material;
+}
+
 TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileName) : 
 	m_pCommandQueue(pQueue), 
 	m_SignalValue(1), 
@@ -119,6 +246,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
 		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
+		Parameters[RayTracingRootSignatureParameters::MaterialBufferSRV].InitAsShaderResourceView(6);
 		
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -243,6 +371,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<CComPtr<ID3D12Resource>> stagingResources;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
+		
+		MaterialTracker materialTracker;
 
 		void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
 		UINT geometryCount = 0;
@@ -254,6 +384,16 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 			{
 				// Only supporting triangle meshes
 				continue;
+			}
+
+			UINT materialIndex = 0;
+			if (materialTracker.Exists(pTriangleMesh->material->name))
+			{
+				materialIndex = materialTracker.GetMaterial(pTriangleMesh->material->name);
+			}
+			else
+			{
+				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material->name, CreateMaterial(pTriangleMesh->material, materialTracker));
 			}
 
 			CComPtr<ID3D12Resource> pVertexBuffer;
@@ -310,6 +450,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 			HitGroupShaderRecord shaderRecord = {};
 			shaderRecord.GeometryIndex = geometryCount++;
+			shaderRecord.MaterialIndex = materialIndex;
 			shaderRecord.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
 			shaderRecord.VertexBuffer = pVertexBuffer->GetGPUVirtualAddress();
 
@@ -322,6 +463,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		}
 
 		AllocateBufferWithData(hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable);
+		AllocateBufferWithData(materialTracker.MaterialList.data(), materialTracker.MaterialList.size() * sizeof(Material), m_pMaterialList);
 
 		CommandListAllocatorPair commandListAllocatorPair;
 		AcquireCommandListAllocatorPair(commandListAllocatorPair);
@@ -454,7 +596,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 void TracerBoy::InitializeLocalRootSignature()
 {
 	CD3DX12_ROOT_PARAMETER1 Parameters[LocalRayTracingRootSignatureParameters::NumLocalRayTracingParameters];
-	Parameters[LocalRayTracingRootSignatureParameters::GeometryIndexRootConstant].InitAsConstants(1, 2);
+	Parameters[LocalRayTracingRootSignatureParameters::GeometryIndexRootConstant].InitAsConstants(2, 2);
 	Parameters[LocalRayTracingRootSignatureParameters::IndexBufferSRV].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
 	Parameters[LocalRayTracingRootSignatureParameters::VertexBufferSRV].InitAsShaderResourceView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
 
@@ -585,6 +727,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer->GetGPUVirtualAddress());
+	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::MaterialBufferSRV, m_pMaterialList->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 	
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =

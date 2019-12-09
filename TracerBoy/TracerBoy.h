@@ -91,6 +91,7 @@ private:
 	CComPtr<ID3D12Resource> m_pConfigConstants;
 
 	CComPtr<ID3D12Resource> m_pEnvironmentMap;
+	CComPtr<ID3D12Resource> m_pMaterialList;
 
 	CComPtr<ID3D12Resource> m_pRandSeedBuffer;
 	void UpdateRandSeedBuffer();
@@ -124,6 +125,7 @@ private:
 		OutputUAV,
 		AccelerationStructureRootSRV,
 		RandSeedRootSRV,
+		MaterialBufferSRV,
 		NumRayTracingParameters
 	};
 	

@@ -4,6 +4,7 @@
 cbuffer LocalConstants : register(b2)
 {
 	uint GeometryIndex;
+	uint MaterialIndex;
 }
 
 StructuredBuffer<uint> IndexBuffer : register(t2);
@@ -34,7 +35,7 @@ void ClosestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttribut
 
 	float3 barycentrics = float3(1 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.x, attr.barycentrics.y);
 	payload.barycentrics = attr.barycentrics;
-	payload.objectIndex = GeometryIndex;
+	payload.materialIndex = MaterialIndex;
 	payload.hitT = RayTCurrent();
 	payload.normal = normalize(
 		(1.0 - payload.barycentrics.x - payload.barycentrics.y) * n0 +

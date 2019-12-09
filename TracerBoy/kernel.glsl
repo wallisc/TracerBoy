@@ -42,6 +42,24 @@ vec3 SampleEnvironmentMap(vec3 v)
     const float EnvironmentLightMultipier = 0.15;
 	return EnvironmentLightMultipier * texture(iChannel1, v).xyz;
 }
+
+#define DEFAULT_MATERIAL_FLAG 0x0
+#define METALLIC_MATERIAL_FLAG 0x1
+#define SUBSURFACE_SCATTER_MATERIAL_FLAG 0x2
+#define NO_SPECULAR_MATERIAL_FLAG 0x4
+    
+struct Material
+{
+    vec3 albedo;
+    float IOR;
+    
+    float roughness;
+    vec3 emissive;
+    
+    float absorption;    
+    float scattering;
+    int Flags;
+};
 #endif 
 
 GLOBAL float seed = 0.;
@@ -64,24 +82,6 @@ struct CameraDescription
 
     float lensHeight;
     float focalDistance;
-};
-
-#define DEFAULT_MATERIAL_FLAG 0x0
-#define METALLIC_MATERIAL_FLAG 0x1
-#define SUBSURFACE_SCATTER_MATERIAL_FLAG 0x2
-#define NO_SPECULAR_MATERIAL_FLAG 0x4
-    
-struct Material
-{
-    vec3 albedo;
-    float IOR;
-    
-    float roughness;
-    vec3 emissive;
-    
-    float absorption;    
-    float scattering;
-    int Flags;
 };
 
 bool AllowsSpecular(Material material)
@@ -900,6 +900,7 @@ Material GetCheckerMaterial(uint PrimitiveID, vec3 WorldPosition)
     return Mat1;
 }
 
+#if IS_SHADER_TOY
 Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
 {
     if(MaterialID == FLOOR_MATERIAL_ID)
@@ -925,7 +926,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
     materials[GOLD_MATERIAL_ID] = MetalMaterial(vec3(0.65, .5, .075), 1.18, 0.15);
     materials[BLUE_PLASTIC_MATERIAL_ID] = PlasticMaterial(vec3(.05, .05, .55));
-    materials[RADIOACTIVE_MATERIAL_ID] = EmissiveMaterial(vec3(.05, .45, .05), vec3(0.0, .6, 0.0));
+    materials[RADIOACTIVE_MATERIAL_ID] = EmissiveMaterial(vec3(.05, .45, .05), vec3(0.0, .1, 0.0));
     materials[MIRROR_MATERIAL_ID] = ReflectiveMaterial();    
     materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
     materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
@@ -937,6 +938,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     
     return materials[MaterialID];
 }
+#endif
 
 // For most material purposes, GetMaterial can be used. This should be used for 
 // accurate albedo information. Abusing this function can result in skyrocketing 
@@ -1372,8 +1374,9 @@ vec4 Trace(Ray ray)
 						}
 
 					}
-					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor + material.emissive;
+					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
+				accumulatedColor += material.emissive;
 				if(bSpecularRay)
                 {
                     if(IsMetallic(material))

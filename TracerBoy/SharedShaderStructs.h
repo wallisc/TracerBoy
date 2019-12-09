@@ -7,7 +7,7 @@ typedef UINT uint;
 struct RayPayload
 {
 	float2 barycentrics;
-	uint objectIndex;
+	uint materialIndex;
 	float hitT;
 	float3 normal;
 };
@@ -33,4 +33,23 @@ struct Vertex
 {
 	float3 Position;
 	float3 Normal;
+};
+
+#define DEFAULT_MATERIAL_FLAG 0x0
+#define METALLIC_MATERIAL_FLAG 0x1
+#define SUBSURFACE_SCATTER_MATERIAL_FLAG 0x2
+#define NO_SPECULAR_MATERIAL_FLAG 0x4
+#define MIX_MATERIAL_FLAG 0x8
+
+struct Material
+{
+	float3 albedo;
+	float IOR;
+
+	float roughness;
+	float3 emissive;
+
+	float absorption;
+	float scattering;
+	int Flags;
 };
