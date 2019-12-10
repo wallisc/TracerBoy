@@ -70,7 +70,7 @@ private:
 	void WaitForGPUIdle();
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
 
-	typedef std::pair<CComPtr<ID3D12GraphicsCommandList>, CComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
+	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair);
 	void ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
 
@@ -79,24 +79,24 @@ private:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
 
-	void AllocateUploadBuffer(UINT bufferSize, CComPtr<ID3D12Resource>& pBuffer);
-	void AllocateBufferWithData(void *pData, UINT dataSize, CComPtr<ID3D12Resource> &pBuffer);
+	void AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer);
+	void AllocateBufferWithData(const void *pData, UINT dataSize, ComPtr<ID3D12Resource> &pBuffer);
 
-	CComPtr<ID3D12Device5> m_pDevice;
-	CComPtr<ID3D12CommandQueue> m_pCommandQueue;
-	CComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
+	ComPtr<ID3D12Device5> m_pDevice;
+	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
+	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
 
-	CComPtr<ID3D12Resource> m_pBottomLevelAS;
-	CComPtr<ID3D12Resource> m_pTopLevelAS;
-	CComPtr<ID3D12Resource> m_pConfigConstants;
+	ComPtr<ID3D12Resource> m_pBottomLevelAS;
+	ComPtr<ID3D12Resource> m_pTopLevelAS;
+	ComPtr<ID3D12Resource> m_pConfigConstants;
 
-	CComPtr<ID3D12Resource> m_pEnvironmentMap;
-	CComPtr<ID3D12Resource> m_pMaterialList;
+	ComPtr<ID3D12Resource> m_pEnvironmentMap;
+	ComPtr<ID3D12Resource> m_pMaterialList;
 
-	CComPtr<ID3D12Resource> m_pRandSeedBuffer;
+	ComPtr<ID3D12Resource> m_pRandSeedBuffer;
 	void UpdateRandSeedBuffer();
 
-	std::vector<CComPtr<ID3D12Resource>> m_pBuffers;
+	std::vector<ComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	enum OutputUAVs
@@ -105,7 +105,7 @@ private:
 		PathTracerOutputUAV1,
 		NumPathTracerOutputUAVs
 	};
-	CComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[OutputUAVs::NumPathTracerOutputUAVs];
+	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[OutputUAVs::NumPathTracerOutputUAVs];
 	UINT8 m_ActivePathTraceOutputIndex;
 
 	enum LocalRayTracingRootSignatureParameters
@@ -129,14 +129,14 @@ private:
 		NumRayTracingParameters
 	};
 	
-	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
+	ComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 
-	CComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
-	CComPtr<ID3D12StateObject> m_pRayTracingStateObject;
+	ComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
+	ComPtr<ID3D12StateObject> m_pRayTracingStateObject;
 
-	CComPtr<ID3D12Resource> m_pRayGenShaderTable;
-	CComPtr<ID3D12Resource> m_pHitGroupShaderTable;
-	CComPtr<ID3D12Resource> m_pMissShaderTable;
+	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
+	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;
+	ComPtr<ID3D12Resource> m_pMissShaderTable;
 
 
 	enum PostProcessRootSignatureParameters
@@ -146,8 +146,8 @@ private:
 		Constants,
 		NumParameters
 	};
-	CComPtr<ID3D12RootSignature> m_pPostProcessRootSignature;
-	CComPtr<ID3D12PipelineState> m_pPostProcessPSO;
+	ComPtr<ID3D12RootSignature> m_pPostProcessRootSignature;
+	ComPtr<ID3D12PipelineState> m_pPostProcessPSO;
 
 	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
 
@@ -155,10 +155,10 @@ private:
 	UINT m_FramesRendered;
 	bool m_bInvalidateHistory;
 
-	CComPtr<ID3D12Fence> m_pFence;
+	ComPtr<ID3D12Fence> m_pFence;
 	UINT64 m_SignalValue;
 
-	CComPtr<ID3D12Resource> m_pPostProcessOutput;
+	ComPtr<ID3D12Resource> m_pPostProcessOutput;
 
 	enum ViewDescriptorHeapSlots
 	{

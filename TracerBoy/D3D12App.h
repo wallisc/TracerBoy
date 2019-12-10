@@ -16,9 +16,9 @@ private:
 	bool m_inputArray[CHAR_MAX];
 	std::chrono::steady_clock::time_point m_LastUpdateTime;
 
-	CComPtr<IDXGISwapChain3> m_pSwapChain;
-	CComPtr<ID3D12Device> m_pDevice;
-	CComPtr<ID3D12CommandQueue> m_pCommandQueue;
+	ComPtr<IDXGISwapChain3> m_pSwapChain;
+	ComPtr<ID3D12Device> m_pDevice;
+	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 
 	std::unique_ptr<TracerBoy> m_pTracerBoy;
 };

@@ -19,6 +19,12 @@ float3 Tonemap(float3 color)
 	return color / (1.0 + color);
 }
 
+#define ComputeRS \
+    "RootConstants(num32BitConstants=3, b0),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
+
+[RootSignature(ComputeRS)]
 [numthreads(1, 1, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
 {

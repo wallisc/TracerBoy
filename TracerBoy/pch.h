@@ -14,7 +14,7 @@
 #include <windowsx.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <atlbase.h>
+#include <wrl/client.h>
 #include "d3dx12.h"
 
 #include "directxtex.h"
@@ -22,6 +22,8 @@
 #define HANDLE_FAILURE() throw -1;
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))
+
+using Microsoft::WRL::ComPtr;
 
 #include "TracerBoy.h"
 #include "D3D12App.h"
