@@ -72,7 +72,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition)
 	Material mat = MaterialBuffer[MaterialID];
 	if ((mat.Flags & MIX_MATERIAL_FLAG) != 0)
 	{
-		if (rand() < 0.5)
+		if (rand() < mat.albedo.z)
 		{
 			return GetMaterial_NonRecursive(uint(mat.albedo.x));
 		}

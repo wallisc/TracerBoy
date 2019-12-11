@@ -151,11 +151,11 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 		material.Flags = MIX_MATERIAL_FLAG;
 
 		// TODO: gross
-		material.albedo = { (float)mat0Index, (float)mat1Index };
+		material.albedo = { (float)mat0Index, (float)mat1Index, ChannelAverage(pMixMaterial->amount) };
 	}
 	else if (pMirrorMaterial)
 	{
-		material.albedo = { 1.0, 1.0, 1.0 };
+		material.albedo = ConvertFloat3(pMirrorMaterial->kr);
 		material.roughness = 0.0;
 		material.Flags = METALLIC_MATERIAL_FLAG;
 	}
@@ -163,17 +163,17 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	{
 		// TODO: need to support real albedo
 		material.albedo = { 1.0, 1.0, 1.0 };
-
+		//material.IOR = ChannelAverage(pMetalMaterial->eta);
 		VERIFY(!pMetalMaterial->map_uRoughness); // Not supporting textures
 		VERIFY(pMetalMaterial->uRoughness == pMetalMaterial->vRoughness); // Not supporting multi dimension rougness
-		material.roughness = pMetalMaterial->uRoughness;
+		material.roughness = 0.5;
 		material.Flags = METALLIC_MATERIAL_FLAG;
 	}
 	else if (pSubstrateMaterial)
 	{
 		VERIFY(!pSubstrateMaterial->map_kd); // Not supporting textures
 		material.albedo = ConvertFloat3(pSubstrateMaterial->kd);
-		//material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
+		material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
 
 		// not supporting different roughness
 		VERIFY(pSubstrateMaterial->uRoughness == pSubstrateMaterial->vRoughness);
@@ -182,9 +182,10 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	else if (pGlassMaterial)
 	{
 		// TODO properly support transmission/absorption
-		material.Flags = DEFAULT_MATERIAL_FLAG;
+		//material.Flags = DEFAULT_MATERIAL_FLAG;
 		material.albedo = { };
-		//material.absorption = pGlassMaterial->kr.x;
+		material.absorption = ChannelAverage(pGlassMaterial->kt * 0.01);
+		material.Flags = SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		//material.scattering = pGlassMaterial->kt.x;
 	}
 	else if (pFourierMaterial)
@@ -210,6 +211,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	m_mouseY(0),
 	m_bInvalidateHistory(false)
 {
+	std::size_t lastDeliminator = sceneFileName.find_last_of("/\\");
+	m_sceneFileDirectory = sceneFileName.substr(0, lastDeliminator + 1);
+
 	m_pCommandQueue->GetDevice(IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf()));
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options;
@@ -377,6 +381,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 		const void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
 		UINT geometryCount = 0;
+		UINT triangleCount = 0;
 		for (UINT geometryIndex = 0; geometryIndex < pScene->world->shapes.size(); geometryIndex++)
 		{
 			auto &pGeometry = pScene->world->shapes[geometryIndex];
@@ -435,6 +440,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 					pIndexBufferData[3 * i + 2] = triangleIndices.z;
 				}
 			}
+			triangleCount += pTriangleMesh->index.size() / 3;
 
 			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
 			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -472,31 +478,19 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		ComPtr<ID3D12GraphicsCommandList4> pCommandList;
 		commandListAllocatorPair.first.As(&pCommandList);
 
-
-		DirectX::TexMetadata texMetaData;
-		DirectX::ScratchImage scratchImage;
-		VERIFY_HRESULT(DirectX::LoadFromHDRFile(L"..\\Scenes\\Teapot\\textures\\envmap.hdr", &texMetaData, scratchImage));
-		VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice.Get(), texMetaData, D3D12_RESOURCE_FLAG_NONE, false, &m_pEnvironmentMap));
-		m_pDevice->CreateShaderResourceView(m_pEnvironmentMap.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
-
-		std::vector < D3D12_SUBRESOURCE_DATA> subresources;
-		VERIFY_HRESULT(PrepareUpload(m_pDevice.Get(), scratchImage.GetImages(), scratchImage.GetImageCount(), texMetaData, subresources));
-
-		const UINT64 uploadBufferSize = GetRequiredIntermediateSizeHelper(m_pDevice.Get(), m_pEnvironmentMap.Get(), 0, 1);
-
-		ComPtr<ID3D12Resource> textureUploadHeap;
-		AllocateUploadBuffer(uploadBufferSize, textureUploadHeap);
-
-		UpdateSubresourcesHelper(m_pDevice.Get(), pCommandList.Get(),
-			m_pEnvironmentMap.Get(), textureUploadHeap.Get(),
-			0, 0, static_cast<unsigned int>(subresources.size()),
-			subresources.data());
-
-		D3D12_RESOURCE_BARRIER barriers[] =
+		ComPtr<ID3D12Resource> pEnvironmentMapScratchBuffer;
+		for (UINT lightIndex = 0; lightIndex < pScene->world->lightSources.size(); lightIndex++)
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pEnvironmentMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		};
-		pCommandList->ResourceBarrier(ARRAYSIZE(barriers), barriers);
+			auto& pLight = pScene->world->lightSources[lightIndex];
+			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
+			if (pInfiniteLightSource)
+			{
+				std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
+				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end());
+
+				InitializeTexture(directory + textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
+			}
+		}
 
 		const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 		{
@@ -549,7 +543,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 			AllocateUploadBuffer(sizeof(instanceDesc), pInstanceDescBuffer);
 			stagingResources.push_back(pInstanceDescBuffer);
-			void *pData;
+			void* pData;
 			pInstanceDescBuffer->Map(0, nullptr, &pData);
 			memcpy(pData, &instanceDesc, sizeof(instanceDesc));
 
@@ -592,6 +586,38 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 		WaitForGPUIdle();
 	}
+}
+
+void TracerBoy::InitializeTexture(
+	const std::wstring &textureName,
+	ID3D12GraphicsCommandList& commandList,
+	ComPtr<ID3D12Resource>& pResource,
+	UINT SRVSlot,
+	ComPtr<ID3D12Resource>& pUploadResource)
+{
+	DirectX::TexMetadata texMetaData;
+	DirectX::ScratchImage scratchImage;
+	VERIFY_HRESULT(DirectX::LoadFromHDRFile(textureName.c_str(), &texMetaData, scratchImage));
+	VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice.Get(), texMetaData, D3D12_RESOURCE_FLAG_NONE, false, pResource.ReleaseAndGetAddressOf()));
+	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), SRVSlot));
+
+	std::vector < D3D12_SUBRESOURCE_DATA> subresources;
+	VERIFY_HRESULT(PrepareUpload(m_pDevice.Get(), scratchImage.GetImages(), scratchImage.GetImageCount(), texMetaData, subresources));
+
+	const UINT64 uploadBufferSize = GetRequiredIntermediateSizeHelper(m_pDevice.Get(), pResource.Get(), 0, 1);
+
+	AllocateUploadBuffer(uploadBufferSize, pUploadResource);
+
+	UpdateSubresourcesHelper(m_pDevice.Get(), &commandList,
+		pResource.Get(), pUploadResource.Get(),
+		0, 0, static_cast<unsigned int>(subresources.size()),
+		subresources.data());
+
+	D3D12_RESOURCE_BARRIER barriers[] =
+	{
+		CD3DX12_RESOURCE_BARRIER::Transition(pResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+	};
+	commandList.ResourceBarrier(ARRAYSIZE(barriers), barriers);
 }
 
 void TracerBoy::InitializeLocalRootSignature()

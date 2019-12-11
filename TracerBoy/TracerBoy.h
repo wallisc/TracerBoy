@@ -75,6 +75,12 @@ private:
 	void ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
 
 	void InitializeLocalRootSignature();
+	void InitializeTexture(
+		const std::wstring& textureName,
+		ID3D12GraphicsCommandList& commandList,
+		ComPtr<ID3D12Resource>& pResource,
+		UINT SRVSlot,
+		ComPtr<ID3D12Resource>& pUploadResource);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot);
@@ -173,4 +179,6 @@ private:
 	};
 
 	Camera m_camera;
+
+	std::string m_sceneFileDirectory;
 };
