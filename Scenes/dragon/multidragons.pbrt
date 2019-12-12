@@ -1,5 +1,5 @@
 Integrator "path" "integer maxdepth" [ 17 ] 
-Transform [ 0.678116 -0.167853 -0.715531 -0 -0 0.973571 -0.228385 -0 -0.734955 -0.154871 -0.660194 -0 -0.554465 -6.29907 1000 1]
+Transform [ 0.678116 -0.167853 -0.715531 -0 -0 0.973571 -0.228385 -0 -0.734955 -0.154871 -0.660194 -0 130 -6.29907 1200 1]
 Sampler "sobol" "integer pixelsamples" [ 64 ] 
 PixelFilter "triangle" "float xwidth" [ 1.000000 ] "float ywidth" [ 1.000000 ] 
 Film "image" "integer xresolution" [ 1280 ] "integer yresolution" [ 720 ] "string filename" [ "dragon.png" ] 
@@ -12,12 +12,14 @@ WorldBegin
 	MakeNamedMaterial "Mirror" "string type" "mirror" "rgb Kr" [1 1 1]
 	MakeNamedMaterial "Rough Mirror" "string type" "disney" "rgb color" [1 1 1] "float roughness" 0.5 "float metallic " 1
 	MakeNamedMaterial "Refractive" "string type" "uber" "rgb Kd" [1 1 1] "float index" 1.5 "rgb opacity" [0 0 0] "float roughness" 0.0 "rgb Kt" [0 0 0]
-	MakeNamedMaterial "Ice" "string type" "uber" "rgb Kd" [0.65 0.65 0.8] "float index" 1.1 "rgb opacity" [0 0 0] "float roughness" 0.3 "rgb Kt" [0.2 0.2 0.2]
+	MakeNamedMaterial "Ice" "string type" "uber" "rgb Kd" [0.65 0.65 0.8] "float index" 1.1 "rgb opacity" [0 0 0] "float roughness" 0.3 "rgb Kt" [0 0 0]
 	MakeNamedMaterial "Glass" "string type" "uber" "rgb Kd" [1.0 0.6 0.6] "float index" 1.05 "rgb opacity" [0 0 0] "float roughness" 0.5 "rgb Kt" [0.5 0.5 0.5]
-
 	MakeNamedMaterial "Sheen" "string type" "mirror" "rgb Kr" [.1 .1 .1]
 	MakeNamedMaterial "Green Paint" "string type" "substrate" "color Kd" [.125 0.7 .125] "color Ks" [.1 .1 .1] "float uroughness" .01 "float vroughness" .01 
 	MakeNamedMaterial "Car Paint"  "string type" "mix" "string namedmaterial1" [ "Sheen" ] "string namedmaterial2" [ "Green Paint" ] 
+	MakeNamedMaterial "Purple Matte" "string type" [ "matte" ] "rgb Kd" [ 0.793110 0.1 0.793110 ] 
+	MakeNamedMaterial "Diffuse Mirror" "string type" "disney" "rgb color" [0.8 0.5 0.2] "float roughness" 0.9 "float metallic " 1
+
 
 	Scale 4 4 4
 
@@ -102,7 +104,7 @@ WorldBegin
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
 
-	Translate 0 0 40
+	Translate 40 0 -120
 
 	NamedMaterial "Bronze"
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
@@ -122,7 +124,7 @@ WorldBegin
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
 
-	Translate 40 0 -160
+	Translate 0 0 40
 
 	NamedMaterial "Rough Mirror"
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
@@ -144,7 +146,7 @@ WorldBegin
 
 	Translate 0 0 40
 
-	NamedMaterial "Mirror"
+	NamedMaterial "Purple Matte"
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh010.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh005.ply" ] 
@@ -181,7 +183,8 @@ WorldBegin
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
 
-	Translate 0 0 40
+	Translate 40 0 -120
+
 	NamedMaterial "Gold"
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh010.ply" ] 
@@ -202,6 +205,45 @@ WorldBegin
 
 	Translate 0 0 40
 	NamedMaterial "Ice"
+	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh010.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh005.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh006.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh012.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh007.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh008.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh013.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh014.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh015.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh004.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh009.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh003.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh002.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
+
+	Translate 0 0 40
+	NamedMaterial "Mirror"
+	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh010.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh005.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh006.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh012.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh007.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh008.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh013.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh014.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh015.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh004.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh009.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh003.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh002.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
+	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
+
+	Translate 0 0 40
+
+	NamedMaterial "Diffuse Mirror"
 	Shape "plymesh" "string filename" [ "models/Mesh011.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh010.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh005.ply" ] 
