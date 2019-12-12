@@ -128,21 +128,42 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	pbrt::MetalMaterial::SP pMetalMaterial = std::dynamic_pointer_cast<pbrt::MetalMaterial>(pPbrtMaterial);
 	pbrt::FourierMaterial::SP pFourierMaterial = std::dynamic_pointer_cast<pbrt::FourierMaterial>(pPbrtMaterial);
 	pbrt::GlassMaterial::SP pGlassMaterial = std::dynamic_pointer_cast<pbrt::GlassMaterial>(pPbrtMaterial);
-	if (pUberMaterial)
+	pbrt::MatteMaterial::SP pMatteMaterial = std::dynamic_pointer_cast<pbrt::MatteMaterial>(pPbrtMaterial);
+	pbrt::DisneyMaterial::SP pDisneyMaterial = std::dynamic_pointer_cast<pbrt::DisneyMaterial>(pPbrtMaterial);
+	
+	if (pDisneyMaterial)
+	{
+		material.albedo = ConvertFloat3(pDisneyMaterial->color);
+		material.roughness = pDisneyMaterial->roughness;
+		material.IOR = pDisneyMaterial->eta;
+		
+		// Not supporting blend between normal and metallic surfaces
+		if (pDisneyMaterial->metallic > 0.5)
+		{
+			material.Flags = METALLIC_MATERIAL_FLAG;
+		}
+	}
+	else if (pUberMaterial)
 	{
 		VERIFY(!pUberMaterial->map_kd); // Not supporting textures
 		material.albedo = ConvertFloat3(pUberMaterial->kd);
-		//material.IOR = pUberMaterial->index;
 
 		VERIFY(!pUberMaterial->map_uRoughness); // Not supporting textures
 		VERIFY(pUberMaterial->uRoughness == pUberMaterial->vRoughness); // Not supporting multi dimension rougness
 		VERIFY(pUberMaterial->uRoughness == 0.0f); // Not supporting multi dimension rougness
 		material.roughness = pUberMaterial->roughness;
 
-		material.Flags = DEFAULT_MATERIAL_FLAG;
-		VERIFY(pUberMaterial->opacity.x >= 0.99); // how to support sub surface?
-		VERIFY(pUberMaterial->opacity.y >= 0.99); // how to support sub surface?
-		VERIFY(pUberMaterial->opacity.z >= 0.99); // how to support sub surface?
+		if (ChannelAverage(pUberMaterial->opacity) < 1.0)
+		{
+			material.Flags = SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.IOR = pUberMaterial->index;
+			material.absorption = ChannelAverage(pUberMaterial->kt); // absorption != transmission but need oh well
+		}
+		else
+		{
+			material.Flags = DEFAULT_MATERIAL_FLAG;
+		}
+
 	}
 	else if (pMixMaterial)
 	{
@@ -193,6 +214,13 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 		// Not suppported
 		material.albedo = { 0.6, 0.6, 0.6 };
 		material.roughness = 0.2;
+	}
+	else if (pMatteMaterial)
+	{
+		material.roughness = pMatteMaterial->sigma;
+		VERIFY(!pMatteMaterial->map_kd);
+		material.albedo = ConvertFloat3(pMatteMaterial->kd);
+		material.Flags = NO_SPECULAR_MATERIAL_FLAG;
 	}
 	else
 	{
