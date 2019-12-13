@@ -233,12 +233,14 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileName) :
 	m_pCommandQueue(pQueue),
 	m_SignalValue(1),
-	m_ActivePathTraceOutputIndex(0),
+	m_ActiveFrameIndex(0),
 	m_FramesRendered(0),
 	m_mouseX(0),
 	m_mouseY(0),
 	m_bInvalidateHistory(false)
 {
+	ZeroMemory(m_FrameFence, sizeof(m_FrameFence));
+
 	std::size_t lastDeliminator = sceneFileName.find_last_of("/\\");
 	m_sceneFileDirectory = sceneFileName.substr(0, lastDeliminator + 1);
 
@@ -676,13 +678,17 @@ UINT64 TracerBoy::SignalFence()
 
 void TracerBoy::WaitForGPUIdle()
 {
-	UINT64 signalledValue = SignalFence();
+	WaitForFenceValue(SignalFence());
+}
 
+void TracerBoy::WaitForFenceValue(UINT fenceValue)
+{
 	HANDLE waitEvent = CreateEvent(nullptr, false, false, nullptr);
-	m_pFence->SetEventOnCompletion(signalledValue, waitEvent);
+	m_pFence->SetEventOnCompletion(fenceValue, waitEvent);
 	WaitForSingleObject(waitEvent, INFINITE);
 	CloseHandle(waitEvent);
 }
+
 
 void TracerBoy::AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair)
 {
@@ -700,16 +706,16 @@ void TracerBoy::AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair)
 		VERIFY_HRESULT(m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pair.second.Get(), nullptr, IID_PPV_ARGS(pair.first.ReleaseAndGetAddressOf())))
 	}
 }
-void TracerBoy::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair)
+
+UINT TracerBoy::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair)
 {
 	ID3D12CommandList *pCommandLists[] = { pair.first.Get() };
 	m_pCommandQueue->ExecuteCommandLists(ARRAYSIZE(pCommandLists), pCommandLists);
 
-	// Not sure why this is needed but, too many command lists are getting queued up
-	WaitForGPUIdle();
-
 	UINT64 signalledValue = SignalFence();
 	FreedCommandListAllocatorPairs.push_front(std::pair<CommandListAllocatorPair, UINT64>(pair, signalledValue));
+
+	return signalledValue;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE TracerBoy::GetCPUDescriptorHandle(ID3D12DescriptorHeap *pDescriptorHeap, UINT slot)
@@ -755,7 +761,8 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
 
-	UpdateRandSeedBuffer();
+	WaitForFenceValue(m_FrameFence[m_ActiveFrameIndex]);
+	UpdateRandSeedBuffer(m_ActiveFrameIndex);
 
 	CommandListAllocatorPair commandListAllocatorPair;
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
@@ -770,7 +777,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	commandListAllocatorPair.first.As(&pRaytracingCommandList);
 	pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject.Get());
 
-	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex].Get());
+	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get());
 	SYSTEMTIME time;
 	GetSystemTime(&time);
 	PerFrameConstants constants;
@@ -781,22 +788,22 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
-	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer->GetGPUVirtualAddress());
+	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer[m_ActiveFrameIndex]->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::MaterialBufferSRV, m_pMaterialList->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(preDispatchRaysBarrier), preDispatchRaysBarrier);
 
-	UINT LastFrameBufferSRVIndex = m_ActivePathTraceOutputIndex == 0 ? ARRAYSIZE(m_pAccumulatedPathTracerOutput) - 1 : m_ActivePathTraceOutputIndex - 1;
+	UINT LastFrameBufferSRVIndex = m_ActiveFrameIndex == 0 ? ARRAYSIZE(m_pAccumulatedPathTracerOutput) - 1 : m_ActiveFrameIndex - 1;
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LastFrameSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + LastFrameBufferSRVIndex));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::EnvironmentMapSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
-	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActivePathTraceOutputIndex));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActiveFrameIndex));
 
-	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex]->GetDesc();
+	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex]->GetDesc();
 
 	D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
 	dispatchDesc.Width = static_cast<UINT>(viewport.Width);
@@ -814,7 +821,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActivePathTraceOutputIndex].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
@@ -827,15 +834,12 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, ARRAYSIZE(constants), constants, 0);
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::InputTexture,
-			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActivePathTraceOutputIndex));
+			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex));
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::OutputTexture,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PostProcessOutputUAV));
 		commandList.Dispatch(constants[0], constants[1], 1);
 	}
-
-	m_ActivePathTraceOutputIndex = (m_ActivePathTraceOutputIndex + 1) % ARRAYSIZE(m_pAccumulatedPathTracerOutput);
-
 
 	{
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
@@ -856,7 +860,9 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	}
 
 	VERIFY_HRESULT(commandListAllocatorPair.first->Close());
-	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
+	m_FrameFence[m_ActiveFrameIndex] = ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
+
+	m_ActiveFrameIndex = (m_ActiveFrameIndex + 1) % MaxActiveFrames;
 	m_bInvalidateHistory = false;
 }
 
@@ -994,18 +1000,21 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 
 		}
 
-		AllocateUploadBuffer(sizeof(float) * backBufferDesc.Width * backBufferDesc.Height, m_pRandSeedBuffer);
+		for (auto& pRandBuffer : m_pRandSeedBuffer)
+		{
+			AllocateUploadBuffer(sizeof(float) * backBufferDesc.Width * backBufferDesc.Height, pRandBuffer);
+		}
 	}
 }
 
-void TracerBoy::UpdateRandSeedBuffer()
+void TracerBoy::UpdateRandSeedBuffer(UINT bufferIndex)
 {
-	UINT numSeeds = m_pRandSeedBuffer->GetDesc().Width / sizeof(UINT32);
+	UINT numSeeds = m_pRandSeedBuffer[bufferIndex]->GetDesc().Width / sizeof(UINT32);
 	float* pData;
-	VERIFY_HRESULT(m_pRandSeedBuffer->Map(0, nullptr, (void**)&pData));
+	VERIFY_HRESULT(m_pRandSeedBuffer[bufferIndex]->Map(0, nullptr, (void**)&pData));
 	for (UINT i = 0; i < numSeeds; i++)
 	{
 		pData[i] = 10000.0f * (float)rand() / (float)RAND_MAX;
 	}
-	m_pRandSeedBuffer->Unmap(0, nullptr);
+	m_pRandSeedBuffer[bufferIndex]->Unmap(0, nullptr);
 }

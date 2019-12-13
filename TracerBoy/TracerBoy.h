@@ -68,11 +68,12 @@ private:
 	UINT64 SignalFence();
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
 	void WaitForGPUIdle();
+	void WaitForFenceValue(UINT fenceValue);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
 
 	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair);
-	void ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
+	UINT ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
 
 	void InitializeLocalRootSignature();
 	void InitializeTexture(
@@ -99,9 +100,6 @@ private:
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	ComPtr<ID3D12Resource> m_pMaterialList;
 
-	ComPtr<ID3D12Resource> m_pRandSeedBuffer;
-	void UpdateRandSeedBuffer();
-
 	std::vector<ComPtr<ID3D12Resource>> m_pBuffers;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -111,8 +109,15 @@ private:
 		PathTracerOutputUAV1,
 		NumPathTracerOutputUAVs
 	};
+	static const UINT MaxActiveFrames = NumPathTracerOutputUAVs;
+
+	UINT m_FrameFence[MaxActiveFrames];
+
+	ComPtr<ID3D12Resource> m_pRandSeedBuffer[MaxActiveFrames];
+	void UpdateRandSeedBuffer(UINT bufferIndex);
+
 	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[OutputUAVs::NumPathTracerOutputUAVs];
-	UINT8 m_ActivePathTraceOutputIndex;
+	UINT8 m_ActiveFrameIndex;
 
 	enum LocalRayTracingRootSignatureParameters
 	{
