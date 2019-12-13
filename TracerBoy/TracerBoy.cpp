@@ -780,12 +780,13 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get());
 	SYSTEMTIME time;
 	GetSystemTime(&time);
-	PerFrameConstants constants;
+	PerFrameConstants constants = {};
 	constants.CameraPosition = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z };
+	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
+	constants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
+	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.InvalidateHistory = m_bInvalidateHistory;
-	constants.Mouse = { static_cast<float>(m_mouseX), static_cast<float>(m_mouseY) };
-	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer[m_ActiveFrameIndex]->GetGPUVirtualAddress());
@@ -872,59 +873,85 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	ConfigConstants configConstants;
 	configConstants.CameraLensHeight = m_camera.LensHeight;
 	configConstants.FocalDistance = m_camera.FocalDistance;
-	configConstants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
-	configConstants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }
 
 void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt)
 {
-	m_mouseX = mouseX;
-	m_mouseY = mouseY;
-
 	bool bCameraMoved = false;
+
+	float yaw = 0.0;
+	float pitch = 0.0;
+	if (m_pPostProcessOutput)
+	{
+		auto outputDesc = m_pPostProcessOutput->GetDesc();
+
+		yaw = 3.14f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
+		pitch = 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
+	}
+
+
+	if (m_mouseX != mouseX || m_mouseY != mouseY)
+	{
+		bCameraMoved = true;
+		m_mouseX = mouseX;
+		m_mouseY = mouseY;
+	}
+	
+	XMVECTOR RightAxis = XMVectorSet(m_camera.Right.x, m_camera.Right.y, m_camera.Right.z, 1.0);
+	XMVECTOR UpAxis = XMVectorSet(m_camera.Up.x, m_camera.Up.y, m_camera.Up.z, 1.0);
+	XMVECTOR Position = XMVectorSet(m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, 1.0);
+	XMVECTOR LookAt = XMVectorSet(m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, 1.0);
+	XMVECTOR ViewDir = LookAt - Position;
+	XMMATRIX RotationMatrix = XMMatrixRotationAxis(UpAxis, yaw) * XMMatrixRotationAxis(RightAxis, pitch);
+	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
+	LookAt = Position + ViewDir;
+
 	const float cameraMoveSpeed = 0.07f;
-	Vector3 ViewDir = (m_camera.LookAt - m_camera.Position).Normalize();
 	if (keyboardInput['w'] || keyboardInput['W'])
 	{
-		m_camera.Position += ViewDir * (dt * cameraMoveSpeed);
-		m_camera.LookAt += ViewDir * (dt * cameraMoveSpeed);
+		Position += dt * cameraMoveSpeed * ViewDir;
+		LookAt += dt * cameraMoveSpeed * ViewDir;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['s'] || keyboardInput['S'])
 	{
-		m_camera.Position -= ViewDir * (dt * cameraMoveSpeed);
-		m_camera.LookAt -= ViewDir * (dt * cameraMoveSpeed);
+		Position -= dt * cameraMoveSpeed * ViewDir;
+		LookAt -= dt * cameraMoveSpeed * ViewDir;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['a'] || keyboardInput['A'])
 	{
-		m_camera.Position -= m_camera.Right * (dt * cameraMoveSpeed);
-		m_camera.LookAt -= m_camera.Right * (dt * cameraMoveSpeed);
+		Position -= dt * cameraMoveSpeed * RightAxis;
+		LookAt -= dt * cameraMoveSpeed * RightAxis;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['D'] || keyboardInput['d'])
 	{
-		m_camera.Position += m_camera.Right * (dt * cameraMoveSpeed);
-		m_camera.LookAt += m_camera.Right * (dt * cameraMoveSpeed);
+		Position += dt * cameraMoveSpeed * RightAxis;
+		LookAt += dt * cameraMoveSpeed * RightAxis;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['Q'] || keyboardInput['q'])
 	{
-		m_camera.Position += m_camera.Up * (dt * cameraMoveSpeed);
-		m_camera.LookAt += m_camera.Up * (dt * cameraMoveSpeed);
+		Position += dt * cameraMoveSpeed * UpAxis;
+		LookAt += dt * cameraMoveSpeed * UpAxis;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['E'] || keyboardInput['e'])
 	{
-		m_camera.Position -= m_camera.Up * (dt * cameraMoveSpeed);
-		m_camera.LookAt -= m_camera.Up * (dt * cameraMoveSpeed);
+		Position -= dt * cameraMoveSpeed * UpAxis;
+		LookAt -= dt * cameraMoveSpeed * UpAxis;
 		bCameraMoved = true;
 	}
 
 	if (bCameraMoved)
 	{
+		m_camera.Position = { XMVectorGetX(Position),  XMVectorGetY(Position), XMVectorGetZ(Position) };
+		m_camera.LookAt = { XMVectorGetX(LookAt),  XMVectorGetY(LookAt), XMVectorGetZ(LookAt) };
+		m_camera.Right = { XMVectorGetX(RightAxis),  XMVectorGetY(RightAxis), XMVectorGetZ(RightAxis) };
+		m_camera.Up = { XMVectorGetX(UpAxis),  XMVectorGetY(UpAxis), XMVectorGetZ(UpAxis) };
 		m_bInvalidateHistory = true;
 	}
 }

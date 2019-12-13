@@ -18,14 +18,14 @@ struct PerFrameConstants
 	float Time;
 	float3 CameraLookAt;
 	uint InvalidateHistory;
-	float2 Mouse;
+	float3 CameraUp;
+	float Padding;
+	float3 CameraRight;
 };
 
 struct ConfigConstants
 {
-	float3 CameraRight;
 	float FocalDistance;
-	float3 CameraUp;
 	float CameraLensHeight;
 };
 

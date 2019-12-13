@@ -15,8 +15,8 @@ cbuffer ConfigCB : register(b1)
 bool ShouldInvalidateHistory() { return perFrameConstants.InvalidateHistory; }
 float3 GetCameraPosition() { return perFrameConstants.CameraPosition; }
 float3 GetCameraLookAt() { return perFrameConstants.CameraLookAt; }
-float3 GetCameraUp() { return configConstants.CameraUp; }
-float3 GetCameraRight() { return configConstants.CameraRight; }
+float3 GetCameraUp() { return perFrameConstants.CameraUp; }
+float3 GetCameraRight() { return perFrameConstants.CameraRight; }
 float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return configConstants.FocalDistance; }
 
@@ -50,7 +50,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 #define GLOBAL static
 float GetTime() { return perFrameConstants.Time; }
 float3 GetResolution() { return float3(DispatchRaysDimensions()); }
-float4 GetMouse() { return float4(perFrameConstants.Mouse.x, GetResolution().y - perFrameConstants.Mouse.y, 0.0, 0.0); }
+float4 GetMouse() { return float4(0.0, 0.0, 0.0, 0.0); }
 float4 GetLastFrameData() {
 	return LastFrameTexture.SampleLevel(PointSampler, float2(0, 1), 0);
 }

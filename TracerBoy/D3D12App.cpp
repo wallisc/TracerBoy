@@ -51,7 +51,7 @@ void D3D12App::Render()
 	const bool bFirstUpdateCall = m_LastUpdateTime == std::chrono::steady_clock::time_point();
 	std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
 	float timeSinceLastUpdate = bFirstUpdateCall ? 0.0f : 
-		std::chrono::duration_cast<std::chrono::milliseconds>(m_LastUpdateTime - currentTime).count();
+		std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_LastUpdateTime).count();
 	m_LastUpdateTime = std::chrono::steady_clock::now();
 
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate);

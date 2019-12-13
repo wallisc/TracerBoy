@@ -18,12 +18,14 @@
 #include "d3dx12.h"
 
 #include "directxtex.h"
+#include "directxmath.h"
 
 #define HANDLE_FAILURE() throw -1;
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))
 
 using Microsoft::WRL::ComPtr;
+using namespace DirectX;
 
 #include "TracerBoy.h"
 #include "D3D12App.h"
