@@ -99,6 +99,11 @@ bool IsSubsurfaceScattering(Material material)
     return (material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
 }
 
+bool IsLight(Material material)
+{
+    return (material.Flags & LIGHT_MATERIAL_FLAG) != 0;
+}
+
 bool UsePerfectSpecularOptimization(float roughness)
 {
     return roughness < 0.05f;
@@ -148,6 +153,11 @@ Material EmissiveMaterial(vec3 albedo, vec3 emissive)
 Material PlasticMaterial(vec3 albedo)
 {
     return NewMaterial(albedo, PLASTIC_IOR, 0.2,  vec3(0.0, 0.0, 0.0), 0.0, 0.0, DEFAULT_MATERIAL_FLAG);
+}
+
+Material LightMaterial(vec3 albedo)
+{
+    return NewMaterial(albedo, PLASTIC_IOR, 0.2,  vec3(0.0, 0.0, 0.0), 0.0, 0.0, LIGHT_MATERIAL_FLAG);
 }
 
 Material NormalMaterial(vec3 color, float IOR, float roughness)
@@ -650,7 +660,8 @@ vec3 GenerateRandomDirection(vec3 normal)
 
 vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
 {
-    vec3 xAxis = cross(normal, vec3(1, 0, 0));
+	vec3 axisToCross = normal.x < normal.z ? vec3(1, 0, 0) : vec3(0, 0, 1);
+    vec3 xAxis = cross(normal, axisToCross);
     vec3 zAxis = cross(normal, xAxis);
     return v.x * xAxis + v.y * normal + v.z * zAxis;
 }
@@ -694,7 +705,7 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
 }
 
 #if IS_SHADER_TOY
-vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out uint PrimitiveID)
+vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out float2 uv, out uint PrimitiveID)
 {
     float t = 999999.0;
     float materialID = float(INVALID_MATERIAL_ID);
@@ -702,6 +713,7 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out uint Pri
     uint PrimitiveIDIterator = 0u;    
     PrimitiveID = uint(-1);
     float intersect;
+	uv = float2(0.0, 0.0);
     
     for (int i = 0; i < numSpheres; i++)
     {
@@ -747,9 +759,9 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out uint Pri
     return vec2(t, materialID);
 }
 #endif
-vec2 Intersect(Ray ray, out vec3 normal, out uint PrimitiveID)
+vec2 Intersect(Ray ray, out vec3 normal, out vec2 uv, out uint PrimitiveID)
 {
-	return IntersectWithMaxDistance(ray, 999999.0, normal, PrimitiveID);
+	return IntersectWithMaxDistance(ray, 999999.0, normal, uv, PrimitiveID);
 }
 
 float atan2(float x, float y)
@@ -934,7 +946,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.1, 0.2); // ice
     
     materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
-    materials[AREA_LIGHT_MATERIAL_ID] = PlasticMaterial(vec3(0.45, 0.45, 0.45));
+    materials[AREA_LIGHT_MATERIAL_ID] = LightMaterial(vec3(0.45, 0.45, 0.45));
     
     return materials[MaterialID];
 }
@@ -943,7 +955,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
 // For most material purposes, GetMaterial can be used. This should be used for 
 // accurate albedo information. Abusing this function can result in skyrocketing 
 // shader compile times
-Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
+Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPosition, float2 uv)
 {
 	if(MaterialID == WOOD_MATERIAL_ID)
     {
@@ -954,14 +966,14 @@ Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPos
         return GetGlassPebbleMaterial(PrimitiveID, WorldPosition);
     }
     
-    return GetMaterial(MaterialID, PrimitiveID, WorldPosition);
+    return GetMaterial(MaterialID, PrimitiveID, WorldPosition, uv);
 } 
 
 
 
 Material GetAreaLightMaterial()
 {
-    return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0));
+    return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0));
 }
 
 struct Intersection
@@ -1037,8 +1049,9 @@ vec4 Trace(Ray ray)
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
         vec3 normal;
+		vec2 uv;
         uint PrimitiveID;
-        vec2 result = Intersect(ray, normal, PrimitiveID);
+        vec2 result = Intersect(ray, normal, uv, PrimitiveID);
 
 #if USE_FOG
         float distanceTravelled = result.x;
@@ -1068,13 +1081,14 @@ vec4 Trace(Ray ray)
             vec3 lightDirection = normalize(lightPosition - currentPosition);
             Ray shadowFeeler = NewRay(currentPosition, lightDirection);
             vec3 shadowNormal;
+			vec2 shadowUV;
             uint shadowPrimitiveID;
-            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID); 
+            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID); 
 
             int materialID = int(shadowResult.y);
             vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
-            Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
-            if(materialID == AREA_LIGHT_MATERIAL_ID)
+            Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV);
+            if(IsLight(material))
             {
                 accumulatedColor += fogColor * accumulatedIndirectLightMultiplier * GetAreaLightMaterial().albedo;
             }
@@ -1099,20 +1113,14 @@ vec4 Trace(Ray ray)
         
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
-            // Dial down the cube map intensity
             accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
             break;
         }
-        else if(int(result.y) == AREA_LIGHT_MATERIAL_ID)
-        {
-           accumulatedColor += accumulatedIndirectLightMultiplier * GetAreaLightMaterial().albedo;
-           break;
-        }
-        else
+		else
         {   
             vec3 RayPoint = GetRayPoint(ray, result.x);
             ray.origin = RayPoint + normal * EPSILON;
-            Material material = GetMaterialWithTextures(int(result.y), PrimitiveID, RayPoint);
+            Material material = GetMaterialWithTextures(int(result.y), PrimitiveID, RayPoint, uv);
 
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
@@ -1240,8 +1248,9 @@ vec4 Trace(Ray ray)
                             lightRay.origin = ray.origin;
                             lightRay.direction = lightDirection;
                             vec3 unused;
+							vec2 unusedUV;
                             uint unusedUint;
-                            vec2 lightResult = Intersect(lightRay, unused, unusedUint);
+                            vec2 lightResult = Intersect(lightRay, unused, unusedUV, unusedUint);
                             vec3 lightEntryPoint = GetRayPoint(lightRay, lightResult.x);
                             float lightDistance = length(lightEntryPoint - ray.origin);
 
@@ -1259,7 +1268,7 @@ vec4 Trace(Ray ray)
 
                         ray.origin += ray.direction * EPSILON;
                         uint unusedPrimitiveID;
-                        result = Intersect(ray, normal, unusedPrimitiveID);
+                        result = Intersect(ray, normal, uv, unusedPrimitiveID);
                         
                         result.x = min(travelDistance, result.x);
                         float distanceTravelledBeforeScatter = result.x;
@@ -1315,14 +1324,21 @@ vec4 Trace(Ray ray)
 					for(int i = 0; i < SHADOW_BOUNCES; i++)
 					{
 						vec3 shadowNormal;
+						vec2 shadowUV;
 						uint shadowPrimitiveID;
-						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID); 
+						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID); 
 						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
                      
 						int materialID = int(shadowResult.y);
-						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint);
 
-						if(materialID == AREA_LIGHT_MATERIAL_ID)
+						// TODO: This shouldn't really be possible unless we're talking a directional light...
+						if(materialID == INVALID_MATERIAL_ID)
+						{
+							break;
+						}
+						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV);
+
+						if(IsLight(material))
 						{
 							break;
 						}
@@ -1335,7 +1351,7 @@ vec4 Trace(Ray ray)
 							shadowNormal,
 							shadowFeeler.direction));
                         
-						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowPrimitiveID);
+						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID);
 						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
 						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
                        
@@ -1376,7 +1392,12 @@ vec4 Trace(Ray ray)
 					}
 					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
-				accumulatedColor += material.emissive;
+				accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
+				if(IsLight(material))
+				{
+					break;
+				}
+
 				if(bSpecularRay)
                 {
                     if(IsMetallic(material))

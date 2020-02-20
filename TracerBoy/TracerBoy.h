@@ -56,6 +56,9 @@ struct Camera
 	float FocalDistance;
 };
 
+class TextureAllocator;
+
+
 class TracerBoy
 {
 public:
@@ -64,6 +67,8 @@ public:
 	void Render(ID3D12Resource *pBackBuffer);
 
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
+
+	friend class TextureAllocator;
 private:
 	UINT64 SignalFence();
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
@@ -89,6 +94,13 @@ private:
 	void AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer);
 	void AllocateBufferWithData(const void *pData, UINT dataSize, ComPtr<ID3D12Resource> &pBuffer);
 
+	UINT CurrentDescriptorSlot;
+	UINT AllocateDescriptorHeapSlot()
+	{
+		VERIFY(CurrentDescriptorSlot < ViewDescriptorHeapSlots::NumTotalViews);
+		return CurrentDescriptorSlot++;
+	}
+
 	ComPtr<ID3D12Device5> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
@@ -99,8 +111,10 @@ private:
 
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	ComPtr<ID3D12Resource> m_pMaterialList;
+	ComPtr<ID3D12Resource> m_pTextureDataList;
 
 	std::vector<ComPtr<ID3D12Resource>> m_pBuffers;
+	std::vector<ComPtr<ID3D12Resource>> m_pTextures;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	enum OutputUAVs
@@ -137,6 +151,8 @@ private:
 		AccelerationStructureRootSRV,
 		RandSeedRootSRV,
 		MaterialBufferSRV,
+		TextureDataSRV,
+		ImageTextureTable,
 		NumRayTracingParameters
 	};
 	
@@ -186,4 +202,22 @@ private:
 	Camera m_camera;
 
 	std::string m_sceneFileDirectory;
+};
+
+class TextureAllocator
+{
+public:
+	TextureAllocator(TracerBoy& tracerBoy, ID3D12GraphicsCommandList& CommandList) :
+		m_tracerboy(tracerBoy),
+		m_pCommandList(&CommandList)
+	{}
+
+	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture);
+	const std::vector<TextureData>& GetTextureData() const { return m_textureData; }
+private:
+	std::vector<TextureData> m_textureData;
+
+	TracerBoy& m_tracerboy;
+	std::vector<ComPtr<ID3D12Resource>> m_uploadResources;
+	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 };

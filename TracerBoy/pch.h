@@ -27,5 +27,13 @@
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
+#ifdef WIN32
+#undef min
+#undef max
+#endif
+
+#include "PBRTParser\Scene.h"
+
+#include "SharedShaderStructs.h"
 #include "TracerBoy.h"
 #include "D3D12App.h"

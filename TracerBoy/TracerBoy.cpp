@@ -4,16 +4,7 @@
 #include "RayGen.h"
 #include "ClosestHit.h"
 #include "Miss.h"
-#include "SharedShaderStructs.h"
 
-#ifdef WIN32
-#undef min
-#undef max
-#endif
-
-#include "PBRTParser\Scene.h"
-
-#define USE_DXR 1
 
 struct HitGroupShaderRecord
 {
@@ -91,35 +82,81 @@ float ConvertSpecularToIOR(float specular)
 
 struct MaterialTracker
 {
-	bool Exists(std::string name)
+	bool Exists(pbrt::Material* pMaterial)
 	{
-		const auto& iter = MaterialNameToIndex.find(name);
+		const auto& iter = MaterialNameToIndex.find(pMaterial);
 		return iter != MaterialNameToIndex.end();
 	}
 
-	UINT GetMaterial(std::string name)
+	UINT GetMaterial(pbrt::Material* pMaterial)
 	{
-		VERIFY(Exists(name));
-		return MaterialNameToIndex[name];
+		VERIFY(Exists(pMaterial));
+		return MaterialNameToIndex[pMaterial];
 	}
 
-	UINT AddMaterial(const std::string &name, const Material m)
+	UINT AddMaterial(pbrt::Material* pMaterial, const Material m)
 	{
 		UINT materialIndex = MaterialList.size();
-		MaterialNameToIndex[name] = materialIndex;
+		MaterialNameToIndex[pMaterial] = materialIndex;
 		MaterialList.push_back(m);
 		return materialIndex;
 	}
 
 	std::vector<Material> MaterialList;
-	std::unordered_map<std::string, UINT> MaterialNameToIndex;
+	std::unordered_map<pbrt::Material*, UINT> MaterialNameToIndex;
 };
 
+UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture)
+{
+	TextureData texture;
+	pbrt::ImageTexture::SP pImageTexture = std::dynamic_pointer_cast<pbrt::ImageTexture>(pPbrtTexture);
+	if (pImageTexture)
+	{
+		ComPtr<ID3D12Resource> pTexture;
+		ComPtr<ID3D12Resource> pUpload;
 
-Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &materialTracker)
+		texture.TextureType = IMAGE_TEXTURE_TYPE;
+		texture.DescriptorHeapIndex = m_tracerboy.AllocateDescriptorHeapSlot();
+		std::wstring fileName(pImageTexture->fileName.begin(), pImageTexture->fileName.end());
+		m_tracerboy.InitializeTexture(fileName,
+			*m_pCommandList.Get(),
+			pTexture,
+			texture.DescriptorHeapIndex,
+			pUpload);
+
+		m_uploadResources.push_back(pUpload);
+		m_tracerboy.m_pTextures.push_back(pTexture);
+	}
+	else
+	{
+		VERIFY(false);
+	}
+	m_textureData.push_back(texture);
+	return m_textureData.size() - 1;
+}
+
+pbrt::vec3f GetAreaLightColor(pbrt::AreaLight::SP pAreaLight)
+{
+	pbrt::vec3f emissive(0.0f);
+	pbrt::DiffuseAreaLightRGB::SP pDiffuseAreaLight= std::dynamic_pointer_cast<pbrt::DiffuseAreaLightRGB>(pAreaLight);
+	if (pDiffuseAreaLight)
+	{
+		emissive = pDiffuseAreaLight->L;
+	}
+	else
+	{
+		VERIFY(false);
+	}
+	return emissive;
+}
+
+Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive, MaterialTracker &materialTracker, TextureAllocator &textureAlloator)
 {
 	Material material = {};
 	material.IOR = 1.5f;
+	material.albedoIndex = UINT_MAX;
+	material.emissive = ConvertFloat3(emissive);
+	material.Flags = ChannelAverage(emissive) > 0.0 ? LIGHT_MATERIAL_FLAG : DEFAULT_MATERIAL_FLAG;
 
 	pbrt::SubstrateMaterial::SP pSubstrateMaterial = std::dynamic_pointer_cast<pbrt::SubstrateMaterial>(pPbrtMaterial);
 	pbrt::UberMaterial::SP pUberMaterial = std::dynamic_pointer_cast<pbrt::UberMaterial>(pPbrtMaterial);
@@ -130,6 +167,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	pbrt::GlassMaterial::SP pGlassMaterial = std::dynamic_pointer_cast<pbrt::GlassMaterial>(pPbrtMaterial);
 	pbrt::MatteMaterial::SP pMatteMaterial = std::dynamic_pointer_cast<pbrt::MatteMaterial>(pPbrtMaterial);
 	pbrt::DisneyMaterial::SP pDisneyMaterial = std::dynamic_pointer_cast<pbrt::DisneyMaterial>(pPbrtMaterial);
+	pbrt::PlasticMaterial::SP pPlasticMaterial = std::dynamic_pointer_cast<pbrt::PlasticMaterial>(pPbrtMaterial);
 	
 	if (pDisneyMaterial)
 	{
@@ -140,7 +178,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 		// Not supporting blend between normal and metallic surfaces
 		if (pDisneyMaterial->metallic > 0.5)
 		{
-			material.Flags = METALLIC_MATERIAL_FLAG;
+			material.Flags |= METALLIC_MATERIAL_FLAG;
 		}
 	}
 	else if (pUberMaterial)
@@ -155,20 +193,15 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 
 		if (ChannelAverage(pUberMaterial->opacity) < 1.0)
 		{
-			material.Flags = SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 			material.IOR = pUberMaterial->index;
 			material.absorption = ChannelAverage(pUberMaterial->kt); // absorption != transmission but need oh well
 		}
-		else
-		{
-			material.Flags = DEFAULT_MATERIAL_FLAG;
-		}
-
 	}
 	else if (pMixMaterial)
 	{
-		UINT mat0Index = materialTracker.AddMaterial(pMixMaterial->material0->name, CreateMaterial(pMixMaterial->material0, materialTracker));
-		UINT mat1Index = materialTracker.AddMaterial(pMixMaterial->material1->name, CreateMaterial(pMixMaterial->material1, materialTracker));
+		UINT mat0Index = materialTracker.AddMaterial(pMixMaterial->material0.get(), CreateMaterial(pMixMaterial->material0, emissive, materialTracker, textureAlloator));
+		UINT mat1Index = materialTracker.AddMaterial(pMixMaterial->material1.get(), CreateMaterial(pMixMaterial->material1, emissive, materialTracker, textureAlloator));
 		material.Flags = MIX_MATERIAL_FLAG;
 
 		// TODO: gross
@@ -178,7 +211,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	{
 		material.albedo = ConvertFloat3(pMirrorMaterial->kr);
 		material.roughness = 0.0;
-		material.Flags = METALLIC_MATERIAL_FLAG;
+		material.Flags |= METALLIC_MATERIAL_FLAG;
 	}
 	else if (pMetalMaterial)
 	{
@@ -188,11 +221,14 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 		VERIFY(!pMetalMaterial->map_uRoughness); // Not supporting textures
 		VERIFY(pMetalMaterial->uRoughness == pMetalMaterial->vRoughness); // Not supporting multi dimension rougness
 		material.roughness = 0.5;
-		material.Flags = METALLIC_MATERIAL_FLAG;
+		material.Flags |= METALLIC_MATERIAL_FLAG;
 	}
 	else if (pSubstrateMaterial)
 	{
-		VERIFY(!pSubstrateMaterial->map_kd); // Not supporting textures
+		if (pSubstrateMaterial->map_kd)
+		{
+			material.albedoIndex = textureAlloator.CreateTexture(pSubstrateMaterial->map_kd);
+		}
 		material.albedo = ConvertFloat3(pSubstrateMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
 
@@ -206,7 +242,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 		//material.Flags = DEFAULT_MATERIAL_FLAG;
 		material.albedo = { };
 		material.absorption = ChannelAverage(pGlassMaterial->kt * 0.01);
-		material.Flags = SUBSURFACE_SCATTER_MATERIAL_FLAG;
+		material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		//material.scattering = pGlassMaterial->kt.x;
 	}
 	else if (pFourierMaterial)
@@ -218,13 +254,32 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, MaterialTracker &mate
 	else if (pMatteMaterial)
 	{
 		material.roughness = pMatteMaterial->sigma;
-		VERIFY(!pMatteMaterial->map_kd);
+		if (pMatteMaterial->map_kd)
+		{
+			material.albedoIndex = textureAlloator.CreateTexture(pMatteMaterial->map_kd);
+		}
+
 		material.albedo = ConvertFloat3(pMatteMaterial->kd);
-		material.Flags = NO_SPECULAR_MATERIAL_FLAG;
+		material.Flags |= NO_SPECULAR_MATERIAL_FLAG;
+	}
+	else if (pPlasticMaterial)
+	{
+		material.roughness = pPlasticMaterial->roughness;
+		if (pPlasticMaterial->map_kd)
+		{
+			material.albedoIndex = textureAlloator.CreateTexture(pPlasticMaterial->map_kd);
+		}
+		material.albedo = ConvertFloat3(pPlasticMaterial->kd);
+		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
+		VERIFY(!pPlasticMaterial->map_ks);
+		VERIFY(!pPlasticMaterial->map_roughness);
+		//VERIFY(!pPlasticMaterial->map_bump);
+
+		material.Flags |= DEFAULT_MATERIAL_FLAG;
 	}
 	else
 	{
-		assert(false);
+		VERIFY(false);
 	}
 
 	return material;
@@ -237,7 +292,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 	m_FramesRendered(0),
 	m_mouseX(0),
 	m_mouseY(0),
-	m_bInvalidateHistory(false)
+	m_bInvalidateHistory(false),
+	CurrentDescriptorSlot(NumReservedViewSlots)
 {
 	ZeroMemory(m_FrameFence, sizeof(m_FrameFence));
 
@@ -281,6 +337,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
 		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
 		Parameters[RayTracingRootSignatureParameters::MaterialBufferSRV].InitAsShaderResourceView(6);
+		Parameters[RayTracingRootSignatureParameters::TextureDataSRV].InitAsShaderResourceView(7);
+
+		CD3DX12_DESCRIPTOR_RANGE1 ImageTextureTableDescriptor;
+		ImageTextureTableDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(1, &ImageTextureTableDescriptor);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -407,6 +468,13 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 		std::vector<ComPtr<ID3D12Resource>> stagingResources;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
 
+		CommandListAllocatorPair commandListAllocatorPair;
+		AcquireCommandListAllocatorPair(commandListAllocatorPair);
+
+		ComPtr<ID3D12GraphicsCommandList4> pCommandList;
+		commandListAllocatorPair.first.As(&pCommandList);
+
+		TextureAllocator textureAllocator(*this, *pCommandList.Get());
 		MaterialTracker materialTracker;
 
 		const void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
@@ -422,35 +490,46 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 				continue;
 			}
 
-			UINT materialIndex = 0;
-			if (materialTracker.Exists(pTriangleMesh->material->name))
+			pbrt::vec3f emissive(0.0f);
+			if (pTriangleMesh->areaLight)
 			{
-				materialIndex = materialTracker.GetMaterial(pTriangleMesh->material->name);
+				emissive = GetAreaLightColor(pTriangleMesh->areaLight);
+			}
+
+			UINT materialIndex = 0;
+			if (materialTracker.Exists(pTriangleMesh->material.get()))
+			{
+				materialIndex = materialTracker.GetMaterial(pTriangleMesh->material.get());
 			}
 			else
 			{
-				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material->name, CreateMaterial(pTriangleMesh->material, materialTracker));
+				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material.get(), CreateMaterial(pTriangleMesh->material, emissive, materialTracker, textureAllocator));
 			}
 
 			ComPtr<ID3D12Resource> pVertexBuffer;
 			UINT vertexSize = sizeof(Vertex);
 			UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
+			AllocateUploadBuffer(vertexBufferSize, pVertexBuffer);
+			bool bNormalsProvided = pTriangleMesh->normal.size();
+			Vertex* pVertexBufferData;
 			{
-				AllocateUploadBuffer(vertexBufferSize, pVertexBuffer);
-				BYTE *pVertexBufferData;
 				VERIFY_HRESULT(pVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
 				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 				{
 					auto& parserVertex = pTriangleMesh->vertex[v];
 					pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
-					if (v < pTriangleMesh->normal.size())
+					if (bNormalsProvided)
 					{
 						parserNormal = pTriangleMesh->normal[v];
 					}
-					Vertex shaderVertex;
-					shaderVertex.Position = { parserVertex.x, parserVertex.y, parserVertex.z };
-					shaderVertex.Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
-					memcpy(pVertexBufferData + vertexSize * v, &shaderVertex, vertexSize);
+					pbrt::vec2f uv(0.0, 0.0);
+					if (v < pTriangleMesh->texcoord.size())
+					{
+						uv = pTriangleMesh->texcoord[v];
+					}
+					pVertexBufferData[v].Position = { parserVertex.x, parserVertex.y, parserVertex.z };
+					pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
+					pVertexBufferData[v].UV = { uv.x, uv.y };
 				}
 			}
 
@@ -468,6 +547,16 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 					pIndexBufferData[3 * i] = triangleIndices.x;
 					pIndexBufferData[3 * i + 1] = triangleIndices.y;
 					pIndexBufferData[3 * i + 2] = triangleIndices.z;
+					if (!bNormalsProvided)
+					{
+						pbrt::vec3f edge1 = pTriangleMesh->vertex[triangleIndices.y] - pTriangleMesh->vertex[triangleIndices.x];
+						pbrt::vec3f edge2 = pTriangleMesh->vertex[triangleIndices.z] - pTriangleMesh->vertex[triangleIndices.y];
+						pbrt::vec3f normal = pbrt::math::cross(pbrt::math::normalize(edge1), pbrt::math::normalize(edge2));
+						
+						pVertexBufferData[triangleIndices.x].Normal = { normal.x, normal.y, normal.z };
+						pVertexBufferData[triangleIndices.y].Normal = { normal.x, normal.y, normal.z };
+						pVertexBufferData[triangleIndices.z].Normal = { normal.x, normal.y, normal.z };
+					}
 				}
 			}
 			triangleCount += pTriangleMesh->index.size() / 3;
@@ -501,12 +590,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 
 		AllocateBufferWithData(hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable);
 		AllocateBufferWithData(materialTracker.MaterialList.data(), materialTracker.MaterialList.size() * sizeof(Material), m_pMaterialList);
-
-		CommandListAllocatorPair commandListAllocatorPair;
-		AcquireCommandListAllocatorPair(commandListAllocatorPair);
-
-		ComPtr<ID3D12GraphicsCommandList4> pCommandList;
-		commandListAllocatorPair.first.As(&pCommandList);
+		if (textureAllocator.GetTextureData().size() > 0)
+		{
+			AllocateBufferWithData(textureAllocator.GetTextureData().data(), textureAllocator.GetTextureData().size() * sizeof(TextureData), m_pTextureDataList);
+		}
+		
 
 		ComPtr<ID3D12Resource> pEnvironmentMapScratchBuffer;
 		for (UINT lightIndex = 0; lightIndex < pScene->world->lightSources.size(); lightIndex++)
@@ -515,10 +603,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileNam
 			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
 			if (pInfiniteLightSource)
 			{
-				std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
 				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end());
-
-				InitializeTexture(directory + textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
+				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
 			}
 		}
 
@@ -625,9 +711,25 @@ void TracerBoy::InitializeTexture(
 	UINT SRVSlot,
 	ComPtr<ID3D12Resource>& pUploadResource)
 {
+	std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
+	std::wstring fullTextureName = directory + textureName;
+
 	DirectX::TexMetadata texMetaData;
 	DirectX::ScratchImage scratchImage;
-	VERIFY_HRESULT(DirectX::LoadFromHDRFile(textureName.c_str(), &texMetaData, scratchImage));
+	std::wstring fileExt = textureName.substr(textureName.size() - 4, 4);
+	if (fileExt.compare(L".hdr") == 0)
+	{
+		VERIFY_HRESULT(DirectX::LoadFromHDRFile(fullTextureName.c_str(), &texMetaData, scratchImage));
+	}
+	else if (fileExt.compare(L".tga") == 0)
+	{
+		VERIFY_HRESULT(DirectX::LoadFromTGAFile(fullTextureName.c_str(), &texMetaData, scratchImage));
+	}
+	else
+	{
+		VERIFY_HRESULT(DirectX::LoadFromWICFile(fullTextureName.c_str(), WIC_FLAGS_NONE, &texMetaData, scratchImage));
+
+	}
 	VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice.Get(), texMetaData, D3D12_RESOURCE_FLAG_NONE, false, pResource.ReleaseAndGetAddressOf()));
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), SRVSlot));
 
@@ -791,6 +893,11 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer[m_ActiveFrameIndex]->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::MaterialBufferSRV, m_pMaterialList->GetGPUVirtualAddress());
+	if (m_pTextureDataList)
+	{
+		commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::TextureDataSRV, m_pTextureDataList->GetGPUVirtualAddress());
+	}
+	
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
@@ -803,6 +910,7 @@ void TracerBoy::Render(ID3D12Resource *pBackBuffer)
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LastFrameSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + LastFrameBufferSRVIndex));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::EnvironmentMapSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActiveFrameIndex));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::ImageTextureTable, m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
 	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex]->GetDesc();
 
@@ -883,12 +991,13 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 
 	float yaw = 0.0;
 	float pitch = 0.0;
+	const float rotationScaler = 0.5f;
 	if (m_pPostProcessOutput)
 	{
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
 
-		yaw = 3.14f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
-		pitch = 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
+		yaw = rotationScaler * 3.14f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
+		pitch = rotationScaler * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
 	}
 
 
@@ -908,7 +1017,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
 	LookAt = Position + ViewDir;
 
-	const float cameraMoveSpeed = 0.07f;
+	const float cameraMoveSpeed = 0.01f;
 	if (keyboardInput['w'] || keyboardInput['W'])
 	{
 		Position += dt * cameraMoveSpeed * ViewDir;

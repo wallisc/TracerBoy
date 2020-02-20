@@ -26,6 +26,9 @@ RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
 StructuredBuffer<float> RandSeedBuffer : register(t5);
 StructuredBuffer<Material> MaterialBuffer : register(t6);
+StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
+Texture2D<float4> ImageTextures[] : register(t0, space1);
+
 SamplerState PointSampler : register(s0);
 SamplerState BilinearSampler : register(s1);
 
@@ -41,9 +44,15 @@ float3 SampleEnvironmentMap(float3 v)
 	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
+float rand();
+
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = LightColor = float3(0.0, 0.0, 0.0);
+	float2 areaLightUV = float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
+	LightPosition = float3(0.5f, 7.14059f, -1.5f) +
+		float3(1.0, 0.0, 0.0) * areaLightUV.x +
+		float3(0.0, 0.0, 1.0) * areaLightUV.y;
+	LightColor = float3(30.0, 30.0, 30.0);
 	PDFValue = 0.0;
 }
 
@@ -65,9 +74,20 @@ Material GetMaterial_NonRecursive(int MaterialID)
 	return MaterialBuffer[MaterialID];
 }
 
-float rand();
+float3 GetTextureData(uint textureIndex, float2 uv)
+{
+	 uv = float2(0, 1) + uv * float2(1, -1);
 
-Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition)
+	float3 data = float3(0.0, 0.0, 0.0);
+	TextureData textureData = TextureDataBuffer[textureIndex];
+	if (textureData.TextureType == IMAGE_TEXTURE_TYPE)
+	{
+		data = ImageTextures[NonUniformResourceIndex(textureData.DescriptorHeapIndex)].SampleLevel(BilinearSampler, uv, 0).rgb;
+	}
+	return data;
+}
+
+Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv)
 {
 	Material mat = MaterialBuffer[MaterialID];
 	if ((mat.Flags & MIX_MATERIAL_FLAG) != 0)
@@ -81,6 +101,12 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition)
 			return GetMaterial_NonRecursive(uint(mat.albedo.y));
 		}
 	}
+
+	if(mat.albedoIndex != UINT_MAX)
+	{
+		mat.albedo = GetTextureData(mat.albedoIndex, uv);
+	}
+
 	return mat;
 }
 
@@ -90,7 +116,7 @@ struct Ray
 	float3 direction;
 };
 
-float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint PrimitiveID)
+float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float2 uv, out uint PrimitiveID)
 {
 	RayDesc dxrRay;
 	dxrRay.Origin = ray.origin;
@@ -115,6 +141,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out uint
 	}
 	PrimitiveID = 0;
 	normal = payload.normal;
+	uv = payload.uv;
 	return result;
 }
 
