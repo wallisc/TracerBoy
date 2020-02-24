@@ -1,9 +1,14 @@
 #include "pch.h"
 
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 std::unique_ptr<D3D12App> g_pD3D12App;
 HWND g_hwnd;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
+		return true;
+
 	switch (message)
 	{
 	case WM_KEYDOWN:
@@ -26,14 +31,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		return 0;
 	case WM_PAINT:
 		{
-			std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
 			g_pD3D12App->Render();
-			std::chrono::steady_clock::time_point endTime = std::chrono::steady_clock::now();
-			float renderTime = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-			
-			char windowTitle[50];
-			snprintf(windowTitle, ARRAYSIZE(windowTitle), "TracerBoy - %.2f ms", renderTime / 1000.0f);
-			SetWindowText(g_hwnd, windowTitle);
 		}
 		return 0;
 	case WM_DESTROY:
@@ -64,7 +62,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	windowClass.lpszClassName = WindowName;
 	RegisterClassEx(&windowClass);
 
-	RECT windowRect = { 0, 0, 1920, 1080 };
+	RECT windowRect = { 0, 0, 800, 600};
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	g_hwnd = CreateWindow(

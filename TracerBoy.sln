@@ -6,12 +6,15 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TracerBoy", "TracerBoy\TracerBoy.vcxproj", "{32B71B8B-05B2-4031-B851-99105CE7CEBB}"
 	ProjectSection(ProjectDependencies) = postProject
 		{C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF} = {C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF}
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB} = {4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77} = {371B9FA9-4C90-4AC6-A123-ACED756D6C77}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTex", "DirectXTex\DirectXTex_Desktop_2019_Win10.vcxproj", "{371B9FA9-4C90-4AC6-A123-ACED756D6C77}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PBRTParser", "PBRTParser\PBRTParser.vcxproj", "{C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Imgui", "imgui\Imgui.vcxproj", "{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -59,6 +62,18 @@ Global
 		{C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF}.Release|x64.Build.0 = Release|x64
 		{C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF}.Release|x86.ActiveCfg = Release|Win32
 		{C0D7AC38-A3A7-4F39-A7AC-FEF25F79C2CF}.Release|x86.Build.0 = Release|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Debug|x64.ActiveCfg = Debug|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Debug|x64.Build.0 = Debug|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Debug|x86.ActiveCfg = Debug|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Debug|x86.Build.0 = Debug|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Profile|x64.ActiveCfg = Release|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Profile|x64.Build.0 = Release|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Profile|x86.ActiveCfg = Release|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Profile|x86.Build.0 = Release|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Release|x64.ActiveCfg = Release|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Release|x64.Build.0 = Release|x64
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Release|x86.ActiveCfg = Release|Win32
+		{4916F5A1-8D24-4C64-A2C6-59DFE63EA9AB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

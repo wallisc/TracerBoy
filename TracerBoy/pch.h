@@ -37,3 +37,7 @@ using namespace DirectX;
 #include "SharedShaderStructs.h"
 #include "TracerBoy.h"
 #include "D3D12App.h"
+
+#include "imgui.h"
+#include "imgui_impl_win32.h"
+#include "imgui_impl_dx12.h"

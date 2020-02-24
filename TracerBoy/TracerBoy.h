@@ -62,23 +62,22 @@ class TextureAllocator;
 class TracerBoy
 {
 public:
-	TracerBoy(ID3D12CommandQueue *pQueue, const std::string &sceneFileName);
-	~TracerBoy() { WaitForGPUIdle(); }
-	void Render(ID3D12Resource *pBackBuffer);
+		
+	TracerBoy(ID3D12CommandQueue *pQueue);
+
+	void LoadScene(
+		ID3D12GraphicsCommandList& commandList, 
+		const std::string& sceneFileName, 
+		std::vector<ComPtr<ID3D12Resource>> &resourcesToDelete);
+
+	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer);
 
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
 
 	friend class TextureAllocator;
 private:
-	UINT64 SignalFence();
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
-	void WaitForGPUIdle();
-	void WaitForFenceValue(UINT fenceValue);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
-
-	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
-	void AcquireCommandListAllocatorPair(CommandListAllocatorPair &pair);
-	UINT ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair &pair);
 
 	void InitializeLocalRootSignature();
 	void InitializeTexture(
@@ -124,8 +123,6 @@ private:
 		NumPathTracerOutputUAVs
 	};
 	static const UINT MaxActiveFrames = NumPathTracerOutputUAVs;
-
-	UINT m_FrameFence[MaxActiveFrames];
 
 	ComPtr<ID3D12Resource> m_pRandSeedBuffer[MaxActiveFrames];
 	void UpdateRandSeedBuffer(UINT bufferIndex);
@@ -176,14 +173,9 @@ private:
 	ComPtr<ID3D12RootSignature> m_pPostProcessRootSignature;
 	ComPtr<ID3D12PipelineState> m_pPostProcessPSO;
 
-	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
-
 	UINT32 m_mouseX, m_mouseY;
 	UINT m_FramesRendered;
 	bool m_bInvalidateHistory;
-
-	ComPtr<ID3D12Fence> m_pFence;
-	UINT64 m_SignalValue;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
 
