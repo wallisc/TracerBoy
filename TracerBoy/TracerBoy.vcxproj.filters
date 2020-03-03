@@ -27,6 +27,9 @@
     <ClCompile Include="TracerBoy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UIController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -46,6 +49,9 @@
     </ClInclude>
     <ClInclude Include="SharedShaderStructs.h">
       <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="UIController.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

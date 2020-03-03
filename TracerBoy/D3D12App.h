@@ -13,8 +13,6 @@ public:
 	
 	void Render();
 private:
-	void InitImigui(HWND hwnd);
-
 	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair& pair);
 	UINT ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& pair);
@@ -35,10 +33,7 @@ private:
 	ComPtr<IDXGISwapChain3> m_pSwapChain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
-	ComPtr<ID3D12DescriptorHeap> m_pImguiSRVDescriptorHeap;
-	ComPtr<ID3D12DescriptorHeap> m_pImguiRTVDescriptorHeap;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE m_RTV[cNumBackBuffers];
 
 	std::unique_ptr<TracerBoy> m_pTracerBoy;
+	std::unique_ptr<UIController> m_pUIController;
 };

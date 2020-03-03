@@ -148,6 +148,7 @@
   <ItemGroup>
     <ClCompile Include="D3D12App.cpp" />
     <ClCompile Include="TracerBoy.cpp" />
+    <ClCompile Include="UIController.cpp" />
     <ClCompile Include="WinMain.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -157,6 +158,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="SharedShaderStructs.h" />
     <ClInclude Include="TracerBoy.h" />
+    <ClInclude Include="UIController.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="ClosestHit.hlsl">
