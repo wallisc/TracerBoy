@@ -21,6 +21,7 @@ float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return configConstants.FocalDistance; }
 
 RWTexture2D<float4> OutputTexture : register(u0);
+
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
@@ -143,6 +144,20 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	normal = payload.normal;
 	uv = payload.uv;
 	return result;
+}
+
+void OutputPrimaryAlbedo(float3 albedo)
+{
+	AOVAlbedo[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+}
+
+void OutputPrimaryNormal(float3 normal)
+{
+	AOVNormals[DispatchRaysIndex().xy] = float4(normal, 1.0);
+}
+
+void ClearAOVs()
+{
 }
 
 #include "GLSLCompat.h"

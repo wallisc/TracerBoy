@@ -22,3 +22,4 @@ x64
 TracerBoy/TracerBoy.vcxproj.user
 *.user
 PBRTParser/PBRTParser.vcxproj.user
+*.ini

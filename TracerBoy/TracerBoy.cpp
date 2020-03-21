@@ -326,6 +326,10 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[RayTracingRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
 
+		CD3DX12_DESCRIPTOR_RANGE1 AOVDescriptor;
+		AOVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ViewDescriptorHeapSlots::AOVLastSlot - ViewDescriptorHeapSlots::AOVBaseSlot + 1, 1);
+		Parameters[RayTracingRootSignatureParameters::AOVDescriptorTable].InitAsDescriptorTable(1, &AOVDescriptor);
+
 
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
 		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
@@ -802,8 +806,22 @@ void TracerBoy::AllocateBufferWithData(const void* pData, UINT dataSize, ComPtr<
 	pBuffer->Unmap(0, nullptr);
 }
 
+ID3D12Resource* TracerBoy::GetOutputResource(OutputType outputType)
+{
+	switch (outputType)
+	{
+	case OutputType::Lit:
+	default:
+		return m_pPostProcessOutput.Get();
+	case OutputType::Albedo:
+		return m_pAOVAlbedo.Get();
+	case OutputType::Normals:
+		return m_pAOVNormals.Get();
+	}
+}
 
-void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer)
+
+void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, OutputType outputType)
 {
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
@@ -851,6 +869,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::EnvironmentMapSRV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + m_ActiveFrameIndex));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::ImageTextureTable, m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVBaseSlot));
 
 	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex]->GetDesc();
 
@@ -891,21 +910,21 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 
 	{
+		ID3D12Resource* pResourceToPresent = GetOutputResource(outputType);
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pPostProcessOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
+			CD3DX12_RESOURCE_BARRIER::Transition(pResourceToPresent, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST)
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
-		commandList.CopyResource(pBackBuffer, m_pPostProcessOutput.Get());
+		commandList.CopyResource(pBackBuffer, pResourceToPresent);
 
 		D3D12_RESOURCE_BARRIER postCopyBarriers[] =
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pPostProcessOutput.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(pResourceToPresent, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer,D3D12_RESOURCE_STATE_COPY_DEST,  D3D12_RESOURCE_STATE_RENDER_TARGET)
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
-
 	}
 
 	m_ActiveFrameIndex = (m_ActiveFrameIndex + 1) % MaxActiveFrames;
@@ -1002,6 +1021,23 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	}
 }
 
+ComPtr<ID3D12Resource> TracerBoy::CreateUAV(const D3D12_RESOURCE_DESC &uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle)
+{
+	ComPtr<ID3D12Resource> pResource;
+	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+		&defaultHeapDesc,
+		D3D12_HEAP_FLAG_NONE,
+		&uavDesc,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		nullptr,
+		IID_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
+
+	m_pDevice->CreateUnorderedAccessView(pResource.Get(), nullptr, nullptr, uavHandle);
+	return pResource;
+}
+
+
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 {
 	D3D12_RESOURCE_DESC backBufferDesc = pBackBuffer->GetDesc();
@@ -1058,6 +1094,12 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 				nullptr,
 				IID_PPV_ARGS(m_pPostProcessOutput.ReleaseAndGetAddressOf())));
+
+			{
+				D3D12_RESOURCE_DESC aovDesc = postProcessOutput;
+				m_pAOVAlbedo = CreateUAV(aovDesc, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVAlbedoSlot));
+				m_pAOVNormals = CreateUAV(aovDesc, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSlot));
+			}
 
 			auto viewDescriptorHeapBase = m_pViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 			auto viewDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

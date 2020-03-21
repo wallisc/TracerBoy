@@ -34,9 +34,9 @@ using namespace DirectX;
 
 #include "PBRTParser\Scene.h"
 
-#include "UIController.h"
 #include "SharedShaderStructs.h"
 #include "TracerBoy.h"
+#include "UIController.h"
 #include "D3D12App.h"
 
 #include "imgui.h"

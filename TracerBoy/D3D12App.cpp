@@ -138,7 +138,7 @@ void D3D12App::Render()
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
 	ID3D12GraphicsCommandList& commandList = *commandListAllocatorPair.first.Get();
 
-	m_pTracerBoy->Render(commandList, pBackBuffer.Get());
+	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pUIController->GetOutputType());
 	m_pUIController->Render(commandList);
 
 	commandList.Close();

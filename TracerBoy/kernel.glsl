@@ -1100,6 +1100,7 @@ vec4 Trace(Ray ray)
         if(i == 0)
         {
             FirstPrimitiveID = PrimitiveID;
+			OutputPrimaryNormal(normal);
         }
         
         if(accumulatedIndirectLightMultiplier.x < EPSILON && 
@@ -1121,7 +1122,10 @@ vec4 Trace(Ray ray)
             vec3 RayPoint = GetRayPoint(ray, result.x);
             ray.origin = RayPoint + normal * EPSILON;
             Material material = GetMaterialWithTextures(int(result.y), PrimitiveID, RayPoint, uv);
-
+			if(i == 0)
+			{	
+				OutputPrimaryAlbedo(material.albedo);
+			}
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
               

@@ -70,12 +70,20 @@ public:
 		const std::string& sceneFileName, 
 		std::vector<ComPtr<ID3D12Resource>> &resourcesToDelete);
 
-	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer);
+	enum class OutputType
+	{
+		Lit,
+		Albedo,
+		Normals
+	};
+	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, OutputType outputType = OutputType::Lit);
 
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
 
 	friend class TextureAllocator;
 private:
+	ID3D12Resource* GetOutputResource(OutputType outputType);
+
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
 
@@ -144,6 +152,7 @@ private:
 		ConfigConstantsParam,
 		EnvironmentMapSRV,
 		LastFrameSRV,
+		AOVDescriptorTable,
 		OutputUAV,
 		AccelerationStructureRootSRV,
 		RandSeedRootSRV,
@@ -178,11 +187,19 @@ private:
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
+	ComPtr<ID3D12Resource> m_pAOVNormals;
+	ComPtr<ID3D12Resource> m_pAOVAlbedo;
+
+	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE);
 
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
 		EnvironmentMapSRVSlot,
+		AOVBaseSlot,
+		AOVNormalsSlot = AOVBaseSlot,
+		AOVAlbedoSlot,
+		AOVLastSlot = AOVAlbedoSlot,
 		PathTracerOutputSRVBaseSlot,
 		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		PathTracerOutputUAVBaseSlot,

@@ -1,7 +1,9 @@
 #include "pch.h"
 
 UIController::UIController(HWND hwnd, ID3D12Device &device, ComPtr<IDXGISwapChain3> pSwapchain) :
-	m_pSwapchain(pSwapchain)
+	m_pSwapchain(pSwapchain),
+	m_outputTypeIndex(0)
+
 {
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -73,6 +75,12 @@ UIController::UIController(HWND hwnd, ID3D12Device &device, ComPtr<IDXGISwapChai
 	//IM_ASSERT(font != NULL);
 }
 
+TracerBoy::OutputType UIController::GetOutputType()
+{
+	return (TracerBoy::OutputType)m_outputTypeIndex;
+}
+
+
 void UIController::Render(ID3D12GraphicsCommandList& commandList)
 {
 	ImGui_ImplDX12_NewFrame();
@@ -82,12 +90,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::Begin("TracerBoy");
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
-	// General BeginCombo() API, you have full control over your selection data and display type.
-	// (your selection data could be an index, a pointer to the object, an id for the object, a flag stored in the object itself, etc.)
-	const char* OutputTypes[] = { "Lit", "Normals", "Albedo" };
+	const char* OutputTypes[] = { "Lit", "Albedo", "Normals" };
 
-	static int current = 0;
-	ImGui::Combo("View Mode", &current, OutputTypes, IM_ARRAYSIZE(OutputTypes));
+	ImGui::Combo("View Mode", &m_outputTypeIndex, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::End();
 
 	ImGui::Render();
