@@ -21,6 +21,8 @@ float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return configConstants.FocalDistance; }
 
 RWTexture2D<float4> OutputTexture : register(u0);
+RWTexture2D<float4> AOVNormals : register(u1);
+RWTexture2D<float4> AOVAlbedo: register(u2);
 
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
@@ -158,6 +160,7 @@ void OutputPrimaryNormal(float3 normal)
 
 void ClearAOVs()
 {
+	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0));
 }
 
 #include "GLSLCompat.h"
@@ -166,6 +169,7 @@ void ClearAOVs()
 [shader("raygeneration")]
 void RayGen()
 {
+	ClearAOVs();
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
