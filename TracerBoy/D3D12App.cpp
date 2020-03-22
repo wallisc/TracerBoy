@@ -130,7 +130,9 @@ void D3D12App::Render()
 		std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_LastUpdateTime).count();
 	m_LastUpdateTime = std::chrono::steady_clock::now();
 
-	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate);
+	TracerBoy::CameraSettings cameraSettings = {};
+	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
+	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
 	ComPtr<ID3D12Resource> pBackBuffer;
 	m_pSwapChain->GetBuffer(backBufferIndex, IID_PPV_ARGS(&pBackBuffer));

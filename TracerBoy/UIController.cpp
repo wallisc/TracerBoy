@@ -1,9 +1,9 @@
 #include "pch.h"
 
-UIController::UIController(HWND hwnd, ID3D12Device &device, ComPtr<IDXGISwapChain3> pSwapchain) :
+UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
-	m_outputTypeIndex(0)
-
+	m_outputTypeIndex(0),
+	m_cameraSpeed(0.03f)
 {
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -93,14 +93,14 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	const char* OutputTypes[] = { "Lit", "Albedo", "Normals" };
 
 	ImGui::Combo("View Mode", &m_outputTypeIndex, OutputTypes, IM_ARRAYSIZE(OutputTypes));
-	ImGui::End();
+	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 
 	ImGui::Render();
 
 	ComPtr<ID3D12Resource> pBackBuffer;
 	UINT backBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	m_pSwapchain->GetBuffer(backBufferIndex, IID_PPV_ARGS(&pBackBuffer));
-
+	
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pImguiSRVDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 	commandList.OMSetRenderTargets(1, &m_RTVs[backBufferIndex], FALSE, NULL);

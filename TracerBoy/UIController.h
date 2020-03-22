@@ -7,8 +7,10 @@ public:
 	void Render(ID3D12GraphicsCommandList& commandList);
 
 	TracerBoy::OutputType GetOutputType();
+	float GetCameraSpeed() { return m_cameraSpeed; }
 private:
 	int m_outputTypeIndex;
+	float m_cameraSpeed;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12DescriptorHeap> m_pImguiSRVDescriptorHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pImguiRTVDescriptorHeap;

@@ -941,7 +941,7 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }
 
-void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt)
+void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const CameraSettings& cameraSettings)
 {
 	bool bCameraMoved = false;
 
@@ -973,7 +973,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
 	LookAt = Position + ViewDir;
 
-	const float cameraMoveSpeed = 0.03f;
+	const float cameraMoveSpeed = cameraSettings.m_movementSpeed;
 	if (keyboardInput['w'] || keyboardInput['W'])
 	{
 		Position += dt * cameraMoveSpeed * ViewDir;

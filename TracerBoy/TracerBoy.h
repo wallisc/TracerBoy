@@ -78,7 +78,11 @@ public:
 	};
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, OutputType outputType = OutputType::Lit);
 
-	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt);
+	struct CameraSettings
+	{
+		float m_movementSpeed;
+	};
+	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const CameraSettings &cameraSettings);
 
 	friend class TextureAllocator;
 private:
