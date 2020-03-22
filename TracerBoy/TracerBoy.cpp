@@ -973,7 +973,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
 	LookAt = Position + ViewDir;
 
-	const float cameraMoveSpeed = 0.01f;
+	const float cameraMoveSpeed = 0.03f;
 	if (keyboardInput['w'] || keyboardInput['W'])
 	{
 		Position += dt * cameraMoveSpeed * ViewDir;

@@ -40,6 +40,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 	swapChainDesc.SampleDesc.Count = 1;
+	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	VERIFY_HRESULT(pDxgiFactory2->CreateSwapChainForHwnd(m_pCommandQueue.Get(), hwnd, &swapChainDesc, nullptr, nullptr, &pSwapChain));
 
 	VERIFY_HRESULT(pSwapChain.As(&m_pSwapChain));
@@ -146,5 +147,5 @@ void D3D12App::Render()
 	ID3D12CommandList* CommandLists[] = { &commandList };
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 
-	m_pSwapChain->Present(0, 0);
+	m_pSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
 }
