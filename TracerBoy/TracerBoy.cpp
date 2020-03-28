@@ -443,8 +443,25 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	std::size_t lastDeliminator = sceneFileName.find_last_of("/\\");
 	m_sceneFileDirectory = sceneFileName.substr(0, lastDeliminator + 1);
 
+	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
+	
 	{
-		std::shared_ptr<pbrt::Scene> pScene = pbrt::importPBRT(sceneFileName);
+#if USE_ASSIMP
+		AssimpImporter::ScratchData assimpScratchData;
+#endif
+		std::shared_ptr<pbrt::Scene> pScene;
+		if (sceneFileExtension.compare("pbrt") == 0)
+		{
+			pScene = pbrt::importPBRT(sceneFileName);
+		}
+		else
+		{
+#if USE_ASSIMP
+			pScene = AssimpImporter::LoadScene(sceneFileName, assimpScratchData);
+#else
+			VERIFY(false); // Unsupported file type
+#endif
+		}
 
 		assert(pScene->cameras.size() > 0);
 		auto& pCamera = pScene->cameras[0];
@@ -952,8 +969,8 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	{
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
 
-		yaw = rotationScaler * 3.14f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
-		pitch = rotationScaler * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
+		yaw = rotationScaler * 2.0 * 6.28f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
+		pitch = rotationScaler * 0.5f * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
 	}
 
 
@@ -969,8 +986,13 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	XMVECTOR Position = XMVectorSet(m_camera.Position.x, m_camera.Position.y, m_camera.Position.z, 1.0);
 	XMVECTOR LookAt = XMVectorSet(m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, 1.0);
 	XMVECTOR ViewDir = LookAt - Position;
-	XMMATRIX RotationMatrix = XMMatrixRotationAxis(UpAxis, yaw) * XMMatrixRotationAxis(RightAxis, pitch);
+
+	XMVECTOR GlobalUp = XMVectorSet(0.0, 1.0, 0.0, 1.0);
+
+	XMMATRIX RotationMatrix = XMMatrixRotationAxis(GlobalUp, yaw);// *XMMatrixRotationAxis(RightAxis, pitch);
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
+	RightAxis = XMVector3Normalize(XMVector3Transform(RightAxis, RotationMatrix));
+	UpAxis = XMVector3Normalize(XMVector3Transform(UpAxis, RotationMatrix));
 	LookAt = Position + ViewDir;
 
 	const float cameraMoveSpeed = cameraSettings.m_movementSpeed;

@@ -94,6 +94,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	ImGui::Combo("View Mode", &m_outputTypeIndex, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
+	ImGui::End();
 
 	ImGui::Render();
 

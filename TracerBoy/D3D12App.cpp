@@ -8,7 +8,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	m_SignalValue(1)
 {
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
-#ifdef DEBUG
+#if 1
 	ComPtr<ID3D12Debug> debugController;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
 	{
@@ -112,9 +112,6 @@ UINT D3D12App::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& 
 
 void D3D12App::UpdateMousePosition(int x, int y)
 {
-	// TODO: Temporarily disabling mouse camera movement since it's conflicting with UI
-	return;
-
 	m_mouseX = x;
 	m_mouseY = y;
 }

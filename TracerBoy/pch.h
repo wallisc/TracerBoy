@@ -1,5 +1,7 @@
 #pragma once
 
+#define USE_ASSIMP 1
+
 #include <memory>
 #include <deque>
 #include <string>
@@ -33,6 +35,12 @@ using namespace DirectX;
 #endif
 
 #include "PBRTParser\Scene.h"
+#if USE_ASSIMP
+#include <assimp/Importer.hpp>      // C++ importer interface
+#include <assimp/postprocess.h>     // Post processing flags
+#include <assimp/scene.h>
+#include "AssimpImporter.h"
+#endif
 
 #include "SharedShaderStructs.h"
 #include "TracerBoy.h"

@@ -30,6 +30,9 @@
     <ClCompile Include="UIController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="AssimpImporter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -51,6 +54,9 @@
       <Filter>Shaders</Filter>
     </ClInclude>
     <ClInclude Include="UIController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AssimpImporter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
