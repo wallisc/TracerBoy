@@ -76,7 +76,23 @@ public:
 		Albedo,
 		Normals
 	};
-	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, OutputType outputType = OutputType::Lit);
+
+	struct OutputSettings
+	{
+		OutputType m_OutputType;
+		bool m_bEnableDenoiser;
+	};
+
+	static OutputSettings GetDefaultOutputSettings()
+	{
+		OutputSettings outputSettings;
+		outputSettings.m_OutputType = OutputType::Lit;
+		outputSettings.m_bEnableDenoiser = true;
+
+		return outputSettings;
+	}
+
+	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, const OutputSettings &outputSettings);
 
 	struct CameraSettings
 	{

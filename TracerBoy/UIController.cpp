@@ -2,9 +2,10 @@
 
 UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
-	m_outputTypeIndex(0),
 	m_cameraSpeed(0.03f)
 {
+	SetDefaultSettings();
+
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -75,11 +76,10 @@ UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChai
 	//IM_ASSERT(font != NULL);
 }
 
-TracerBoy::OutputType UIController::GetOutputType()
+void UIController::SetDefaultSettings()
 {
-	return (TracerBoy::OutputType)m_outputTypeIndex;
+	m_outputSettings = TracerBoy::GetDefaultOutputSettings();
 }
-
 
 void UIController::Render(ID3D12GraphicsCommandList& commandList)
 {
@@ -92,8 +92,15 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	const char* OutputTypes[] = { "Lit", "Albedo", "Normals" };
 
-	ImGui::Combo("View Mode", &m_outputTypeIndex, OutputTypes, IM_ARRAYSIZE(OutputTypes));
+	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
+
+	if (ImGui::TreeNode("Denoising"))
+	{
+		ImGui::Checkbox("Enable Denoiser", &m_outputSettings.m_bEnableDenoiser);
+		ImGui::TreePop();
+	}
+
 	ImGui::End();
 
 	ImGui::Render();

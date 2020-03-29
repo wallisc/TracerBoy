@@ -838,7 +838,7 @@ ID3D12Resource* TracerBoy::GetOutputResource(OutputType outputType)
 }
 
 
-void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, OutputType outputType)
+void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, const OutputSettings& outputSettings)
 {
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
@@ -927,7 +927,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 
 	{
-		ID3D12Resource* pResourceToPresent = GetOutputResource(outputType);
+		ID3D12Resource* pResourceToPresent = GetOutputResource(outputSettings.m_OutputType);
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
 		{
 			CD3DX12_RESOURCE_BARRIER::Transition(pResourceToPresent, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),

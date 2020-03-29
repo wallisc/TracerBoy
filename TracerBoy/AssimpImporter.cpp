@@ -49,19 +49,20 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	pDefaultMaterial->roughness = 0.1f;
 #endif
 
-	//MakeNamedMaterial "Rough Ice" "string type" "uber" "rgb Kd"[0.65 0.65 0.8] "float index" 1.1 "rgb opacity"[0 0 0] "float roughness" 0.3 "rgb Kt"[0 0 0]
 	std::shared_ptr<pbrt::UberMaterial> pDefaultMaterial = std::make_shared<pbrt::UberMaterial>();
-	pDefaultMaterial->kd.x = 1.0f;
-	pDefaultMaterial->kd.y = 0.6f;
-	pDefaultMaterial->kd.z = 0.6f;
+#if 0
+	pDefaultMaterial->kd.x = 0.0f;
+	pDefaultMaterial->kd.y = 0.8f;
+	pDefaultMaterial->kd.z = 1.0f;
 	pDefaultMaterial->index = 1.05f;
 	pDefaultMaterial->opacity.x = 0.0f;
 	pDefaultMaterial->opacity.y = 0.0f;
 	pDefaultMaterial->opacity.z = 0.0f;
-	pDefaultMaterial->kt.x = 0.5f;
-	pDefaultMaterial->kt.y = 0.5f;
-	pDefaultMaterial->kt.z = 0.5f;
-	pDefaultMaterial->roughness = 0.5f;
+	pDefaultMaterial->kt.x = 0.01f;
+	pDefaultMaterial->kt.y = 0.01f;
+	pDefaultMaterial->kt.z = 0.01f;
+	pDefaultMaterial->roughness = 0.1f;
+#endif
 
 
 	UINT numMeshes = pAiScene->mNumMeshes;
