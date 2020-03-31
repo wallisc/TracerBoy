@@ -3,6 +3,7 @@
 
 Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
+Texture2D AOVIntersectPosition : register(t2);
 RWTexture2D<float4> OutputTexture;
 
 cbuffer DenoiserCB
@@ -12,13 +13,29 @@ cbuffer DenoiserCB
 
 #define KERNEL_WIDTH 5
 
-float CalculateWeight(float3 centerNormal, int2 coord, int2 offset)
+
+float CalculateWeight(
+	float3 centerNormal, 
+	float3 centerIntersectPosition, 
+	float distanceToNeighborPixel, 
+	int2 coord, 
+	int2 offset)
 {
 	float3 normal = AOVNormals[coord];
-	float normalWeight = max(0.0f, dot(centerNormal, normal));
+	float normalWeightExponential = 128.0f;
+	float normalWeight = pow(max(0.0f, dot(centerNormal, normal)), normalWeightExponential);
+
+#if 1
+	float positionWeightMultiplier = 1.0f;
+	float3 intersectedPosition = AOVIntersectPosition[coord].xyz;
+	float distance = length(intersectedPosition - centerIntersectPosition);
+	float positionWeight = exp(-distance / (positionWeightMultiplier * abs(dot(offset, float2(distanceToNeighborPixel, distanceToNeighborPixel))) + EPSILON));
+#else
+	float positionWeight = 1.0f;
+#endif
 
 	float weights[(KERNEL_WIDTH / 2) + 1] = { 3.0f / 8.0f, 1.0f / 4.0f, 1.0f / 16.0f };
-	return normalWeight * weights[abs(offset.x)] * weights[abs(offset.y)];
+	return positionWeight * normalWeight * weights[abs(offset.x)] * weights[abs(offset.y)];
 }
 
 bool ValidNormal(float3 normal)
@@ -38,6 +55,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
 	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
 	float3 normal = AOVNormals[DTid.xy].xyz;
+	float4 intersectedPositionData = AOVIntersectPosition[DTid.xy];
+	float3 intersectedPosition = intersectedPositionData.xyz;
+	float distanceToNeighborPixel = intersectedPositionData.w;
 
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);
@@ -56,7 +76,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 					continue;
 				}
 
-				float weight = CalculateWeight(normal, coord, offsetCoord);
+				float weight = CalculateWeight(normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
 
 				accumulatedColor += weight * InputTexture[coord].xyz / FrameCount;
 				weightedSum += weight;

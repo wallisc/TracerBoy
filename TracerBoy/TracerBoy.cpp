@@ -942,11 +942,13 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	{
 		ScopedResourceBarrier denoiserBarrier(commandList, *m_pDenoiserOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		ScopedResourceBarrier normalsBarrier(commandList, *m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		ScopedResourceBarrier intersectPositionsBarrier(commandList, *m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		m_pDenoiserPass->Run(commandList,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputUAV),
 			PostProcessInput,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSRV),
+			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionSRV),
 			viewport.Width,
 			viewport.Height);
 
@@ -1187,6 +1189,16 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVAlbedoUAV),
 					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVAlbedoSRV));
 			}
+
+			{
+				D3D12_RESOURCE_DESC worldPositionDesc = postProcessOutput;
+				worldPositionDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+				m_pAOVWorldPosition = CreateUAVandSRV(
+					worldPositionDesc,
+					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionUAV),
+					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionSRV));
+			}
+
 			{
 				D3D12_RESOURCE_DESC normalDesc = postProcessOutput;
 				normalDesc.Format = DXGI_FORMAT_R8G8B8A8_SNORM;

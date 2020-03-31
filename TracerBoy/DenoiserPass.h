@@ -8,6 +8,7 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE outputUAV, 
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
+		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
 		UINT width,
 		UINT height);
 
@@ -20,6 +21,7 @@ private:
 		ConstantsParam = 0,
 		InputSRV,
 		AOVNormal,
+		AOVIntersectPosition,
 		OutputUAV,
 		NumRootSignatureParameters
 	};

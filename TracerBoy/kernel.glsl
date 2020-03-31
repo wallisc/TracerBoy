@@ -1036,7 +1036,7 @@ vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFa
     }
 }
 
-vec4 Trace(Ray ray)
+vec4 Trace(Ray ray, Ray neighborRay)
 {
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
@@ -1125,6 +1125,9 @@ vec4 Trace(Ray ray)
 			if(i == 0)
 			{	
 				OutputPrimaryAlbedo(material.albedo);
+
+                vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
+                OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			}
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
@@ -1486,9 +1489,24 @@ mat3 GetViewMatrix(float xRotationFactor)
                 -sin(xRotation),0.0, cos(xRotation));
 }
 
+float3 GetLensPosition(in vec2 uv, float aspectRatio, float rotationFactor)
+{
+    vec3 lensPoint = GetCameraPosition();
+
+    float lensWidth = GetCameraLensHeight() * aspectRatio;
+    lensPoint += GetCameraRight() * (uv.x * 2.0 - 1.0) * lensWidth / 2.0;
+    lensPoint += GetCameraUp() * (uv.y * 2.0 - 1.0) * GetCameraLensHeight() / 2.0;
+    
+    mat3 viewMatrix = GetViewMatrix(rotationFactor);
+    lensPoint = mul(lensPoint, viewMatrix);
+
+    return lensPoint;
+}
+
 vec4 PathTrace(in vec2 pixelCoord)
 {
-    vec2 uv = pixelCoord.xy / GetResolution().xy;
+    const float2 pixelUVSize = 1.0 / GetResolution().xy;
+    vec2 uv = pixelCoord.xy * pixelUVSize;
     float rotationFactor = GetRotationFactor();
     LightPositionYOffset = GetLightYOffset();
     
@@ -1510,28 +1528,26 @@ vec4 PathTrace(in vec2 pixelCoord)
     seed = GetTime() + GetResolution().y * pixelCoord.x / GetResolution().x + pixelCoord.y / GetResolution().y;
 #endif
 	vec4 accumulatedColor = GetAccumulatedColor(uv);
+
     // Add some jitter for anti-aliasing
-    uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) / GetResolution().xy;
+    uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) * pixelUVSize;
     
     float aspectRatio = GetResolution().x / GetResolution().y ; 
     vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
-    vec3 lensPoint = GetCameraPosition();
     
     if(HasSceneChanged)
     {
         // Discard all past samples since they're now invalid
         accumulatedColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    
-    float lensWidth = GetCameraLensHeight() * aspectRatio;
-    lensPoint += GetCameraRight() * (uv.x * 2.0 - 1.0) * lensWidth / 2.0;
-    lensPoint += GetCameraUp() * (uv.y * 2.0 - 1.0) * GetCameraLensHeight() / 2.0;
+    vec3 lensPoint = GetLensPosition(uv, aspectRatio, rotationFactor);
+    vec3 neighborLensPoint = GetLensPosition(uv + pixelUVSize, aspectRatio, rotationFactor);
     
     mat3 viewMatrix = GetViewMatrix(rotationFactor);
-    lensPoint = mul(lensPoint, viewMatrix);
     focalPoint = mul(focalPoint, viewMatrix);
     
     Ray cameraRay = NewRay(focalPoint, normalize(lensPoint - focalPoint));
+    Ray neighborCameraRay = NewRay(focalPoint, normalize(neighborLensPoint - focalPoint));
 
 #if USE_DOF
     float FocusDistance = 5.5;
@@ -1547,7 +1563,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
-    vec4 result = Trace(cameraRay);
+    vec4 result = Trace(cameraRay, neighborCameraRay);
     return vec4(accumulatedColor.rgb + result.rgb, result.w);
 }
 
