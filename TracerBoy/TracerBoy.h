@@ -114,14 +114,19 @@ public:
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
-		bool m_bEnableDenoiser;
+		DenoiserSettings m_denoiserSettings;
 	};
 
 	static OutputSettings GetDefaultOutputSettings()
 	{
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
-		outputSettings.m_bEnableDenoiser = true;
+		
+		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
+		denoiserSettings.m_bEnabled = true;
+		denoiserSettings.m_intersectPositionWeightingMultiplier = 1.0f;
+		denoiserSettings.m_normalWeightingExponential = 128.0f;
+		denoiserSettings.m_waveletIterations = 5;
 
 		return outputSettings;
 	}

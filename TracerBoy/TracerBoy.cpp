@@ -913,13 +913,14 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex);
-	if(outputSettings.m_bEnableDenoiser)
+	if(outputSettings.m_denoiserSettings.m_bEnabled)
 	{
 		ScopedResourceBarrier normalsBarrier(commandList, *m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		ScopedResourceBarrier intersectPositionsBarrier(commandList, *m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		PostProcessInput = m_pDenoiserPass->Run(commandList,
 			m_pDenoiserBuffers,
+			outputSettings.m_denoiserSettings,
 			PostProcessInput,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionSRV),

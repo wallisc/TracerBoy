@@ -42,6 +42,7 @@ DenoiserPass::DenoiserPass(ID3D12Device& device)
 
 D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& commandList,
 	PassResource DenoiserBuffers[2],
+	const DenoiserSettings& denoiserSettings,
 	D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
@@ -51,11 +52,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 	commandList.SetPipelineState(m_pPSO.Get());
 	commandList.SetComputeRootSignature(m_pRootSignature.Get());
 
-	const UINT iterations = 5;
-
 	UINT OutputDenoiserBufferIndex = 0;
 	UINT InputDenoiserBufferIndex = 1;
-	for (UINT i = 0; i < iterations; i++)
+	for (UINT i = 0; i < denoiserSettings.m_waveletIterations; i++)
 	{
 		ScopedResourceBarrier denoiserBarrier(commandList, *DenoiserBuffers[InputDenoiserBufferIndex].m_pResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -63,6 +62,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		constants.Resolution.x = width;
 		constants.Resolution.y = height;
 		constants.OffsetMultiplier = pow(2, i);
+		constants.NormalWeightingExponential = denoiserSettings.m_normalWeightingExponential;
+		constants.IntersectionPositionWeightingMultiplier = denoiserSettings.m_intersectPositionWeightingMultiplier;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE iterationInputSRV = i == 0 ? inputSRV : DenoiserBuffers[InputDenoiserBufferIndex].m_srvHandle;
 

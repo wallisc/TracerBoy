@@ -2,12 +2,21 @@
 
 struct PassResource;
 
+struct DenoiserSettings
+{
+	bool m_bEnabled;
+	float m_normalWeightingExponential;
+	float m_intersectPositionWeightingMultiplier;
+	int m_waveletIterations;
+};
+
 class DenoiserPass
 {
 public:
 	DenoiserPass(ID3D12Device& device);
 	D3D12_GPU_DESCRIPTOR_HANDLE Run(ID3D12GraphicsCommandList& commandList,
 		PassResource DenoiserBuffers[2],
+		const DenoiserSettings& denoiserSettings,
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,

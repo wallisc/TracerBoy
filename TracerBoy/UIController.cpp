@@ -97,7 +97,11 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	if (ImGui::TreeNode("Denoising"))
 	{
-		ImGui::Checkbox("Enable Denoiser", &m_outputSettings.m_bEnableDenoiser);
+		DenoiserSettings& denoiserSettings = m_outputSettings.m_denoiserSettings;
+		ImGui::Checkbox("Enable Denoiser", &denoiserSettings.m_bEnabled);
+		ImGui::InputInt("Wavelet Iterations", &denoiserSettings.m_waveletIterations, 1, 1);
+		ImGui::InputFloat("Normal Weighting Exponential", &denoiserSettings.m_normalWeightingExponential, 1.0f, 10.0f, "%.1f");
+		ImGui::InputFloat("Intersection Position Weighting Multiplier", &denoiserSettings.m_intersectPositionWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::TreePop();
 	}
 

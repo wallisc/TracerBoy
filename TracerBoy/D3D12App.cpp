@@ -112,6 +112,8 @@ UINT D3D12App::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& 
 
 void D3D12App::UpdateMousePosition(int x, int y)
 {
+	return;
+
 	m_mouseX = x;
 	m_mouseY = y;
 }
