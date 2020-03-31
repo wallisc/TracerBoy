@@ -6,5 +6,7 @@
 struct DenoiserConstants
 {
 	uint2 Resolution;
+	uint OffsetMultiplier;
+	uint padding;
 };
 

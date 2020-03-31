@@ -1,11 +1,13 @@
 #pragma once
 
+struct PassResource;
+
 class DenoiserPass
 {
 public:
 	DenoiserPass(ID3D12Device& device);
-	void Run(ID3D12GraphicsCommandList& commandList,
-		D3D12_GPU_DESCRIPTOR_HANDLE outputUAV, 
+	D3D12_GPU_DESCRIPTOR_HANDLE Run(ID3D12GraphicsCommandList& commandList,
+		PassResource DenoiserBuffers[2],
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,

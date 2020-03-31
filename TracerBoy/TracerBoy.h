@@ -38,6 +38,15 @@ struct Vector3
 	}
 };
 
+struct PassResource
+{
+	PassResource() {}
+
+	ComPtr<ID3D12Resource> m_pResource;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_srvHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_uavHandle;
+};
+
 inline Vector3 Cross(const Vector3& a, const Vector3& b)
 {
 	return Vector3(
@@ -54,6 +63,31 @@ struct Camera
 	Vector3 Up;
 	float LensHeight;
 	float FocalDistance;
+};
+
+struct ScopedResourceBarrier
+{
+	ScopedResourceBarrier(ID3D12GraphicsCommandList& commandList, ID3D12Resource& resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState) :
+		m_commandList(commandList),
+		m_resource(resource),
+		m_beforeState(beforeState),
+		m_afterState(afterState)
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_beforeState, m_afterState);
+		m_commandList.ResourceBarrier(1, &barrier);
+	}
+
+	~ScopedResourceBarrier()
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_afterState, m_beforeState);
+		m_commandList.ResourceBarrier(1, &barrier);
+	}
+
+private:
+	ID3D12GraphicsCommandList& m_commandList;
+	ID3D12Resource& m_resource;
+	D3D12_RESOURCE_STATES m_beforeState;
+	D3D12_RESOURCE_STATES m_afterState;
 };
 
 class TextureAllocator;
@@ -207,7 +241,8 @@ private:
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
-	ComPtr<ID3D12Resource> m_pDenoiserOutput;
+	PassResource m_pDenoiserBuffers[2];
+
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVAlbedo;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
@@ -218,8 +253,10 @@ private:
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
-		DenoiserOuputSRV,
-		DenoiserOutputUAV,
+		DenoiserOuputBaseSRV,
+		DenoiserOuputLastSRV,
+		DenoiserOutputBaseUAV,
+		DenoiserOutputLastUAV,
 		EnvironmentMapSRVSlot,
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,

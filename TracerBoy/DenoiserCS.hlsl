@@ -25,17 +25,13 @@ float CalculateWeight(
 	float normalWeightExponential = 128.0f;
 	float normalWeight = pow(max(0.0f, dot(centerNormal, normal)), normalWeightExponential);
 
-#if 1
 	float positionWeightMultiplier = 1.0f;
 	float3 intersectedPosition = AOVIntersectPosition[coord].xyz;
 	float distance = length(intersectedPosition - centerIntersectPosition);
 	float positionWeight = exp(-distance / (positionWeightMultiplier * abs(dot(offset, float2(distanceToNeighborPixel, distanceToNeighborPixel))) + EPSILON));
-#else
-	float positionWeight = 1.0f;
-#endif
 
 	float weights[(KERNEL_WIDTH / 2) + 1] = { 3.0f / 8.0f, 1.0f / 4.0f, 1.0f / 16.0f };
-	return positionWeight * normalWeight * weights[abs(offset.x)] * weights[abs(offset.y)];
+	return positionWeight* normalWeight* weights[abs(offset.x / int(Constants.OffsetMultiplier))] * weights[abs(offset.y / int(Constants.OffsetMultiplier))];
 }
 
 bool ValidNormal(float3 normal)
@@ -68,7 +64,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 		{
 			for (int yOffset = -KERNEL_WIDTH / 2; yOffset <= KERNEL_WIDTH / 2; yOffset++)
 			{
-				int2 offsetCoord = int2(xOffset, yOffset);
+				int2 offsetCoord = int2(xOffset, yOffset) * Constants.OffsetMultiplier;
 				int2 coord = DTid.xy + offsetCoord;
 
 				if (coord.x < 0 || coord.y < 0 || coord.x > Constants.Resolution.x || coord.y > Constants.Resolution.y)

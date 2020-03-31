@@ -16,31 +16,6 @@ struct HitGroupShaderRecord
 	BYTE Padding2[8];
 };
 
-struct ScopedResourceBarrier
-{
-	ScopedResourceBarrier(ID3D12GraphicsCommandList& commandList, ID3D12Resource& resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState) :
-		m_commandList(commandList),
-		m_resource(resource),
-		m_beforeState(beforeState),
-		m_afterState(afterState)
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_beforeState, m_afterState);
-		m_commandList.ResourceBarrier(1, &barrier);
-	}
-
-	~ScopedResourceBarrier()
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_afterState, m_beforeState);
-		m_commandList.ResourceBarrier(1, &barrier);
-	}
-
-private:
-	ID3D12GraphicsCommandList& m_commandList;
-	ID3D12Resource& m_resource;
-	D3D12_RESOURCE_STATES m_beforeState;
-	D3D12_RESOURCE_STATES m_afterState;
-};
-
 //------------------------------------------------------------------------------------------------
 // Heap-allocating UpdateSubresources implementation
 inline UINT64 UpdateSubresourcesHelper(
@@ -940,20 +915,16 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex);
 	if(outputSettings.m_bEnableDenoiser)
 	{
-		ScopedResourceBarrier denoiserBarrier(commandList, *m_pDenoiserOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		ScopedResourceBarrier normalsBarrier(commandList, *m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		ScopedResourceBarrier intersectPositionsBarrier(commandList, *m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-		m_pDenoiserPass->Run(commandList,
-			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputUAV),
+		PostProcessInput = m_pDenoiserPass->Run(commandList,
+			m_pDenoiserBuffers,
 			PostProcessInput,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionSRV),
 			viewport.Width,
 			viewport.Height);
-
-		PostProcessInput =
-			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputSRV);
 	}
 
 	{
@@ -1152,17 +1123,22 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			m_pDevice->CreateUnorderedAccessView(pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::PathTracerOutputUAVBaseSlot + i));
 		}
 
+		for(UINT i = 0; i < ARRAYSIZE(m_pDenoiserBuffers); i++)
 		{
+			PassResource& passResource = m_pDenoiserBuffers[i];
 			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
 				&defaultHeapDesc,
 				D3D12_HEAP_FLAG_NONE,
 				&pathTracerOutput,
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
 				nullptr,
-				IID_PPV_ARGS(m_pDenoiserOutput.ReleaseAndGetAddressOf())));
+				IID_PPV_ARGS(passResource.m_pResource.ReleaseAndGetAddressOf())));
 
-			m_pDevice->CreateShaderResourceView(m_pDenoiserOutput.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputSRV));
-			m_pDevice->CreateUnorderedAccessView(m_pDenoiserOutput.Get(), nullptr, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputUAV));
+			m_pDevice->CreateShaderResourceView(passResource.m_pResource.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputBaseSRV + i));
+			m_pDevice->CreateUnorderedAccessView(passResource.m_pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputBaseUAV + i));
+
+			passResource.m_srvHandle = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputBaseSRV + i);
+			passResource.m_uavHandle = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputBaseSRV + i);
 		}
 
 
