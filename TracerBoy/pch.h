@@ -43,6 +43,7 @@ using namespace DirectX;
 #endif
 
 #include "SharedShaderStructs.h"
+#include "DenoiserPass.h"
 #include "TracerBoy.h"
 #include "UIController.h"
 #include "D3D12App.h"

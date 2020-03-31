@@ -57,7 +57,7 @@ struct Camera
 };
 
 class TextureAllocator;
-
+class DenoiserPass;
 
 class TracerBoy
 {
@@ -207,19 +207,27 @@ private:
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
+	ComPtr<ID3D12Resource> m_pDenoiserOutput;
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVAlbedo;
 
 	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE);
+	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle);
 
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
+		DenoiserOuputSRV,
+		DenoiserOutputUAV,
 		EnvironmentMapSRVSlot,
-		AOVBaseSlot,
-		AOVNormalsSlot = AOVBaseSlot,
-		AOVAlbedoSlot,
-		AOVLastSlot = AOVAlbedoSlot,
+		AOVBaseUAVSlot,
+		AOVNormalsUAV = AOVBaseUAVSlot,
+		AOVAlbedoUAV,
+		AOVLastUAVSlot = AOVAlbedoUAV,
+		AOVBaseSRVSlot,
+		AOVNormalsSRV = AOVBaseSRVSlot,
+		AOVAlbedoSRV,
+		AOVLastSRVSlot = AOVAlbedoSRV,
 		PathTracerOutputSRVBaseSlot,
 		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		PathTracerOutputUAVBaseSlot,
@@ -231,6 +239,7 @@ private:
 	Camera m_camera;
 
 	std::string m_sceneFileDirectory;
+	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
 };
 
 class TextureAllocator
