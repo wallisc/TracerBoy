@@ -9,21 +9,27 @@ DenoiserPass::DenoiserPass(ID3D12Device& device)
 	Parameters[DenoiserRootSignatureParameters::ConstantsParam].InitAsConstants(sizeof(DenoiserConstants) / sizeof(UINT32), 0);
 
 	CD3DX12_DESCRIPTOR_RANGE1 InputSRVDescriptor;
+	InputSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::InputSRV].InitAsDescriptorTable(1, &InputSRVDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
+	OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 AOVNormalDescriptor;
+	AOVNormalDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::AOVNormal].InitAsDescriptorTable(1, &AOVNormalDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 AOVIntersectPositionDescriptor;
+	AOVIntersectPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::AOVIntersectPosition].InitAsDescriptorTable(1, &AOVIntersectPositionDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 AOVSDRHistogramDescriptor;
+	AOVSDRHistogramDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::AOVSDRHistogram].InitAsDescriptorTable(1, &AOVSDRHistogramDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 UndenoisedInputDescriptor;
+	UndenoisedInputDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::UndenoisedInputSRV].InitAsDescriptorTable(1, &UndenoisedInputDescriptor);
 
 
