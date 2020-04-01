@@ -158,7 +158,7 @@ void OutputPrimaryAlbedo(float3 albedo)
 
 void OutputPrimaryNormal(float3 normal)
 {
-	AOVNormals[DispatchRaysIndex().xy] = float4(normal, 1.0);
+	AOVNormals[DispatchRaysIndex().xy] = AOVNormals[DispatchRaysIndex().xy] + float4(normal, 1.0);
 }
 
 void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)

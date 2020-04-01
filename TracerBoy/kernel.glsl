@@ -1100,9 +1100,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
         if(i == 0)
         {
             FirstPrimitiveID = PrimitiveID;
-			OutputPrimaryNormal(normal);
         }
-        
+
         if(accumulatedIndirectLightMultiplier.x < EPSILON && 
           accumulatedIndirectLightMultiplier.y < EPSILON &&
           accumulatedIndirectLightMultiplier.z < EPSILON)
@@ -1128,6 +1127,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
+			    OutputPrimaryNormal(normal);
 			}
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;

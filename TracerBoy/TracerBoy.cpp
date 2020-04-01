@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "PostProcessCS.h"
+#include "ClearAOVCS.h"
 #include "RayGen.h"
 #include "ClosestHit.h"
 #include "Miss.h"
@@ -437,6 +438,13 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pPostProcessPSO.ReleaseAndGetAddressOf())));
 	}
 
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
+		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pClearAOVCS, ARRAYSIZE(g_pClearAOVCS));
+		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pClearAOVs.ReleaseAndGetAddressOf())));
+	}
+
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
 }
 
@@ -847,8 +855,19 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	UpdateRandSeedBuffer(m_ActiveFrameIndex);
 
-	ID3D12DescriptorHeap *pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
+	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
+
+	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get());
+	if (m_bInvalidateHistory)
+	{
+		// TODO: make root signature for clearing
+		commandList.SetComputeRootSignature(m_pRayTracingRootSignature.Get());
+		commandList.SetPipelineState(m_pClearAOVs.Get());
+		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVBaseUAVSlot));
+		
+		commandList.Dispatch(viewport.Width, viewport.Height, 1);
+	}
 
 	commandList.SetComputeRootSignature(m_pRayTracingRootSignature.Get());
 
@@ -856,7 +875,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.QueryInterface(IID_PPV_ARGS(&pRaytracingCommandList));
 	pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject.Get());
 
-	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get());
 	SYSTEMTIME time;
 	GetSystemTime(&time);
 	PerFrameConstants constants = {};
@@ -1180,7 +1198,7 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 
 			{
 				D3D12_RESOURCE_DESC normalDesc = postProcessOutput;
-				normalDesc.Format = DXGI_FORMAT_R8G8B8A8_SNORM;
+				normalDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 				m_pAOVNormals = CreateUAVandSRV(
 					normalDesc,
 					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsUAV), 

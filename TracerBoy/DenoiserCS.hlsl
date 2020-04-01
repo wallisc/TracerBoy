@@ -47,6 +47,14 @@ float CalculateVariance(SDRHistogram histogram)
 	return lumaVarianceSum / float(totalCounts);
 }
 
+float3 GetNormal(int2 coord)
+{
+	float4 normalData = AOVNormals[coord];
+	if (normalData.w == 0.0f) return float3(0.0f, 0.0f, 0.0f);
+
+	return normalize(normalData.xyz / normalData.w);
+}
+
 float CalculateWeight(
 	float centerLuma,
 	float3 centerNormal, 
@@ -64,7 +72,7 @@ float CalculateWeight(
 #endif
 	float lumaWeight = 1.0f;
 
-	float3 normal = AOVNormals[coord];
+	float3 normal = GetNormal(coord);
 	float normalWeightExponential = 128.0f;
 	float normalWeight = pow(max(0.0f, dot(centerNormal, normal)), Constants.NormalWeightingExponential);
 
@@ -94,7 +102,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
 	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
 	float UndenoisedFrameCount = UndenoisedTexture[float2(0, Constants.Resolution.y - 1)].x;
-	float3 normal = AOVNormals[DTid.xy].xyz;
+	float3 normal = GetNormal(DTid.xy);
 	float4 intersectedPositionData = AOVIntersectPosition[DTid.xy];
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;

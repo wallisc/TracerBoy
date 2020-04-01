@@ -242,6 +242,8 @@ private:
 	ComPtr<ID3D12RootSignature> m_pPostProcessRootSignature;
 	ComPtr<ID3D12PipelineState> m_pPostProcessPSO;
 
+	ComPtr<ID3D12PipelineState> m_pClearAOVs;
+
 	UINT32 m_mouseX, m_mouseY;
 	UINT m_FramesRendered;
 	bool m_bInvalidateHistory;
