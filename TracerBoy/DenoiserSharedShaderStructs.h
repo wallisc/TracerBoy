@@ -9,5 +9,6 @@ struct DenoiserConstants
 	uint OffsetMultiplier;
 	float NormalWeightingExponential;
 	float IntersectionPositionWeightingMultiplier;
+	float LumaWeightingMultiplier;
 };
 

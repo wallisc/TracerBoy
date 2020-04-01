@@ -126,6 +126,7 @@ public:
 		denoiserSettings.m_bEnabled = true;
 		denoiserSettings.m_intersectPositionWeightingMultiplier = 1.0f;
 		denoiserSettings.m_normalWeightingExponential = 128.0f;
+		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
 
 		return outputSettings;
@@ -251,6 +252,7 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVAlbedo;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
+	ComPtr<ID3D12Resource> m_pAOVSDRHistogram;
 
 	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle);
@@ -266,11 +268,13 @@ private:
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
+		AOVSDRHistogramUAV,
 		AOVAlbedoUAV,
 		AOVLastUAVSlot = AOVAlbedoUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
 		AOVWorldPositionSRV,
+		AOVSDRHistogramSRV,
 		AOVAlbedoSRV,
 		AOVLastSRVSlot = AOVAlbedoSRV,
 		PathTracerOutputSRVBaseSlot,

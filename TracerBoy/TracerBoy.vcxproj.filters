@@ -68,6 +68,9 @@
     <ClInclude Include="DenoiserSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="Tonemap.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">

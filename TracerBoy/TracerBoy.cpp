@@ -917,6 +917,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	{
 		ScopedResourceBarrier normalsBarrier(commandList, *m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		ScopedResourceBarrier intersectPositionsBarrier(commandList, *m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		ScopedResourceBarrier histogramBarrier(commandList, *m_pAOVSDRHistogram.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		PostProcessInput = m_pDenoiserPass->Run(commandList,
 			m_pDenoiserBuffers,
@@ -924,6 +925,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			PostProcessInput,
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+			GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVSDRHistogramSRV),
 			viewport.Width,
 			viewport.Height);
 	}
@@ -1139,7 +1141,7 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			m_pDevice->CreateUnorderedAccessView(passResource.m_pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputBaseUAV + i));
 
 			passResource.m_srvHandle = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputBaseSRV + i);
-			passResource.m_uavHandle = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOuputBaseSRV + i);
+			passResource.m_uavHandle = GetGPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::DenoiserOutputBaseUAV + i);
 		}
 
 
@@ -1183,6 +1185,40 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 					normalDesc,
 					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsUAV), 
 					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVNormalsSRV));
+			}
+
+			{
+				UINT numElements = backBufferDesc.Width * backBufferDesc.Height;
+				D3D12_RESOURCE_DESC aovHistogramDesc = CD3DX12_RESOURCE_DESC::Buffer(
+					sizeof(SDRHistogram) * numElements, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+				
+				const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+				VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+					&defaultHeapDesc,
+					D3D12_HEAP_FLAG_NONE,
+					&aovHistogramDesc,
+					D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+					nullptr,
+					IID_PPV_ARGS(m_pAOVSDRHistogram.ReleaseAndGetAddressOf())));
+
+				D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+				uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+				uavDesc.Buffer.StructureByteStride = sizeof(SDRHistogram);
+				uavDesc.Buffer.FirstElement = 0;
+				uavDesc.Buffer.NumElements = numElements;
+				m_pDevice->CreateUnorderedAccessView(m_pAOVSDRHistogram.Get(), nullptr, &uavDesc,
+					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVSDRHistogramUAV));
+				
+				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+				srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+				srvDesc.Buffer.FirstElement = 0;
+				srvDesc.Buffer.NumElements = numElements;
+				srvDesc.Buffer.StructureByteStride = sizeof(SDRHistogram);
+				m_pDevice->CreateShaderResourceView(m_pAOVSDRHistogram.Get(), &srvDesc, 
+					GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), ViewDescriptorHeapSlots::AOVSDRHistogramSRV));
 			}
 
 			auto viewDescriptorHeapBase = m_pViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart();

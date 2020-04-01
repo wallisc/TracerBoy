@@ -1,3 +1,5 @@
+#include "Tonemap.h"
+
 cbuffer RootConstants
 {
 	uint2 Resolution;
@@ -11,12 +13,6 @@ float3 GammaCorrect(float3 color)
 {
 	return pow(color, float4(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2, 1));
 
-}
-
-float3 Tonemap(float3 color)
-{
-	// Reinhard tonemapping
-	return color / (1.0 + color);
 }
 
 #define ComputeRS \

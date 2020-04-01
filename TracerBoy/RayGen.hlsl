@@ -1,5 +1,6 @@
 #define HLSL
 #include "SharedShaderStructs.h"
+#include "Tonemap.h"
 
 #define IS_SHADER_TOY 0
 cbuffer PerFrameCB : register(b0)
@@ -23,7 +24,8 @@ float GetCameraFocalDistance() { return configConstants.FocalDistance; }
 RWTexture2D<float4> OutputTexture : register(u0);
 RWTexture2D<float4> AOVNormals : register(u1);
 RWTexture2D<float4> AOVWorldPosition : register(u2);
-RWTexture2D<float4> AOVAlbedo: register(u3);
+RWStructuredBuffer<SDRHistogram> AOVSDRHistogram : register(u3);
+RWTexture2D<float4> AOVAlbedo: register(u4);
 
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
@@ -164,6 +166,16 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 	AOVWorldPosition[DispatchRaysIndex().xy] = float4(worldPosition, distanceToNeighbor);
 }
 
+void OutputSDRHistogram(float3 hdrColor)
+{
+	int outputIndex = DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x;
+	float3 luma = SDRToLuma(Tonemap(hdrColor));
+	SDRHistogram histogram = AOVSDRHistogram[outputIndex];
+	int lumaIndex = luma / float(NUM_HISTOGRAM_BUCKETS);
+	histogram.Count[lumaIndex]++;
+	AOVSDRHistogram[outputIndex] = histogram;
+}
+
 void ClearAOVs()
 {
 	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0));
@@ -179,5 +191,7 @@ void RayGen()
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
-	OutputTexture[DispatchRaysIndex().xy] = PathTrace(uv * GetResolution().xy);
+	float4 outputColor = PathTrace(uv * GetResolution().xy);
+	OutputSDRHistogram(outputColor);
+	OutputTexture[DispatchRaysIndex().xy] = outputColor;
 }

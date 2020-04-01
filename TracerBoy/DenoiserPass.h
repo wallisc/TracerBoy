@@ -7,6 +7,7 @@ struct DenoiserSettings
 	bool m_bEnabled;
 	float m_normalWeightingExponential;
 	float m_intersectPositionWeightingMultiplier;
+	float m_luminanceWeightingMultiplier;
 	int m_waveletIterations;
 };
 
@@ -20,6 +21,7 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
+		D3D12_GPU_DESCRIPTOR_HANDLE sdrHistogramSRV,
 		UINT width,
 		UINT height);
 
@@ -33,6 +35,8 @@ private:
 		InputSRV,
 		AOVNormal,
 		AOVIntersectPosition,
+		AOVSDRHistogram,
+		UndenoisedInputSRV,
 		OutputUAV,
 		NumRootSignatureParameters
 	};

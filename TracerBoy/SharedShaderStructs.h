@@ -17,6 +17,12 @@ struct RayPayload
 	float3 normal;
 };
 
+#define NUM_HISTOGRAM_BUCKETS 16
+struct SDRHistogram
+{
+	uint Count[NUM_HISTOGRAM_BUCKETS];
+};
+
 struct PerFrameConstants
 {
 	float3 CameraPosition;

@@ -9,20 +9,23 @@ DenoiserPass::DenoiserPass(ID3D12Device& device)
 	Parameters[DenoiserRootSignatureParameters::ConstantsParam].InitAsConstants(sizeof(DenoiserConstants) / sizeof(UINT32), 0);
 
 	CD3DX12_DESCRIPTOR_RANGE1 InputSRVDescriptor;
-	InputSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 	Parameters[DenoiserRootSignatureParameters::InputSRV].InitAsDescriptorTable(1, &InputSRVDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
-	OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 	Parameters[DenoiserRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 AOVNormalDescriptor;
-	AOVNormalDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
 	Parameters[DenoiserRootSignatureParameters::AOVNormal].InitAsDescriptorTable(1, &AOVNormalDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 AOVIntersectPositionDescriptor;
-	AOVIntersectPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
 	Parameters[DenoiserRootSignatureParameters::AOVIntersectPosition].InitAsDescriptorTable(1, &AOVIntersectPositionDescriptor);
+
+	CD3DX12_DESCRIPTOR_RANGE1 AOVSDRHistogramDescriptor;
+	Parameters[DenoiserRootSignatureParameters::AOVSDRHistogram].InitAsDescriptorTable(1, &AOVSDRHistogramDescriptor);
+
+	CD3DX12_DESCRIPTOR_RANGE1 UndenoisedInputDescriptor;
+	Parameters[DenoiserRootSignatureParameters::UndenoisedInputSRV].InitAsDescriptorTable(1, &UndenoisedInputDescriptor);
+
 
 	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 	rootSignatureDesc.pParameters = Parameters;
@@ -46,6 +49,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 	D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
+	D3D12_GPU_DESCRIPTOR_HANDLE sdrHistogramSRV,
 	UINT width,
 	UINT height) 
 {
@@ -64,6 +68,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		constants.OffsetMultiplier = pow(2, i);
 		constants.NormalWeightingExponential = denoiserSettings.m_normalWeightingExponential;
 		constants.IntersectionPositionWeightingMultiplier = denoiserSettings.m_intersectPositionWeightingMultiplier;
+		constants.LumaWeightingMultiplier = denoiserSettings.m_luminanceWeightingMultiplier;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE iterationInputSRV = i == 0 ? inputSRV : DenoiserBuffers[InputDenoiserBufferIndex].m_srvHandle;
 
@@ -72,6 +77,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::OutputUAV, DenoiserBuffers[OutputDenoiserBufferIndex].m_uavHandle);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVNormal, normalsSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVIntersectPosition, intersectPositionSRV);
+		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVSDRHistogram, sdrHistogramSRV);
+		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::UndenoisedInputSRV, inputSRV);
 		commandList.Dispatch(width / DENOISER_THREAD_GROUP_WIDTH, height / DENOISER_THREAD_GROUP_HEIGHT, 1);
 
 		InputDenoiserBufferIndex = OutputDenoiserBufferIndex;
