@@ -184,7 +184,10 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	}
 	else if (pUberMaterial)
 	{
-		VERIFY(!pUberMaterial->map_kd); // Not supporting textures
+		if (pUberMaterial->map_kd)
+		{
+			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd);
+		}
 		material.albedo = ConvertFloat3(pUberMaterial->kd);
 
 		VERIFY(!pUberMaterial->map_uRoughness); // Not supporting textures
@@ -293,6 +296,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_mouseX(0),
 	m_mouseY(0),
 	m_bInvalidateHistory(false),
+	m_flipTextureUVs(false),
 	CurrentDescriptorSlot(NumReservedViewSlots)
 {
 	m_pCommandQueue->GetDevice(IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf()));
@@ -463,6 +467,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		if (sceneFileExtension.compare("pbrt") == 0)
 		{
 			pScene = pbrt::importPBRT(sceneFileName);
+
+			// PBRT uses GL style texture sampling
+			m_flipTextureUVs = true;
 		}
 		else
 		{
@@ -726,7 +733,10 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			pCommandList->BuildRaytracingAccelerationStructure(&buildTopLevelDesc, 0, nullptr);
 		}
+
+		textureAllocator.ExtractScratchResources(resourcesToDelete);
 	}
+
 }
 
 
@@ -992,6 +1002,7 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	ConfigConstants configConstants;
 	configConstants.CameraLensHeight = m_camera.LensHeight;
 	configConstants.FocalDistance = m_camera.FocalDistance;
+	configConstants.FlipTextureUVs = m_flipTextureUVs;
 
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }

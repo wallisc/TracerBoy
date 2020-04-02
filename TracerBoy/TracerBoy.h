@@ -288,6 +288,7 @@ private:
 	};
 
 	Camera m_camera;
+	bool m_flipTextureUVs;
 
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
@@ -303,6 +304,14 @@ public:
 
 	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture);
 	const std::vector<TextureData>& GetTextureData() const { return m_textureData; }
+
+	void ExtractScratchResources(std::vector<ComPtr<ID3D12Resource>>& scratchResources)
+	{
+		for (auto &uploadResource : m_uploadResources)
+		{
+			scratchResources.push_back(uploadResource);
+		}
+	}
 private:
 	std::vector<TextureData> m_textureData;
 

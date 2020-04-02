@@ -1,5 +1,33 @@
 #include "pch.h"
 
+void ConvertToPBRTTexture(aiMaterial &AiMaterial, const char *key, UINT type, UINT idx, pbrt::Texture::SP &pTexture)
+{
+	aiString textureName;
+	auto result = AiMaterial.Get(key, type, idx, textureName);
+	if (textureName.length)
+	{
+		pTexture = std::make_shared<pbrt::ImageTexture>(textureName.C_Str());
+	}
+}
+
+
+void ConvertToFloat(aiMaterial& AiMaterial, const char* key, UINT type, UINT idx, float &f)
+{
+	auto result = AiMaterial.Get(key, type, idx, f);
+}
+
+void ConvertToPBRTFloat3(aiMaterial& AiMaterial, const char* key, UINT type, UINT idx, pbrt::vec3f& vec)
+{
+	aiColor3D color;
+	auto result = AiMaterial.Get(key, type, idx, color);
+	if (result == AI_SUCCESS)
+	{
+		vec.x = color.r;
+		vec.y = color.g;
+		vec.z = color.b;
+	}
+}
+
 std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	const std::string& filename, 
 	ScratchData& scratchData)
@@ -31,46 +59,48 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	std::shared_ptr<pbrt::InfiniteLightSource> pLight = std::make_shared<pbrt::InfiniteLightSource>();
 	pLight->mapName = "../dragon/textures/envmap.hdr";
 	pScene->world->lightSources.push_back(pLight);
-#if 0
 	UINT numMaterials = pAiScene->mNumMaterials;
+
+	std::vector<std::shared_ptr<pbrt::Material>> materialList;
 	for (UINT materialIndex = 0; materialIndex < numMaterials; materialIndex++)
 	{
 		aiMaterial *pAiMaterial = pAiScene->mMaterials[materialIndex];
 		UINT numProperties = pAiMaterial->mNumProperties;
+		
+		std::shared_ptr<pbrt::UberMaterial> pMaterial = std::make_shared<pbrt::UberMaterial>();
+		materialList.push_back(pMaterial);
+
+		UINT count = pAiMaterial->GetTextureCount(aiTextureType_DIFFUSE);
+
+		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_DIFFUSE(0), pMaterial->map_kd);
+		
+#if 0
+		ConvertToPBRTFloat3(*pAiMaterial, AI_MATKEY_COLOR_DIFFUSE, pMaterial->kd);
+
+		float shininess;
+		ConvertToFloat(*pAiMaterial, AI_MATKEY_SHININESS, shininess);
+		pMaterial->roughness = std::min((1.0f - shininess) * (1.0f - shininess), 1.0f);
+#endif
+
+		for (UINT propertyIndex = 0; propertyIndex < numProperties; propertyIndex++)
+		{
+			aiMaterialProperty* pProperty = pAiMaterial->mProperties[propertyIndex];
+			std::string keyName = pProperty->mKey.C_Str();
+
+			if (keyName.compare("?mat.name") == 0)
+			{
+				VERIFY(pProperty->mType == aiPTI_String);
+				pMaterial->name = pProperty->mData;
+			}
+		}
 	}
-#endif
-
-#if 0
-	std::shared_ptr<pbrt::DisneyMaterial> pDefaultMaterial = std::make_shared<pbrt::DisneyMaterial>();
-	pDefaultMaterial->metallic = 1.0f;
-	pDefaultMaterial->color.x = 0.55f;
-	pDefaultMaterial->color.y = 0.2f;
-	pDefaultMaterial->color.z = 0.075f;
-	pDefaultMaterial->roughness = 0.1f;
-#endif
-
-	std::shared_ptr<pbrt::UberMaterial> pDefaultMaterial = std::make_shared<pbrt::UberMaterial>();
-#if 0
-	pDefaultMaterial->kd.x = 0.0f;
-	pDefaultMaterial->kd.y = 0.8f;
-	pDefaultMaterial->kd.z = 1.0f;
-	pDefaultMaterial->index = 1.05f;
-	pDefaultMaterial->opacity.x = 0.0f;
-	pDefaultMaterial->opacity.y = 0.0f;
-	pDefaultMaterial->opacity.z = 0.0f;
-	pDefaultMaterial->kt.x = 0.01f;
-	pDefaultMaterial->kt.y = 0.01f;
-	pDefaultMaterial->kt.z = 0.01f;
-	pDefaultMaterial->roughness = 0.1f;
-#endif
-
 
 	UINT numMeshes = pAiScene->mNumMeshes;
 	for (UINT meshIndex = 0; meshIndex < numMeshes; meshIndex++)
 	{
 		aiMesh* pAiMesh = pAiScene->mMeshes[meshIndex];
 		std::shared_ptr<pbrt::TriangleMesh> pMesh = std::make_shared<pbrt::TriangleMesh>();
-		pMesh->material = pDefaultMaterial;
+		pMesh->material = materialList[pAiMesh->mMaterialIndex];
 		pScene->world->shapes.push_back(pMesh);
 
 		for (UINT faceIndex = 0; faceIndex < pAiMesh->mNumFaces; faceIndex++)
@@ -93,13 +123,11 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 				pMesh->normal.push_back({ normal.x, normal.y, normal.z });
 			}
 			
-#if 0
 			if (pAiMesh->HasTextureCoords(0))
 			{
-				aiVector3D* uv = pAiMesh->mTextureCoords[vertexIndex];
-				pMesh->texcoord.push_back({ uv[0].x, uv[0].y });
+				aiVector3D uv = pAiMesh->mTextureCoords[0][vertexIndex];
+				pMesh->texcoord.push_back({ uv.x, uv.y });
 			}
-#endif
 		}
 	}
 

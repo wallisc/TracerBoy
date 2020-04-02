@@ -38,6 +38,7 @@ struct ConfigConstants
 {
 	float FocalDistance;
 	float CameraLensHeight;
+	bool FlipTextureUVs;
 };
 
 struct Vertex

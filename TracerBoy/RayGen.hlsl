@@ -82,7 +82,10 @@ Material GetMaterial_NonRecursive(int MaterialID)
 
 float3 GetTextureData(uint textureIndex, float2 uv)
 {
-	 uv = float2(0, 1) + uv * float2(1, -1);
+	if (configConstants.FlipTextureUVs)
+	{
+		uv = float2(0, 1) + uv * float2(1, -1);
+	}
 
 	float3 data = float3(0.0, 0.0, 0.0);
 	TextureData textureData = TextureDataBuffer[textureIndex];
