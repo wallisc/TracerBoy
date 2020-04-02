@@ -425,7 +425,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		outputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[PostProcessRootSignatureParameters::InputTexture].InitAsDescriptorTable(1, &InputTextureDescriptor);
 		Parameters[PostProcessRootSignatureParameters::OutputTexture].InitAsDescriptorTable(1, &outputTextureDescriptor);
-		Parameters[PostProcessRootSignatureParameters::Constants].InitAsConstants(3, 0);
+		Parameters[PostProcessRootSignatureParameters::Constants].InitAsConstants(4, 0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = PostProcessRootSignatureParameters::NumParameters;
@@ -963,7 +963,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		commandList.SetPipelineState(m_pPostProcessPSO.Get());
 
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
-		UINT32 constants[] = { static_cast<UINT32>(outputDesc.Width), static_cast<UINT32>(outputDesc.Height), ++m_FramesRendered };
+		UINT32 constants[] = { static_cast<UINT32>(outputDesc.Width), static_cast<UINT32>(outputDesc.Height), ++m_FramesRendered, *(UINT*)&outputSettings.m_ExposureMultiplier };
 		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, ARRAYSIZE(constants), constants, 0);
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::InputTexture,

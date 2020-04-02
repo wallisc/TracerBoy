@@ -114,6 +114,7 @@ public:
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
+		float m_ExposureMultiplier;
 		DenoiserSettings m_denoiserSettings;
 	};
 
@@ -121,6 +122,7 @@ public:
 	{
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
+		outputSettings.m_ExposureMultiplier = 1.0f;
 		
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
 		denoiserSettings.m_bEnabled = true;

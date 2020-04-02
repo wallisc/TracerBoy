@@ -4,6 +4,7 @@ cbuffer RootConstants
 {
 	uint2 Resolution;
 	uint FramesRendered;
+	float ExposureMultiplier;
 }
 
 Texture2D InputTexture;
@@ -16,7 +17,7 @@ float3 GammaCorrect(float3 color)
 }
 
 #define ComputeRS \
-    "RootConstants(num32BitConstants=3, b0),\
+    "RootConstants(num32BitConstants=4, b0),\
     DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
@@ -28,6 +29,7 @@ void main( uint2 DTid : SV_DispatchThreadID )
 
 	float FrameCount = InputTexture[float2(0, Resolution.y - 1)].x;
 	float3 outputColor = InputTexture[DTid] / FrameCount;
+	outputColor *= ExposureMultiplier;
 
 	outputColor = Tonemap(outputColor);
 	outputColor = GammaCorrect(outputColor);
