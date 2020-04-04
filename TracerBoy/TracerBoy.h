@@ -111,11 +111,17 @@ public:
 		Normals
 	};
 
+	struct CameraOutputSettings
+	{
+		float m_FocalDistance;
+	};
+
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
 		float m_ExposureMultiplier;
 		bool m_EnableNormalMaps;
+		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
 	};
 
@@ -126,6 +132,8 @@ public:
 		outputSettings.m_ExposureMultiplier = 1.0f;
 		outputSettings.m_EnableNormalMaps = false;
 		
+		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
+
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
 		denoiserSettings.m_bEnabled = false;
 		denoiserSettings.m_intersectPositionWeightingMultiplier = 1.0f;
@@ -146,6 +154,7 @@ public:
 
 	friend class TextureAllocator;
 private:
+	void UpdateOutputSettings(const OutputSettings& outputSettings);
 	ID3D12Resource* GetOutputResource(OutputType outputType);
 
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
@@ -291,6 +300,7 @@ private:
 		NumTotalViews = 4096
 	};
 
+	OutputSettings m_CachedOutputSettings;
 	Camera m_camera;
 	bool m_flipTextureUVs;
 

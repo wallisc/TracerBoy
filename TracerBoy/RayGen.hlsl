@@ -19,7 +19,7 @@ float3 GetCameraLookAt() { return perFrameConstants.CameraLookAt; }
 float3 GetCameraUp() { return perFrameConstants.CameraUp; }
 float3 GetCameraRight() { return perFrameConstants.CameraRight; }
 float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
-float GetCameraFocalDistance() { return configConstants.FocalDistance; }
+float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
 RWTexture2D<float4> OutputTexture : register(u0);
 RWTexture2D<float4> AOVNormals : register(u1);

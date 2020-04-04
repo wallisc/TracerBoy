@@ -312,7 +312,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_mouseY(0),
 	m_bInvalidateHistory(false),
 	m_flipTextureUVs(false),
-	CurrentDescriptorSlot(NumReservedViewSlots)
+	CurrentDescriptorSlot(NumReservedViewSlots),
+	m_CachedOutputSettings(GetDefaultOutputSettings())
 {
 	m_pCommandQueue->GetDevice(IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf()));
 
@@ -760,6 +761,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 }
 
+void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
+{
+	if (m_CachedOutputSettings.m_EnableNormalMaps != outputSettings.m_EnableNormalMaps ||
+		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance)
+	{
+		m_bInvalidateHistory = true;
+	}
+	m_CachedOutputSettings = outputSettings;
+}
+
 
 void TracerBoy::InitializeTexture(
 	const std::wstring &textureName,
@@ -885,6 +896,8 @@ ID3D12Resource* TracerBoy::GetOutputResource(OutputType outputType)
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, const OutputSettings& outputSettings)
 {
+	UpdateOutputSettings(outputSettings);
+
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
 
@@ -919,6 +932,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
+	constants.FocalDistance = outputSettings.m_cameraSettings.m_FocalDistance;
 	constants.InvalidateHistory = m_bInvalidateHistory;
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
@@ -1028,7 +1042,6 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 {
 	ConfigConstants configConstants;
 	configConstants.CameraLensHeight = m_camera.LensHeight;
-	configConstants.FocalDistance = m_camera.FocalDistance;
 	configConstants.FlipTextureUVs = m_flipTextureUVs;
 
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);

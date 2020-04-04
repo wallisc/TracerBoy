@@ -97,6 +97,13 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::InputFloat("Exposure Multiplier", &m_outputSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
 
+
+	if (ImGui::TreeNode("Camera"))
+	{
+		auto& cameraSettings = m_outputSettings.m_cameraSettings;
+		ImGui::InputFloat("Focal Distance", &cameraSettings.m_FocalDistance, 0.1f, 1.0f, "%0.1f");
+		ImGui::TreePop();
+	}
 	if (ImGui::TreeNode("Denoising"))
 	{
 		DenoiserSettings& denoiserSettings = m_outputSettings.m_denoiserSettings;

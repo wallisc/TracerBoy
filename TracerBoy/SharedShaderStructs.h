@@ -39,11 +39,12 @@ struct PerFrameConstants
 	float3 CameraRight;
 
 	uint EnableNormalMaps;
+	float FocalDistance;
+
 };
 
 struct ConfigConstants
 {
-	float FocalDistance;
 	float CameraLensHeight;
 	uint FlipTextureUVs;
 };
