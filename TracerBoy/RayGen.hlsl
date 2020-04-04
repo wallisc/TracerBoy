@@ -142,6 +142,11 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
 		mat.albedo = GetTextureData(mat.albedoIndex, uv);
 	}
 
+	if (IsValidTexture(mat.emissiveIndex))
+	{
+		mat.emissive = GetTextureData(mat.emissiveIndex, uv);
+	}
+
 	return mat;
 }
 

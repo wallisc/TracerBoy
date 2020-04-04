@@ -67,8 +67,8 @@ struct Material
 {
 	float3 albedo;
 	uint albedoIndex;
-	
 	uint normalMapIndex;
+	uint emissiveIndex;
 
 	float IOR;
 	float roughness;

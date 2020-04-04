@@ -74,6 +74,7 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_DIFFUSE(0), pMaterial->map_kd);
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_NORMALS(0), pMaterial->map_normal);
+		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_EMISSIVE(0), pMaterial->map_emissive);
 		
 #if 0
 		ConvertToPBRTFloat3(*pAiMaterial, AI_MATKEY_COLOR_DIFFUSE, pMaterial->kd);

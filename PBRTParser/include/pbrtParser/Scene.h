@@ -666,6 +666,7 @@ namespace pbrt {
     Texture::SP map_roughness;
     Texture::SP map_bump;
     Texture::SP map_normal;
+    Texture::SP map_emissive;
   };
 
 
