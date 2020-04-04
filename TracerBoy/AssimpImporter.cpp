@@ -57,7 +57,7 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	pScene->cameras.push_back(pCamera);
 
 	std::shared_ptr<pbrt::InfiniteLightSource> pLight = std::make_shared<pbrt::InfiniteLightSource>();
-	pLight->mapName = "../dragon/textures/envmap.hdr";
+	pLight->mapName = "san_giuseppe_bridge_4k.hdr";
 	pScene->world->lightSources.push_back(pLight);
 	UINT numMaterials = pAiScene->mNumMaterials;
 
@@ -75,15 +75,10 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_DIFFUSE(0), pMaterial->map_kd);
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_NORMALS(0), pMaterial->map_normal);
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_EMISSIVE(0), pMaterial->map_emissive);
+		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_SPECULAR(0), pMaterial->map_specular);
 		
-#if 0
 		ConvertToPBRTFloat3(*pAiMaterial, AI_MATKEY_COLOR_DIFFUSE, pMaterial->kd);
-
-		float shininess;
-		ConvertToFloat(*pAiMaterial, AI_MATKEY_SHININESS, shininess);
-		pMaterial->roughness = std::min((1.0f - shininess) * (1.0f - shininess), 1.0f);
-#endif
-
+		
 		for (UINT propertyIndex = 0; propertyIndex < numProperties; propertyIndex++)
 		{
 			aiMaterialProperty* pProperty = pAiMaterial->mProperties[propertyIndex];

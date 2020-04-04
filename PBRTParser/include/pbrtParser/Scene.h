@@ -664,9 +664,12 @@ namespace pbrt {
     Texture::SP map_vRoughness;
 
     Texture::SP map_roughness;
+
+    // Special textures for FBX support
     Texture::SP map_bump;
     Texture::SP map_normal;
     Texture::SP map_emissive;
+    Texture::SP map_specular;
   };
 
 

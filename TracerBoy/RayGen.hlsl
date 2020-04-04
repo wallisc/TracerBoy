@@ -54,12 +54,9 @@ float rand();
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	float2 areaLightUV = float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
-	LightPosition = float3(0.5f, 7.14059f, -1.5f) +
-		float3(1.0, 0.0, 0.0) * areaLightUV.x +
-		float3(0.0, 0.0, 1.0) * areaLightUV.y;
-	LightColor = float3(30.0, 30.0, 30.0);
-	PDFValue = 0.0;
+	LightPosition = float3(0.172, -0.818, -0.549) * -999999.9f;
+	LightColor = float3(1.0, 1.0, 1.0);
+	PDFValue = 1.0;
 }
 
 #define GLOBAL static
@@ -145,6 +142,16 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
 	if (IsValidTexture(mat.emissiveIndex))
 	{
 		mat.emissive = GetTextureData(mat.emissiveIndex, uv);
+	}
+
+	if (IsValidTexture(mat.specularMapIndex))
+	{
+		float3 specularMapData = GetTextureData(mat.specularMapIndex, uv);
+		mat.roughness = specularMapData.g;
+		if (specularMapData.b > 0.5f)
+		{
+			mat.Flags |= METALLIC_MATERIAL_FLAG;
+		}
 	}
 
 	return mat;

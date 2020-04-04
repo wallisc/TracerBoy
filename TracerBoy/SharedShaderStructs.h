@@ -69,6 +69,7 @@ struct Material
 	uint albedoIndex;
 	uint normalMapIndex;
 	uint emissiveIndex;
+	uint specularMapIndex;
 
 	float IOR;
 	float roughness;

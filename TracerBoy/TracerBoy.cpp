@@ -158,6 +158,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	material.albedoIndex = UINT_MAX;
 	material.normalMapIndex = UINT_MAX;
 	material.emissiveIndex = UINT_MAX;
+	material.specularMapIndex = UINT_MAX;
 	material.emissive = ConvertFloat3(emissive);
 	material.Flags = ChannelAverage(emissive) > 0.0 ? LIGHT_MATERIAL_FLAG : DEFAULT_MATERIAL_FLAG;
 
@@ -197,6 +198,10 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 		if (pUberMaterial->map_emissive)
 		{
 			material.emissiveIndex = textureAlloator.CreateTexture(pUberMaterial->map_emissive);
+		}
+		if (pUberMaterial->map_specular)
+		{
+			material.specularMapIndex = textureAlloator.CreateTexture(pUberMaterial->map_specular);
 		}
 		material.albedo = ConvertFloat3(pUberMaterial->kd);
 
