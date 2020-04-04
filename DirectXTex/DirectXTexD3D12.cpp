@@ -44,7 +44,7 @@ namespace
         _In_ DXGI_FORMAT fmt,
         _In_ size_t height,
         _In_ size_t slicePlane,
-        _Inout_ T& res)
+        _Inout_ T& res) noexcept
     {
         switch (static_cast<int>(fmt))
         {
@@ -119,7 +119,7 @@ namespace
         UINT& numberOfPlanes,
         UINT& numberOfResources,
         D3D12_RESOURCE_STATES beforeState,
-        D3D12_RESOURCE_STATES afterState)
+        D3D12_RESOURCE_STATES afterState) noexcept
     {
         if (!pCommandQ || !pSource)
             return E_INVALIDARG;
@@ -152,7 +152,9 @@ namespace
         if (memAlloc > SIZE_MAX)
             return E_UNEXPECTED;
 
-        layoutBuff.reset(new uint8_t[memAlloc]);
+        layoutBuff.reset(new (std::nothrow) uint8_t[memAlloc]);
+        if (!layoutBuff)
+            return E_OUTOFMEMORY;
 
         auto pLayout = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(layoutBuff.get());
         auto pRowSizesInBytes = reinterpret_cast<UINT64*>(pLayout + numberOfResources);
@@ -314,7 +316,7 @@ namespace
 _Use_decl_annotations_
 bool DirectX::IsSupportedTexture(
     ID3D12Device* pDevice,
-    const TexMetadata& metadata)
+    const TexMetadata& metadata) noexcept
 {
     if (!pDevice)
         return false;
@@ -426,7 +428,7 @@ _Use_decl_annotations_
 HRESULT DirectX::CreateTexture(
     ID3D12Device* pDevice,
     const TexMetadata& metadata,
-    ID3D12Resource** ppResource)
+    ID3D12Resource** ppResource) noexcept
 {
     return CreateTextureEx(
         pDevice, metadata,
@@ -440,7 +442,7 @@ HRESULT DirectX::CreateTextureEx(
     const TexMetadata& metadata,
     D3D12_RESOURCE_FLAGS resFlags,
     bool forceSRGB,
-    ID3D12Resource** ppResource)
+    ID3D12Resource** ppResource) noexcept
 {
     if (!pDevice || !ppResource)
         return E_INVALIDARG;
@@ -460,9 +462,20 @@ HRESULT DirectX::CreateTextureEx(
         format = MakeSRGB(format);
     }
 
+    UINT alignment = 1;
+    if (format == DXGI_FORMAT_BC5_UNORM)
+    {
+        alignment = 4;
+    }
+
+    auto pfnAlign = [](UINT address, UINT alignment) -> UINT
+    {
+        return alignment * ((address - 1) / alignment + 1);
+    };
+
     D3D12_RESOURCE_DESC desc = {};
-    desc.Width = static_cast<UINT>(metadata.width);
-    desc.Height = static_cast<UINT>(metadata.height);
+    desc.Width = static_cast<UINT>(pfnAlign(metadata.width, alignment));
+    desc.Height = static_cast<UINT>(pfnAlign(metadata.height, alignment));
     desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
     desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
                             ? static_cast<UINT16>(metadata.depth)
@@ -644,7 +657,7 @@ HRESULT DirectX::CaptureTexture(
     bool isCubeMap,
     ScratchImage& result,
     D3D12_RESOURCE_STATES beforeState,
-    D3D12_RESOURCE_STATES afterState)
+    D3D12_RESOURCE_STATES afterState) noexcept
 {
     if (!pCommandQueue || !pSource)
         return E_INVALIDARG;

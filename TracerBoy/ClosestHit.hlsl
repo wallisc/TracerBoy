@@ -10,7 +10,7 @@ cbuffer LocalConstants : register(b2)
 StructuredBuffer<uint> IndexBuffer : register(t2);
 StructuredBuffer<float> VertexBuffer : register(t3);
 
-#define VertexStride 8
+#define VertexStride 11
 
 float3 GetFloat3FromVertexBuffer(uint vertexIndex, uint dataOffset)
 {
@@ -56,6 +56,16 @@ void ClosestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttribut
 		barycentrics.x * n0 +
 		barycentrics.y * n1 +
 		barycentrics.z * n2);
+
+	// TODO: Only do this if there is a normal map. Should have this specified in some geometry flag
+	const uint tangentOffset = 8;
+	float3 t0 = GetFloat3FromVertexBuffer(i0, tangentOffset);
+	float3 t1 = GetFloat3FromVertexBuffer(i1, tangentOffset);
+	float3 t2 = GetFloat3FromVertexBuffer(i2, tangentOffset);
+	payload.tangent = normalize(
+		barycentrics.x * t0 +
+		barycentrics.y * t1 +
+		barycentrics.z * t2);
 }
 
 

@@ -665,6 +665,7 @@ namespace pbrt {
 
     Texture::SP map_roughness;
     Texture::SP map_bump;
+    Texture::SP map_normal;
   };
 
 
@@ -739,6 +740,7 @@ namespace pbrt {
 
     std::vector<vec3f> vertex;
     std::vector<vec3f> normal;
+    std::vector<vec3f> tangents;
     std::vector<vec2f> texcoord;
     std::vector<vec3i> index;
     /*! mutex to lock anything within this object that might get

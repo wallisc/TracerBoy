@@ -63,7 +63,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 UINT64 D3D12App::SignalFence()
 {
 	UINT64 signalledValue = m_SignalValue;
-	m_pCommandQueue->Signal(m_pFence.Get(), m_SignalValue++);
+	VERIFY_HRESULT(m_pCommandQueue->Signal(m_pFence.Get(), m_SignalValue++));
 	return signalledValue;
 }
 
@@ -113,7 +113,6 @@ UINT D3D12App::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& 
 void D3D12App::UpdateMousePosition(int x, int y)
 {
 	return;
-
 	m_mouseX = x;
 	m_mouseY = y;
 }

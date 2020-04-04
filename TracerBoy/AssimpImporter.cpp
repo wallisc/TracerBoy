@@ -73,6 +73,7 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 		UINT count = pAiMaterial->GetTextureCount(aiTextureType_DIFFUSE);
 
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_DIFFUSE(0), pMaterial->map_kd);
+		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_NORMALS(0), pMaterial->map_normal);
 		
 #if 0
 		ConvertToPBRTFloat3(*pAiMaterial, AI_MATKEY_COLOR_DIFFUSE, pMaterial->kd);
@@ -127,6 +128,12 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 			{
 				aiVector3D uv = pAiMesh->mTextureCoords[0][vertexIndex];
 				pMesh->texcoord.push_back({ uv.x, uv.y });
+			}
+
+			if (pAiMesh->HasTangentsAndBitangents())
+			{
+				aiVector3D tangent = pAiMesh->mTangents[vertexIndex];
+				pMesh->tangents.push_back({ tangent.x, tangent.y, tangent.z });
 			}
 		}
 	}

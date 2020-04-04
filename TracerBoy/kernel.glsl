@@ -442,7 +442,7 @@ float DiffuseBRDF(
     vec3 LightDirection,
     vec3 Normal)
 {
-	return dot(LightDirection, Normal) / PI;
+	return max(dot(LightDirection, Normal), 0.0f) / PI;
 }
 
 bool IsFloatZero(float f)
@@ -705,7 +705,7 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
 }
 
 #if IS_SHADER_TOY
-vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out float2 uv, out uint PrimitiveID)
+vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tangent, out float2 uv, out uint PrimitiveID)
 {
     float t = 999999.0;
     float materialID = float(INVALID_MATERIAL_ID);
@@ -759,9 +759,10 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out float2 u
     return vec2(t, materialID);
 }
 #endif
-vec2 Intersect(Ray ray, out vec3 normal, out vec2 uv, out uint PrimitiveID)
+vec2 Intersect(Ray ray, out vec3 normal, out vec3 tangent, out vec2 uv, out uint PrimitiveID)
 {
-	return IntersectWithMaxDistance(ray, 999999.0, normal, uv, PrimitiveID);
+	vec2 result = IntersectWithMaxDistance(ray, 999999.0, normal, tangent, uv, PrimitiveID);
+    return result;
 }
 
 float atan2(float x, float y)
@@ -1049,9 +1050,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
         vec3 normal;
-		vec2 uv;
+        vec3 tangent;
+        vec2 uv;
         uint PrimitiveID;
-        vec2 result = Intersect(ray, normal, uv, PrimitiveID);
+        vec2 result = Intersect(ray, normal, tangent, uv, PrimitiveID);
 
 #if USE_FOG
         float distanceTravelled = result.x;
@@ -1081,9 +1083,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
             vec3 lightDirection = normalize(lightPosition - currentPosition);
             Ray shadowFeeler = NewRay(currentPosition, lightDirection);
             vec3 shadowNormal;
+            vec3 shadowTangent;
 			vec2 shadowUV;
             uint shadowPrimitiveID;
-            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID); 
+            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
 
             int materialID = int(shadowResult.y);
             vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
@@ -1121,6 +1124,13 @@ vec4 Trace(Ray ray, Ray neighborRay)
             vec3 RayPoint = GetRayPoint(ray, result.x);
             ray.origin = RayPoint + normal * EPSILON;
             Material material = GetMaterialWithTextures(int(result.y), PrimitiveID, RayPoint, uv);
+
+            // Keep normals derived from a normal/bump map separate from the mesh normal.
+            // Detail normals are used whenever possible but should be avoided anytime they're
+            // used to calculate the ray direction because it can lead to generating rays
+            // that go into a mesh. Not really aware of anyway around this since normal maps
+            // are really a hack to start with
+            float3 detailNormal = GetDetailNormal(material, normal, tangent, uv);
 			if(i == 0)
 			{	
 				OutputPrimaryAlbedo(material.albedo);
@@ -1257,7 +1267,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             vec3 unused;
 							vec2 unusedUV;
                             uint unusedUint;
-                            vec2 lightResult = Intersect(lightRay, unused, unusedUV, unusedUint);
+                            vec2 lightResult = Intersect(lightRay, unused, unused, unusedUV, unusedUint);
                             vec3 lightEntryPoint = GetRayPoint(lightRay, lightResult.x);
                             float lightDistance = length(lightEntryPoint - ray.origin);
 
@@ -1275,7 +1285,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
                         ray.origin += ray.direction * EPSILON;
                         uint unusedPrimitiveID;
-                        result = Intersect(ray, normal, uv, unusedPrimitiveID);
+                        result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
                         
                         result.x = min(travelDistance, result.x);
                         float distanceTravelledBeforeScatter = result.x;
@@ -1331,9 +1341,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					for(int i = 0; i < SHADOW_BOUNCES; i++)
 					{
 						vec3 shadowNormal;
+                        vec3 shadowTangent;
 						vec2 shadowUV;
 						uint shadowPrimitiveID;
-						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID); 
+						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
 						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
                      
 						int materialID = int(shadowResult.y);
@@ -1358,7 +1369,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 							shadowNormal,
 							shadowFeeler.direction));
                         
-						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowUV, shadowPrimitiveID);
+						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID);
 						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
 						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
                        
@@ -1426,7 +1437,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 }
                 else // diffuse ray
                 {
-                   accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, normal); 
+                   accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, detailNormal); 
                 }
             }
         }

@@ -14,7 +14,12 @@ struct RayPayload
 	float2 uv;
 	uint materialIndex;
 	float hitT;
+	
 	float3 normal;
+	float padding;
+	
+	float3 tangent;
+	float padding2;
 };
 
 #define NUM_HISTOGRAM_BUCKETS 16
@@ -32,13 +37,15 @@ struct PerFrameConstants
 	float3 CameraUp;
 	float Padding;
 	float3 CameraRight;
+
+	uint EnableNormalMaps;
 };
 
 struct ConfigConstants
 {
 	float FocalDistance;
 	float CameraLensHeight;
-	bool FlipTextureUVs;
+	uint FlipTextureUVs;
 };
 
 struct Vertex
@@ -46,6 +53,7 @@ struct Vertex
 	float3 Position;
 	float3 Normal;
 	float2 UV;
+	float3 Tangent;
 };
 
 #define DEFAULT_MATERIAL_FLAG 0x0
@@ -60,6 +68,8 @@ struct Material
 	float3 albedo;
 	uint albedoIndex;
 	
+	uint normalMapIndex;
+
 	float IOR;
 	float roughness;
 	float absorption;

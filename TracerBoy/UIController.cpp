@@ -95,6 +95,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 	ImGui::InputFloat("Exposure Multiplier", &m_outputSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
+	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
 
 	if (ImGui::TreeNode("Denoising"))
 	{

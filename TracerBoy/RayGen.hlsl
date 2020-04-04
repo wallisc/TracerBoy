@@ -80,6 +80,11 @@ Material GetMaterial_NonRecursive(int MaterialID)
 	return MaterialBuffer[MaterialID];
 }
 
+bool IsValidTexture(uint textureIndex)
+{
+	return textureIndex != UINT_MAX;
+}
+
 float3 GetTextureData(uint textureIndex, float2 uv)
 {
 	if (configConstants.FlipTextureUVs)
@@ -96,6 +101,27 @@ float3 GetTextureData(uint textureIndex, float2 uv)
 	return data;
 }
 
+float3 GetDetailNormal(Material mat, float3 normal, float3 tangent, float2 uv)
+{
+	if (IsValidTexture(mat.normalMapIndex) && perFrameConstants.EnableNormalMaps)
+	{
+		float3 bitangent = cross(tangent, normal);
+		float2 normalMapData = GetTextureData(mat.normalMapIndex, uv).xy;
+		float3 tbn = float3(
+			(0.5f - normalMapData.x) * 2.0f,
+			(0.5f - normalMapData.y) * 2.0f,
+			0.0f);
+		tbn.z = sqrt(1.0f - (tbn.x * tbn.x + tbn.y * tbn.y));
+
+		return normalize(
+			tangent * tbn.x +
+			bitangent * tbn.y +
+			normal * tbn.z);
+	}
+	return normal;
+}
+
+
 Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv)
 {
 	Material mat = MaterialBuffer[MaterialID];
@@ -111,7 +137,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
 		}
 	}
 
-	if(mat.albedoIndex != UINT_MAX)
+	if(IsValidTexture(mat.albedoIndex))
 	{
 		mat.albedo = GetTextureData(mat.albedoIndex, uv);
 	}
@@ -125,7 +151,7 @@ struct Ray
 	float3 direction;
 };
 
-float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float2 uv, out uint PrimitiveID)
+float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
 {
 	RayDesc dxrRay;
 	dxrRay.Origin = ray.origin;
@@ -134,7 +160,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	dxrRay.TMax = maxT;
 
 	float bigNumber = 9999.0f;
-	RayPayload payload = { float2(0, 0), uint(-1), bigNumber, float3(0, 0, 0) };
+	RayPayload payload = { float2(0, 0), uint(-1), bigNumber, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, dxrRay, payload);
 
 	float2 result;
@@ -151,6 +177,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	PrimitiveID = 0;
 	normal = payload.normal;
 	uv = payload.uv;
+	tangent = payload.tangent;
 	return result;
 }
 

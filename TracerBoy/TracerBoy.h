@@ -115,6 +115,7 @@ public:
 	{
 		OutputType m_OutputType;
 		float m_ExposureMultiplier;
+		bool m_EnableNormalMaps;
 		DenoiserSettings m_denoiserSettings;
 	};
 
@@ -123,9 +124,10 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_ExposureMultiplier = 1.0f;
+		outputSettings.m_EnableNormalMaps = false;
 		
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
-		denoiserSettings.m_bEnabled = true;
+		denoiserSettings.m_bEnabled = false;
 		denoiserSettings.m_intersectPositionWeightingMultiplier = 1.0f;
 		denoiserSettings.m_normalWeightingExponential = 128.0f;
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
@@ -286,7 +288,7 @@ private:
 		PathTracerOutputUAVBaseSlot,
 		PathTracerOutputUAVLastSlot = PathTracerOutputUAVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		NumReservedViewSlots,
-		NumTotalViews = 1024
+		NumTotalViews = 4096
 	};
 
 	Camera m_camera;

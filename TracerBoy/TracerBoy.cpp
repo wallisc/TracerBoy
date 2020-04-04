@@ -156,6 +156,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	Material material = {};
 	material.IOR = 1.5f;
 	material.albedoIndex = UINT_MAX;
+	material.normalMapIndex = UINT_MAX;
 	material.emissive = ConvertFloat3(emissive);
 	material.Flags = ChannelAverage(emissive) > 0.0 ? LIGHT_MATERIAL_FLAG : DEFAULT_MATERIAL_FLAG;
 
@@ -187,6 +188,10 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 		if (pUberMaterial->map_kd)
 		{
 			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd);
+		}
+		if (pUberMaterial->map_normal)
+		{
+			material.normalMapIndex = textureAlloator.CreateTexture(pUberMaterial->map_normal);
 		}
 		material.albedo = ConvertFloat3(pUberMaterial->kd);
 
@@ -553,9 +558,14 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				{
 					auto& parserVertex = pTriangleMesh->vertex[v];
 					pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
+					pbrt::vec3f parserTangent(0, 0, 1);
 					if (bNormalsProvided)
 					{
 						parserNormal = pTriangleMesh->normal[v];
+					}
+					if (v < pTriangleMesh->tangents.size())
+					{
+						parserTangent = pTriangleMesh->tangents[v];
 					}
 					pbrt::vec2f uv(0.0, 0.0);
 					if (v < pTriangleMesh->texcoord.size())
@@ -565,6 +575,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 					pVertexBufferData[v].Position = { parserVertex.x, parserVertex.y, parserVertex.z };
 					pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
 					pVertexBufferData[v].UV = { uv.x, uv.y };
+					pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
 				}
 			}
 
@@ -750,8 +761,8 @@ void TracerBoy::InitializeTexture(
 	std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
 	std::wstring fullTextureName = directory + textureName;
 
-	DirectX::TexMetadata texMetaData;
-	DirectX::ScratchImage scratchImage;
+	DirectX::TexMetadata texMetaData = {};
+	DirectX::ScratchImage scratchImage = {};
 	std::wstring fileExt = textureName.substr(textureName.size() - 4, 4);
 	if (fileExt.compare(L".hdr") == 0)
 	{
@@ -761,18 +772,22 @@ void TracerBoy::InitializeTexture(
 	{
 		VERIFY_HRESULT(DirectX::LoadFromTGAFile(fullTextureName.c_str(), &texMetaData, scratchImage));
 	}
+	else if (fileExt.compare(L".dds") == 0)
+	{
+		VERIFY_HRESULT(DirectX::LoadFromDDSFile(fullTextureName.c_str(), DDS_FLAGS_NO_16BPP, &texMetaData, scratchImage));
+	}
 	else
 	{
 		VERIFY_HRESULT(DirectX::LoadFromWICFile(fullTextureName.c_str(), WIC_FLAGS_NONE, &texMetaData, scratchImage));
-
 	}
 	VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice.Get(), texMetaData, D3D12_RESOURCE_FLAG_NONE, false, pResource.ReleaseAndGetAddressOf()));
+
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, GetCPUDescriptorHandle(m_pViewDescriptorHeap.Get(), SRVSlot));
 
 	std::vector < D3D12_SUBRESOURCE_DATA> subresources;
 	VERIFY_HRESULT(PrepareUpload(m_pDevice.Get(), scratchImage.GetImages(), scratchImage.GetImageCount(), texMetaData, subresources));
 
-	const UINT64 uploadBufferSize = GetRequiredIntermediateSizeHelper(m_pDevice.Get(), pResource.Get(), 0, 1);
+	const UINT64 uploadBufferSize = GetRequiredIntermediateSizeHelper(m_pDevice.Get(), pResource.Get(), 0, texMetaData.mipLevels);
 
 	AllocateUploadBuffer(uploadBufferSize, pUploadResource);
 
@@ -893,7 +908,9 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
 	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
+	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
 	constants.InvalidateHistory = m_bInvalidateHistory;
+	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer[m_ActiveFrameIndex]->GetGPUVirtualAddress());
