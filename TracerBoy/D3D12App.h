@@ -8,7 +8,14 @@ public:
 	D3D12App(HWND hwnd, LPSTR pCommandLine);
 
 	void UpdateMousePosition(int x, int y);
-	void KeyUpEvent(char key) { m_inputArray[key] = false; }
+	void KeyUpEvent(char key) 
+	{ 
+		m_inputArray[key] = false; 
+		if (key == 'm' || key == 'M')
+		{
+			m_MouseMovementEnabled = !m_MouseMovementEnabled;
+		}
+	}
 	void KeyDownEvent(char key) { m_inputArray[key] = true; }
 	
 	void Render();
@@ -26,6 +33,7 @@ private:
 	UINT64 m_SignalValue;
 	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
 
+	bool m_MouseMovementEnabled = false;
 	int m_mouseX, m_mouseY;
 	bool m_inputArray[CHAR_MAX];
 	std::chrono::steady_clock::time_point m_LastUpdateTime;
