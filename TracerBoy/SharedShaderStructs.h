@@ -40,7 +40,7 @@ struct PerFrameConstants
 
 	uint EnableNormalMaps;
 	float FocalDistance;
-
+	float FireflyClampValue;
 };
 
 struct ConfigConstants
@@ -83,10 +83,13 @@ struct Material
 
 #define IMAGE_TEXTURE_TYPE 0
 
+#define DEFAULT_TEXTURE_FLAG 0
+#define NEEDS_GAMMA_CORRECTION_TEXTURE_FLAG 0x1
 struct TextureData
 {
 	uint TextureType;
 	uint DescriptorHeapIndex;
+	uint TextureFlags;
 };
 
 struct AreaLightData

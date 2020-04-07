@@ -8,7 +8,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	m_SignalValue(1)
 {
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
-#if 1
+#if 0
 	ComPtr<ID3D12Debug> debugController;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
 	{

@@ -4,8 +4,10 @@
 #include "ClearAOVCS.h"
 #include "RayGen.h"
 #include "ClosestHit.h"
+#include "AnyHit.h"
 #include "Miss.h"
 
+#define USE_ANYHIT 0
 
 struct HitGroupShaderRecord
 {
@@ -107,7 +109,56 @@ struct MaterialTracker
 	std::unordered_map<pbrt::Material*, UINT> MaterialNameToIndex;
 };
 
-UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture)
+bool IsNormalizedFormat(DXGI_FORMAT format)
+{
+	switch (format)
+	{
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+	case DXGI_FORMAT_R16G16B16A16_SNORM:
+	case DXGI_FORMAT_R10G10B10A2_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+	case DXGI_FORMAT_R8G8B8A8_SNORM:
+	case DXGI_FORMAT_R16G16_UNORM:
+	case DXGI_FORMAT_R16G16_SNORM:
+	case DXGI_FORMAT_R8G8_UNORM:
+	case DXGI_FORMAT_R8G8_SNORM:
+	case DXGI_FORMAT_R16_UNORM:
+	case DXGI_FORMAT_R16_UINT:
+	case DXGI_FORMAT_R16_SNORM:
+	case DXGI_FORMAT_R8_UNORM:
+	case DXGI_FORMAT_R8_SNORM:
+	case DXGI_FORMAT_A8_UNORM:
+	case DXGI_FORMAT_R1_UNORM:
+	case DXGI_FORMAT_R8G8_B8G8_UNORM:
+	case DXGI_FORMAT_G8R8_G8B8_UNORM:
+	case DXGI_FORMAT_BC1_UNORM:
+	case DXGI_FORMAT_BC1_UNORM_SRGB:
+	case DXGI_FORMAT_BC2_UNORM:
+	case DXGI_FORMAT_BC2_UNORM_SRGB:
+	case DXGI_FORMAT_BC3_UNORM:
+	case DXGI_FORMAT_BC3_UNORM_SRGB:
+	case DXGI_FORMAT_BC4_UNORM:
+	case DXGI_FORMAT_BC4_SNORM:
+	case DXGI_FORMAT_BC5_UNORM:
+	case DXGI_FORMAT_BC5_SNORM:
+	case DXGI_FORMAT_B5G6R5_UNORM:
+	case DXGI_FORMAT_B5G5R5A1_UNORM:
+	case DXGI_FORMAT_B8G8R8A8_UNORM:
+	case DXGI_FORMAT_B8G8R8X8_UNORM:
+	case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
+	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+	case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+	case DXGI_FORMAT_BC7_UNORM:
+	case DXGI_FORMAT_BC7_UNORM_SRGB:
+	case DXGI_FORMAT_B4G4R4A4_UNORM:
+		return true;
+	default:
+		return false;
+	}
+}
+
+UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect)
 {
 	TextureData texture;
 	pbrt::ImageTexture::SP pImageTexture = std::dynamic_pointer_cast<pbrt::ImageTexture>(pPbrtTexture);
@@ -119,11 +170,18 @@ UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture)
 		texture.TextureType = IMAGE_TEXTURE_TYPE;
 		texture.DescriptorHeapIndex = m_tracerboy.AllocateDescriptorHeapSlot();
 		std::wstring fileName(pImageTexture->fileName.begin(), pImageTexture->fileName.end());
+
 		m_tracerboy.InitializeTexture(fileName,
 			*m_pCommandList.Get(),
 			pTexture,
 			texture.DescriptorHeapIndex,
 			pUpload);
+
+		texture.TextureFlags = DEFAULT_TEXTURE_FLAG;
+		if (bGammaCorrect && IsNormalizedFormat(pTexture->GetDesc().Format))
+		{
+			texture.TextureFlags |= NEEDS_GAMMA_CORRECTION_TEXTURE_FLAG;
+		}
 
 		m_uploadResources.push_back(pUpload);
 		m_tracerboy.m_pTextures.push_back(pTexture);
@@ -189,7 +247,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	{
 		if (pUberMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd);
+			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd, true);
 		}
 		if (pUberMaterial->map_normal)
 		{
@@ -366,9 +424,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 			CD3DX12_STATIC_SAMPLER_DESC(
 				0u,
 				D3D12_FILTER_MIN_MAG_MIP_POINT,
-				D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-				D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-				D3D12_TEXTURE_ADDRESS_MODE_WRAP),
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP),
 
 			CD3DX12_STATIC_SAMPLER_DESC(
 				1u,
@@ -403,12 +461,17 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		D3D12_SHADER_BYTECODE closestHitLibDxil = CD3DX12_SHADER_BYTECODE((void*)g_pClosestHit, ARRAYSIZE(g_pClosestHit));
 		closestHitLib->SetDXILLibrary(&closestHitLibDxil);
 
+		auto anyHitLib = raytracingPipeline.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
+		D3D12_SHADER_BYTECODE anyHitLibDxil = CD3DX12_SHADER_BYTECODE((void*)g_pAnyHit, ARRAYSIZE(g_pAnyHit));
+		anyHitLib->SetDXILLibrary(&anyHitLibDxil);
+
 		auto missLib = raytracingPipeline.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
 		D3D12_SHADER_BYTECODE missLibDxil = CD3DX12_SHADER_BYTECODE((void*)g_pMiss, ARRAYSIZE(g_pMiss));
 		missLib->SetDXILLibrary(&missLibDxil);
 
 		auto hitGroup = raytracingPipeline.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
 		hitGroup->SetClosestHitShaderImport(L"ClosestHit");
+		hitGroup->SetAnyHitShaderImport(L"AnyHit");
 		hitGroup->SetHitGroupExport(L"HitGroup");
 
 		raytracingPipeline.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pRayTracingRootSignature.Get());
@@ -628,7 +691,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / vertexSize;
 			geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress();
 			geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
-			geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+			geometryDesc.Flags = USE_ANYHIT ? D3D12_RAYTRACING_GEOMETRY_FLAG_NONE : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 			geometryDescs.push_back(geometryDesc);
 
 			HitGroupShaderRecord shaderRecord = {};
@@ -934,6 +997,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
 	constants.FocalDistance = outputSettings.m_cameraSettings.m_FocalDistance;
 	constants.InvalidateHistory = m_bInvalidateHistory;
+	constants.FireflyClampValue = outputSettings.m_denoiserSettings.m_fireflyClampValue;
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());

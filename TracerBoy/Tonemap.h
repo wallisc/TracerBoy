@@ -14,3 +14,8 @@ float HDRToLuma(float3 color)
 {
 	return SDRToLuma(Tonemap(color));
 }
+
+float3 GammaToLinear(float3 color)
+{
+	return pow(color, 2.2f);
+}

@@ -133,6 +133,7 @@ public:
 		outputSettings.m_EnableNormalMaps = false;
 		
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
+		cameraSettings.m_FocalDistance = 3.0f;
 
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
 		denoiserSettings.m_bEnabled = false;
@@ -140,6 +141,7 @@ public:
 		denoiserSettings.m_normalWeightingExponential = 128.0f;
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
+		denoiserSettings.m_fireflyClampValue = 3.0f;
 
 		return outputSettings;
 	}
@@ -316,7 +318,7 @@ public:
 		m_pCommandList(&CommandList)
 	{}
 
-	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture);
+	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect = false);
 	const std::vector<TextureData>& GetTextureData() const { return m_textureData; }
 
 	void ExtractScratchResources(std::vector<ComPtr<ID3D12Resource>>& scratchResources)

@@ -1,17 +1,10 @@
 #define HLSL
 #include "SharedShaderStructs.h"
+#include "SharedRaytracing.h"
 #include "Tonemap.h"
 
 #define IS_SHADER_TOY 0
-cbuffer PerFrameCB : register(b0)
-{
-	PerFrameConstants perFrameConstants;
-}
 
-cbuffer ConfigCB : register(b1)
-{
-	ConfigConstants configConstants;
-}
 
 bool ShouldInvalidateHistory() { return perFrameConstants.InvalidateHistory; }
 float3 GetCameraPosition() { return perFrameConstants.CameraPosition; }
@@ -21,22 +14,6 @@ float3 GetCameraRight() { return perFrameConstants.CameraRight; }
 float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
-RWTexture2D<float4> OutputTexture : register(u0);
-RWTexture2D<float4> AOVNormals : register(u1);
-RWTexture2D<float4> AOVWorldPosition : register(u2);
-RWStructuredBuffer<SDRHistogram> AOVSDRHistogram : register(u3);
-RWTexture2D<float4> AOVAlbedo: register(u4);
-
-Texture2D LastFrameTexture : register(t0);
-RaytracingAccelerationStructure AS : register(t1);
-Texture2D EnvironmentMap : register(t4);
-StructuredBuffer<float> RandSeedBuffer : register(t5);
-StructuredBuffer<Material> MaterialBuffer : register(t6);
-StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
-Texture2D<float4> ImageTextures[] : register(t0, space1);
-
-SamplerState PointSampler : register(s0);
-SamplerState BilinearSampler : register(s1);
 
 float3 SampleEnvironmentMap(float3 v)
 {
@@ -54,9 +31,11 @@ float rand();
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = float3(0.172, -0.818, -0.549) * -999999.9f;
+	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
+	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
+
 	LightColor = float3(1.0, 1.0, 1.0);
-	PDFValue = 1.0;
+	PDFValue = 0.0;
 }
 
 #define GLOBAL static
@@ -71,32 +50,6 @@ float4 GetAccumulatedColor(float2 uv) {
 	return LastFrameTexture.SampleLevel(PointSampler, uv, 0);
 }
 bool NeedsToSaveLastFrameData() { return false; } // Handled by the CPU
-
-Material GetMaterial_NonRecursive(int MaterialID)
-{
-	return MaterialBuffer[MaterialID];
-}
-
-bool IsValidTexture(uint textureIndex)
-{
-	return textureIndex != UINT_MAX;
-}
-
-float3 GetTextureData(uint textureIndex, float2 uv)
-{
-	if (configConstants.FlipTextureUVs)
-	{
-		uv = float2(0, 1) + uv * float2(1, -1);
-	}
-
-	float3 data = float3(0.0, 0.0, 0.0);
-	TextureData textureData = TextureDataBuffer[textureIndex];
-	if (textureData.TextureType == IMAGE_TEXTURE_TYPE)
-	{
-		data = ImageTextures[NonUniformResourceIndex(textureData.DescriptorHeapIndex)].SampleLevel(BilinearSampler, uv, 0).rgb;
-	}
-	return data;
-}
 
 float3 GetDetailNormal(Material mat, float3 normal, float3 tangent, float2 uv)
 {

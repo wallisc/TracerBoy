@@ -2,7 +2,7 @@
 
 UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
-	m_cameraSpeed(0.03f)
+	m_cameraSpeed(0.003f)
 {
 	SetDefaultSettings();
 
@@ -112,6 +112,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Normal Weighting Exponential", &denoiserSettings.m_normalWeightingExponential, 1.0f, 10.0f, "%.1f");
 		ImGui::InputFloat("Intersection Position Weighting Multiplier", &denoiserSettings.m_intersectPositionWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Luminance Weighting Multiplier", &denoiserSettings.m_luminanceWeightingMultiplier, 0.1f, 1.0f, "%.2f");
+		ImGui::InputFloat("Firefly Clamping value", &denoiserSettings.m_fireflyClampValue, 1.0f, 10.0f, "%.1f");
 		ImGui::TreePop();
 	}
 

@@ -4,6 +4,7 @@ struct PassResource;
 
 struct DenoiserSettings
 {
+	float m_fireflyClampValue;
 	bool m_bEnabled;
 	float m_normalWeightingExponential;
 	float m_intersectPositionWeightingMultiplier;

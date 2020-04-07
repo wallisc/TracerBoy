@@ -1138,6 +1138,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(normal);
+                return float4(normal, 1.0);
 			}
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
@@ -1396,7 +1397,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						}
 					}
                 
-            		float lightMultiplier = DiffuseBRDF(lightDirection, normal);
+            		float lightMultiplier = DiffuseBRDF(lightDirection, detailNormal);
 					if(IsSubsurfaceScattering(material))
 					{
 						// TODO: What was this trying to accomplish again?
@@ -1431,7 +1432,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         accumulatedIndirectLightMultiplier *= SpecularBRDF(
                             -previousDirection,
                             ray.direction,
-                            normal,
+                            detailNormal,
                             material.roughness);
                     }
                 }
@@ -1575,7 +1576,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay, neighborCameraRay);
-    return vec4(accumulatedColor.rgb + result.rgb, result.w);
+    return vec4(accumulatedColor.rgb + min(result.rgb, perFrameConstants.FireflyClampValue), result.w);
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )

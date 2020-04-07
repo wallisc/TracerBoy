@@ -71,6 +71,12 @@
     <ClInclude Include="Tonemap.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="SharedHitGroup.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="SharedRaytracing.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -89,6 +95,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="ClearAOVCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="AnyHit.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
