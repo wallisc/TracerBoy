@@ -7,6 +7,12 @@ public:
 
 	D3D12App(HWND hwnd, LPSTR pCommandLine);
 
+	~D3D12App() 
+	{
+		WaitForGPUIdle();
+	};
+
+
 	void UpdateMousePosition(int x, int y);
 	void KeyUpEvent(char key) 
 	{ 
