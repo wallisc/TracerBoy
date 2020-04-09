@@ -827,7 +827,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 {
 	if (m_CachedOutputSettings.m_EnableNormalMaps != outputSettings.m_EnableNormalMaps ||
-		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance)
+		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
+		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
+		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth)
 	{
 		m_bInvalidateHistory = true;
 	}
@@ -996,6 +998,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
 	constants.FocalDistance = outputSettings.m_cameraSettings.m_FocalDistance;
+	constants.DOFFocusDistance = outputSettings.m_cameraSettings.m_DOFFocalDistance;
+	constants.DOFApertureWidth = outputSettings.m_cameraSettings.m_ApertureWidth;
 	constants.InvalidateHistory = m_bInvalidateHistory;
 	constants.FireflyClampValue = outputSettings.m_denoiserSettings.m_fireflyClampValue;
 	

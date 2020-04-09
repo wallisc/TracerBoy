@@ -102,6 +102,8 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	{
 		auto& cameraSettings = m_outputSettings.m_cameraSettings;
 		ImGui::InputFloat("Focal Distance", &cameraSettings.m_FocalDistance, 0.1f, 1.0f, "%0.1f");
+		ImGui::InputFloat("Depth of Field Focal Distance", &cameraSettings.m_DOFFocalDistance, 0.1f, 1.0f, "%0.1f");
+		ImGui::InputFloat("Depth of Field Aperture Width", &cameraSettings.m_ApertureWidth, 0.01f, .1f, "%0.3f");
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNode("Denoising"))

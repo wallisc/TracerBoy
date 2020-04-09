@@ -114,6 +114,8 @@ public:
 	struct CameraOutputSettings
 	{
 		float m_FocalDistance;
+		float m_DOFFocalDistance;
+		float m_ApertureWidth;
 	};
 
 	struct OutputSettings
@@ -134,6 +136,8 @@ public:
 		
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
+		cameraSettings.m_DOFFocalDistance = 0.0f;
+		cameraSettings.m_ApertureWidth = 0.075f;
 
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
 		denoiserSettings.m_bEnabled = false;

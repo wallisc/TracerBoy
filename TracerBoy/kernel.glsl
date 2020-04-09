@@ -7,7 +7,6 @@
 #define PLASTIC_IOR 1.46f
 #define FLOOR_IOR 1.0;
 
-#define USE_DOF 0
 #define USE_FOG 0
 
 #ifndef IS_SHADER_TOY
@@ -1560,17 +1559,14 @@ vec4 PathTrace(in vec2 pixelCoord)
     Ray cameraRay = NewRay(focalPoint, normalize(lensPoint - focalPoint));
     Ray neighborCameraRay = NewRay(focalPoint, normalize(neighborLensPoint - focalPoint));
 
-#if USE_DOF
-    float FocusDistance = 5.5;
-    vec3 FocusPoint = GetRayPoint(cameraRay, FocusDistance);
+    if(perFrameConstants.DOFFocusDistance > 0.0f)
+    {
+        vec3 FocusPoint = GetRayPoint(cameraRay, perFrameConstants.DOFFocusDistance);
+        vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5, 0.5)) * perFrameConstants.DOFApertureWidth;
+        cameraRay.origin += FocalJitter.x * GetCameraRight() + FocalJitter.y * GetCameraUp();
     
-    float ApertureWidth = 0.075;
-    vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5, 0.5)) * ApertureWidth;
-    cameraRay.origin += FocalJitter.x * GetCameraRight();
-    cameraRay.origin += FocalJitter.y * GetCameraUp();
-    
-    cameraRay.direction = normalize(FocusPoint - cameraRay.origin);
-#endif
+        cameraRay.direction = normalize(FocusPoint - cameraRay.origin);
+    }
     
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far

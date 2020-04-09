@@ -38,6 +38,8 @@ struct PerFrameConstants
 	float Padding;
 	float3 CameraRight;
 
+	float DOFFocusDistance;
+	float DOFApertureWidth;
 	uint EnableNormalMaps;
 	float FocalDistance;
 	float FireflyClampValue;
