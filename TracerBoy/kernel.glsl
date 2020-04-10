@@ -21,6 +21,15 @@ vec3 GetResolution() { return iResolution; }
 vec3 mul(vec3 v, mat3 m) { return v * m; }
 vec4 GetAccumulatedColor(vec2 uv) { return texture(iChannel0, uv); }
 vec4 GetLastFrameData() { return texture(iChannel0, vec2(0.0)); }
+bool ShouldInvalidateHistory()
+{
+    float rotationFactor = GetRotationFactor();
+    LightPositionYOffset = GetLightYOffset();
+    
+    vec4 lastFrameData = GetLastFrameData();
+    return HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor) ||
+      !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset);
+}
 
 vec3 GetCameraPosition() { return vec3(0.0, 2.0, 3.5); }
 vec3 GetCameraLookAt() { return vec3(0.0, 1.0, 0.0); }
@@ -28,7 +37,6 @@ vec3 GetCameraUp() { return vec3(0.0, 1.0, 0.0); }
 vec3 GetCameraRight() { return vec3(1.0, 0.0, 0.0); }
 float GetCameraLensHeight() { return 2.0; }
 float GetCameraFocalDistance() { return 7.0; }
-bool ShouldInvalidateHistory() { return false; }
 
 struct Ray
 { 
@@ -1522,9 +1530,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     
     vec4 lastFrameData = GetLastFrameData();
     
-    bool HasSceneChanged = HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor) ||
-      !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset) ||
-	  ShouldInvalidateHistory();
+    bool HasSceneChanged = ShouldInvalidateHistory();
 
     // Sacrifice the top left pixel to store previous frame meta-data
     if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)
