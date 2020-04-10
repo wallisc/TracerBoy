@@ -112,8 +112,6 @@ UINT D3D12App::ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& 
 
 void D3D12App::UpdateMousePosition(int x, int y)
 {
-	if (!m_MouseMovementEnabled) return; 
-
 	m_mouseX = x;
 	m_mouseY = y;
 }
@@ -131,6 +129,7 @@ void D3D12App::Render()
 
 	TracerBoy::CameraSettings cameraSettings = {};
 	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
+	cameraSettings.m_ignoreMouse = !m_MouseMovementEnabled;
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
 	ComPtr<ID3D12Resource> pBackBuffer;

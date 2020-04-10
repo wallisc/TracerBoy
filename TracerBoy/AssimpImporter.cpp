@@ -57,7 +57,7 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	pScene->cameras.push_back(pCamera);
 
 	std::shared_ptr<pbrt::InfiniteLightSource> pLight = std::make_shared<pbrt::InfiniteLightSource>();
-	pLight->mapName = "san_giuseppe_bridge_4k.hdr";
+	pLight->mapName = "../bistro/san_giuseppe_bridge_4k.hdr";
 	pScene->world->lightSources.push_back(pLight);
 	UINT numMaterials = pAiScene->mNumMaterials;
 

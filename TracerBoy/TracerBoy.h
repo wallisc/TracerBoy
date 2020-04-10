@@ -155,6 +155,7 @@ public:
 	struct CameraSettings
 	{
 		float m_movementSpeed;
+		bool m_ignoreMouse;
 	};
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const CameraSettings &cameraSettings);
 
