@@ -1122,12 +1122,12 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	float yaw = 0.0;
 	float pitch = 0.0;
 	const float rotationScaler = 0.5f;
-	if (m_pPostProcessOutput)
+	if (m_pPostProcessOutput && !cameraSettings.m_ignoreMouse)
 	{
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
 
 		yaw = rotationScaler * 2.0 * 6.28f * ((float)mouseX - (float)m_mouseX) / (float)outputDesc.Width;
-		pitch = rotationScaler * 0.5f * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
+		pitch = rotationScaler * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
 	}
 
 
@@ -1145,11 +1145,12 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	XMVECTOR ViewDir = LookAt - Position;
 
 	XMVECTOR GlobalUp = XMVectorSet(0.0, 1.0, 0.0, 1.0);
+	XMVECTOR XZAlignedRight = XMVector3Normalize(XMVectorSet(XMVectorGetX(RightAxis), 0.0f, XMVectorGetZ(RightAxis), 1.0f));
 
-	XMMATRIX RotationMatrix = XMMatrixRotationAxis(GlobalUp, yaw);// *XMMatrixRotationAxis(RightAxis, pitch);
+	XMMATRIX RotationMatrix = XMMatrixRotationAxis(GlobalUp, yaw) * XMMatrixRotationAxis(XZAlignedRight, pitch);
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
-	RightAxis = XMVector3Normalize(XMVector3Transform(RightAxis, RotationMatrix));
-	UpAxis = XMVector3Normalize(XMVector3Transform(UpAxis, RotationMatrix));
+	RightAxis = XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), ViewDir));
+	UpAxis = XMVector3Normalize(XMVector3Cross(ViewDir, RightAxis));
 	LookAt = Position + ViewDir;
 
 	const float cameraMoveSpeed = cameraSettings.m_movementSpeed;
