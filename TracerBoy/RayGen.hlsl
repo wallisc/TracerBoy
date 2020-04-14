@@ -34,8 +34,8 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
 	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
 
-	LightColor = float3(1.0, 1.0, 1.0);
-	PDFValue = 0.0;
+	LightColor = float3(1.0, 1.0, 1.0) * 0.5;
+	PDFValue = 1.0;
 }
 
 #define GLOBAL static
@@ -63,10 +63,14 @@ float3 GetDetailNormal(Material mat, float3 normal, float3 tangent, float2 uv)
 			0.0f);
 		tbn.z = sqrt(1.0f - (tbn.x * tbn.x + tbn.y * tbn.y));
 
+		// Prevent normal maps from making a normal completely parallel with the triangle geometry. This causes
+		// artifacts due to impossible reflection rays
+		const float normalYClamp = 0.02f;
+
 		return normalize(
 			tangent * tbn.x +
 			bitangent * tbn.y +
-			normal * tbn.z);
+			normal * max(tbn.z, normalYClamp));
 	}
 	return normal;
 }
@@ -124,13 +128,12 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	dxrRay.TMin = 0.001;
 	dxrRay.TMax = maxT;
 
-	float bigNumber = 9999.0f;
-	RayPayload payload = { float2(0, 0), uint(-1), bigNumber, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
+	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, dxrRay, payload);
 
 	float2 result;
 	result.x = payload.hitT;
-	bool hitFound = result.x < bigNumber;
+	bool hitFound = result.x < maxT;
 	if (hitFound)
 	{
 		result.y = payload.materialIndex;
@@ -169,6 +172,11 @@ void OutputSDRHistogram(float3 hdrColor)
 	int lumaIndex = luma / float(NUM_HISTOGRAM_BUCKETS);
 	histogram.Count[lumaIndex]++;
 	AOVSDRHistogram[outputIndex] = histogram;
+}
+
+bool IsFogEnabled()
+{
+	return perFrameConstants.fogScatterDistance > EPSILON;
 }
 
 void ClearAOVs()
