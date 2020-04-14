@@ -22,6 +22,8 @@
 #include "directxtex.h"
 #include "directxmath.h"
 
+#include "wincodec.h"
+
 #define HANDLE_FAILURE() throw -1;
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))

@@ -20,6 +20,7 @@ x64
 *.user
 *.user
 TracerBoy/TracerBoy.vcxproj.user
+TracerBoy/Render
 *.user
 PBRTParser/PBRTParser.vcxproj.user
 *.ini

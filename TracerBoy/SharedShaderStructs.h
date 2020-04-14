@@ -43,6 +43,9 @@ struct PerFrameConstants
 	uint EnableNormalMaps;
 	float FocalDistance;
 	float FireflyClampValue;
+
+	float fogScatterDistance;
+	float fogScatterDirection;
 };
 
 struct ConfigConstants

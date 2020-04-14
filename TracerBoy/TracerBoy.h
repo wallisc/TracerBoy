@@ -118,6 +118,12 @@ public:
 		float m_ApertureWidth;
 	};
 
+	struct FogSettings
+	{
+		float ScatterDistance;
+		float ScatterDirection;
+	};
+
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
@@ -125,6 +131,7 @@ public:
 		bool m_EnableNormalMaps;
 		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
+		FogSettings m_fogSettings;
 	};
 
 	static OutputSettings GetDefaultOutputSettings()
@@ -146,6 +153,10 @@ public:
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
 		denoiserSettings.m_fireflyClampValue = 3.0f;
+
+		FogSettings& fogSettings = outputSettings.m_fogSettings;
+		fogSettings.ScatterDistance = 10.0f;
+		fogSettings.ScatterDirection = 0.0f;
 
 		return outputSettings;
 	}

@@ -2,7 +2,10 @@
 
 UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
-	m_cameraSpeed(0.003f)
+	m_cameraSpeed(0.003f),
+	m_captureLengthInSeconds(5.0),
+	m_captureFramesPerSecond(24),
+	m_captureSamplesPerFrame(1024)
 {
 	SetDefaultSettings();
 
@@ -115,6 +118,22 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Intersection Position Weighting Multiplier", &denoiserSettings.m_intersectPositionWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Luminance Weighting Multiplier", &denoiserSettings.m_luminanceWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Firefly Clamping value", &denoiserSettings.m_fireflyClampValue, 1.0f, 10.0f, "%.1f");
+		ImGui::TreePop();
+	}
+	if (ImGui::TreeNode("Fog"))
+	{
+		auto& fogSettings = m_outputSettings.m_fogSettings;
+		
+		ImGui::InputFloat("Scatter distance", &fogSettings.ScatterDistance, 0.1f, 1.0f, "%.2f");
+		ImGui::InputFloat("Scatter direction", &fogSettings.ScatterDirection, 0.01f, .1f, "%.3f");
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNode("Capture"))
+	{
+		ImGui::InputFloat("Capture Length (seconds)", &m_captureLengthInSeconds, 01.0f, 1.0f, "%.2f");
+		ImGui::InputInt("Capture frames per second ", &m_captureFramesPerSecond, 1, 5);
+		ImGui::InputInt("Samples per frame", &m_captureSamplesPerFrame, 1, 16);
 		ImGui::TreePop();
 	}
 

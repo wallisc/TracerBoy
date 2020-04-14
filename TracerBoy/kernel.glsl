@@ -7,8 +7,6 @@
 #define PLASTIC_IOR 1.46f
 #define FLOOR_IOR 1.0;
 
-#define USE_FOG 0
-
 #ifndef IS_SHADER_TOY
 #define IS_SHADER_TOY 1
 #endif
@@ -1028,7 +1026,7 @@ vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFa
     if(abs(scatteringDirectionFactor) < EPSILON)
     {
 		pdfValue = 1.0; // TODO: Wrong
-		return GenerateRandomDirection();   
+		return GenerateRandomDirection();
     }
     else
     {
@@ -1056,57 +1054,16 @@ vec4 Trace(Ray ray, Ray neighborRay)
     
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
+        bool bLastRay = (i == MAX_BOUNCES - 1);
+        bool bLimitRayCastDistance = IsFogEnabled() && !bLastRay;
+        float marchDistance = bLimitRayCastDistance ? max(-log(rand()), 0.1) * perFrameConstants.fogScatterDistance : 999999.0f;
+
         vec3 normal;
         vec3 tangent;
         vec2 uv;
         uint PrimitiveID;
-        vec2 result = Intersect(ray, normal, tangent, uv, PrimitiveID);
+	    vec2 result = IntersectWithMaxDistance(ray, marchDistance, normal, tangent, uv, PrimitiveID);
 
-#if USE_FOG
-        float distanceTravelled = result.x;
-        bool hitNotFound = int(result.y) == INVALID_MATERIAL_ID;
-        vec3 fogColor = vec3(0.375, 0.25, 0.3) * 1.1;
-        float fogAbsorption = 0.15;        
-        float distancePerFogScatterEvent = 2.0;
-        vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - fogColor;
-
-        if(hitNotFound)
-        {
-            distanceTravelled = 20.0;
-        }
-        
-        #define MAX_FOG_SHADOW_CASTS 5
-        float distanceMarched = 0.0;
-        for(int i = 0; i < MAX_FOG_SHADOW_CASTS; i++)
-        {
-            float marchDistance = max(-log(rand()), 0.1) * distancePerFogScatterEvent;
-			if(distanceMarched + marchDistance > distanceTravelled)
-            {
-            	break;    
-            }
-            distanceMarched += marchDistance;
-            
-            vec3 currentPosition = GetRayPoint(ray, distanceMarched);
-            vec3 lightDirection = normalize(lightPosition - currentPosition);
-            Ray shadowFeeler = NewRay(currentPosition, lightDirection);
-            vec3 shadowNormal;
-            vec3 shadowTangent;
-			vec2 shadowUV;
-            uint shadowPrimitiveID;
-            vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
-
-            int materialID = int(shadowResult.y);
-            vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
-            Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV);
-            if(IsLight(material))
-            {
-                accumulatedColor += fogColor * accumulatedIndirectLightMultiplier * GetAreaLightMaterial().albedo;
-            }
-            
-            accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * marchDistance * fogAbsorption);
-        }
-#endif
-        
         if(i == 0)
         {
             FirstPrimitiveID = PrimitiveID;
@@ -1123,8 +1080,20 @@ vec4 Trace(Ray ray, Ray neighborRay)
         
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
-            accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
-            break;
+            if(!IsFogEnabled() || bLastRay)
+            {
+                accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
+                break;
+            }
+            else
+            {
+                vec3 RayPoint = GetRayPoint(ray, marchDistance);
+                ray.origin = RayPoint;
+                float pdfValue;
+                ray.direction = GenerateNewDirectionFromBSDF(ray.direction, perFrameConstants.fogScatterDirection, pdfValue); 
+                continue;
+            }
+
         }
 		else
         {   

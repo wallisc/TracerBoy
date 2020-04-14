@@ -8,11 +8,17 @@ public:
 
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }
 	float GetCameraSpeed() { return m_cameraSpeed; }
+	float GetCaptureLengthInSeconds() { return m_captureLengthInSeconds; }
+	float GetCaptureFramesPerSecond() { return m_captureFramesPerSecond; }
+	float GetCaptureSamplesPerFrame() { return m_captureSamplesPerFrame; }
 private:
 	void SetDefaultSettings();
 	TracerBoy::OutputSettings m_outputSettings;
 
 	float m_cameraSpeed;
+	float m_captureLengthInSeconds;
+	int m_captureFramesPerSecond;
+	int m_captureSamplesPerFrame;
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12DescriptorHeap> m_pImguiSRVDescriptorHeap;

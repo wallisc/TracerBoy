@@ -5,7 +5,9 @@ const DXGI_FORMAT cBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) : 
 	m_mouseX(0), 
 	m_mouseY(0),
-	m_SignalValue(1)
+	m_SignalValue(1),
+	m_bIsRecording(false),
+	m_bRenderUI(true)
 {
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
 #if 0
@@ -130,6 +132,13 @@ void D3D12App::Render()
 	TracerBoy::CameraSettings cameraSettings = {};
 	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
 	cameraSettings.m_ignoreMouse = !m_MouseMovementEnabled;
+
+	if (m_bIsRecording)
+	{
+		bool bFrameStart = m_SamplesRendered == 0;
+		timeSinceLastUpdate = bFrameStart ? 1000.0f / m_pUIController->GetCaptureFramesPerSecond() : 0.0f;
+	}
+
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
 	ComPtr<ID3D12Resource> pBackBuffer;
@@ -140,12 +149,39 @@ void D3D12App::Render()
 	ID3D12GraphicsCommandList& commandList = *commandListAllocatorPair.first.Get();
 
 	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pUIController->GetOutputSettings());
-	m_pUIController->Render(commandList);
+	if (m_bRenderUI)
+	{
+		m_pUIController->Render(commandList);
+	}
 
 	commandList.Close();
 
 	ID3D12CommandList* CommandLists[] = { &commandList };
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 
+	OnSampleSubmit(*pBackBuffer.Get());
 	m_pSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+}
+
+void D3D12App::OnSampleSubmit(ID3D12Resource &backBuffer)
+{
+	if (m_bIsRecording)
+	{
+		m_SamplesRendered++;
+		if (m_SamplesRendered == m_pUIController->GetCaptureSamplesPerFrame())
+		{
+			std::wstring filename = L"render/frame" + std::to_wstring(m_FramesRendered) + L".png";
+			DirectX::ScratchImage scratchImage;
+			DirectX::CaptureTexture(m_pCommandQueue.Get(), &backBuffer, false, scratchImage, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
+			DirectX::SaveToWICFile(*scratchImage.GetImage(0, 0, 0), DirectX::WIC_FLAGS_FORCE_SRGB, GUID_ContainerFormatPng, filename.c_str(), nullptr);
+
+			m_FramesRendered++;
+			m_SamplesRendered = 0;
+		}
+
+		if (m_FramesRendered == m_pUIController->GetCaptureLengthInSeconds() * m_pUIController->GetCaptureFramesPerSecond())
+		{
+			StopRecording();
+		}
+	}
 }

@@ -829,7 +829,9 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 	if (m_CachedOutputSettings.m_EnableNormalMaps != outputSettings.m_EnableNormalMaps ||
 		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
-		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth)
+		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
+		m_CachedOutputSettings.m_fogSettings.ScatterDirection != outputSettings.m_fogSettings.ScatterDirection ||
+		m_CachedOutputSettings.m_fogSettings.ScatterDistance != outputSettings.m_fogSettings.ScatterDistance)
 	{
 		m_bInvalidateHistory = true;
 	}
@@ -1002,6 +1004,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.DOFApertureWidth = outputSettings.m_cameraSettings.m_ApertureWidth;
 	constants.InvalidateHistory = m_bInvalidateHistory;
 	constants.FireflyClampValue = outputSettings.m_denoiserSettings.m_fireflyClampValue;
+	constants.fogScatterDistance = outputSettings.m_fogSettings.ScatterDistance;
+	constants.fogScatterDirection = outputSettings.m_fogSettings.ScatterDirection;
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
@@ -1133,7 +1137,10 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 
 	if (m_mouseX != mouseX || m_mouseY != mouseY)
 	{
-		bCameraMoved = true;
+		if (!cameraSettings.m_ignoreMouse)
+		{
+			bCameraMoved = true;
+		}
 		m_mouseX = mouseX;
 		m_mouseY = mouseY;
 	}
