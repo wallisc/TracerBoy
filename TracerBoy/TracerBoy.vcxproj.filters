@@ -77,6 +77,9 @@
     <ClInclude Include="SharedRaytracing.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="SharedPostProcessStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">

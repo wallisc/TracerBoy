@@ -1,5 +1,6 @@
 #include "pch.h"
 
+#include "SharedPostProcessStructs.h"
 #include "PostProcessCS.h"
 #include "ClearAOVCS.h"
 #include "RayGen.h"
@@ -504,7 +505,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		outputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[PostProcessRootSignatureParameters::InputTexture].InitAsDescriptorTable(1, &InputTextureDescriptor);
 		Parameters[PostProcessRootSignatureParameters::OutputTexture].InitAsDescriptorTable(1, &outputTextureDescriptor);
-		Parameters[PostProcessRootSignatureParameters::Constants].InitAsConstants(6, 0);
+		Parameters[PostProcessRootSignatureParameters::Constants].InitAsConstants(sizeof(PostProcessConstants) / sizeof(UINT32), 0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = PostProcessRootSignatureParameters::NumParameters;
@@ -1077,21 +1078,21 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
 		auto& postProcessSettings = outputSettings.m_postProcessSettings;
-		UINT32 constants[] = { 
-			static_cast<UINT32>(outputDesc.Width), static_cast<UINT32>(outputDesc.Height), 
-			++m_FramesRendered, 
-			*(UINT*)&postProcessSettings.m_ExposureMultiplier,
-			postProcessSettings.m_bEnableToneMapping,
-			postProcessSettings.m_bEnableGammaCorrection 
-		};
-		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, ARRAYSIZE(constants), constants, 0);
+		PostProcessConstants postProcessConstants;
+		postProcessConstants.Resolution.x = static_cast<UINT32>(outputDesc.Width);
+		postProcessConstants.Resolution.y = static_cast<UINT32>(outputDesc.Height);
+		postProcessConstants.ExposureMultiplier = postProcessSettings.m_ExposureMultiplier;
+		postProcessConstants.UseGammaCorrection = postProcessSettings.m_bEnableGammaCorrection;
+		postProcessConstants.UseToneMapping = postProcessSettings.m_bEnableToneMapping;
+
+		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, sizeof(postProcessConstants) / sizeof(UINT32), &postProcessConstants, 0);
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::InputTexture,
 			PostProcessInput);
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::OutputTexture,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV));
-		commandList.Dispatch(constants[0], constants[1], 1);
+		commandList.Dispatch(postProcessConstants.Resolution.x, postProcessConstants.Resolution.y, 1);
 	}
 
 	{

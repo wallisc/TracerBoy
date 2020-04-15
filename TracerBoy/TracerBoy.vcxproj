@@ -179,6 +179,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="SharedPostProcessStructs.h" />
     <ClInclude Include="SharedRaytracing.h" />
     <ClInclude Include="SharedShaderStructs.h" />
     <ClInclude Include="Tonemap.h" />

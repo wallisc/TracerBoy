@@ -124,11 +124,20 @@ public:
 		float ScatterDirection;
 	};
 
+	struct PostProcessSettings
+	{
+		float m_ExposureMultiplier;
+		bool m_bEnableToneMapping;
+		bool m_bEnableGammaCorrection;
+	};
+
+
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
-		float m_ExposureMultiplier;
 		bool m_EnableNormalMaps;
+
+		PostProcessSettings m_postProcessSettings;
 		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
 		FogSettings m_fogSettings;
@@ -138,9 +147,13 @@ public:
 	{
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
-		outputSettings.m_ExposureMultiplier = 1.0f;
 		outputSettings.m_EnableNormalMaps = false;
 		
+		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
+		postProcessSettings.m_ExposureMultiplier = 1.0f;
+		postProcessSettings.m_bEnableToneMapping = true;
+		postProcessSettings.m_bEnableGammaCorrection = true;
+
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
 		cameraSettings.m_DOFFocalDistance = 0.0f;
@@ -155,7 +168,7 @@ public:
 		denoiserSettings.m_fireflyClampValue = 3.0f;
 
 		FogSettings& fogSettings = outputSettings.m_fogSettings;
-		fogSettings.ScatterDistance = 10.0f;
+		fogSettings.ScatterDistance = 0.0f;
 		fogSettings.ScatterDirection = 0.0f;
 
 		return outputSettings;

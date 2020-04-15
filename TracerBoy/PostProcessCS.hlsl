@@ -1,12 +1,10 @@
+#define HLSL
 #include "Tonemap.h"
+#include "SharedPostProcessStructs.h"
 
 cbuffer RootConstants
 {
-	uint2 Resolution;
-	uint FramesRendered;
-	float ExposureMultiplier;
-	uint UseToneMapping;
-	uint UseGammaCorrection;
+	PostProcessConstants Constants;
 }
 
 Texture2D InputTexture;
@@ -27,18 +25,18 @@ float3 GammaCorrect(float3 color)
 [numthreads(1, 1, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
 {
-	if (DTid.x >= Resolution.x || DTid.y >= Resolution.y) return;
+	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
-	float FrameCount = InputTexture[float2(0, Resolution.y - 1)].x;
+	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
 	float3 outputColor = InputTexture[DTid] / FrameCount;
 	
-	if (UseToneMapping)
+	if (Constants.UseToneMapping)
 	{
-		outputColor *= ExposureMultiplier;
+		outputColor *= Constants.ExposureMultiplier;
 		outputColor = Tonemap(outputColor);
 	}
 	
-	if (UseGammaCorrection)
+	if (Constants.UseGammaCorrection)
 	{
 		outputColor = GammaCorrect(outputColor);
 	}
