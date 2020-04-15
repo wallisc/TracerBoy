@@ -5,6 +5,8 @@ cbuffer RootConstants
 	uint2 Resolution;
 	uint FramesRendered;
 	float ExposureMultiplier;
+	uint UseToneMapping;
+	uint UseGammaCorrection;
 }
 
 Texture2D InputTexture;
@@ -29,10 +31,17 @@ void main( uint2 DTid : SV_DispatchThreadID )
 
 	float FrameCount = InputTexture[float2(0, Resolution.y - 1)].x;
 	float3 outputColor = InputTexture[DTid] / FrameCount;
-	outputColor *= ExposureMultiplier;
-
-	outputColor = Tonemap(outputColor);
-	outputColor = GammaCorrect(outputColor);
+	
+	if (UseToneMapping)
+	{
+		outputColor *= ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+	
+	if (UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
 
 	OutputTexture[DTid] = float4(outputColor, 1);
 }

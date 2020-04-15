@@ -97,7 +97,6 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
-	ImGui::InputFloat("Exposure Multiplier", &m_outputSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
 
 
@@ -128,6 +127,15 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Scatter direction", &fogSettings.ScatterDirection, 0.01f, .1f, "%.3f");
 		ImGui::TreePop();
 	}
+
+	if (ImGui::TreeNode("Post Processing"))
+	{
+		auto& postProcessSettings = m_outputSettings.m_postProcessSettings;
+		ImGui::InputFloat("Exposure Multiplier", &postProcessSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
+		ImGui::Checkbox("Enable Tonemapping", &postProcessSettings.m_bEnableToneMapping);
+		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
+	}
+
 
 	if (ImGui::TreeNode("Capture"))
 	{
