@@ -67,25 +67,31 @@ struct Camera
 
 struct ScopedResourceBarrier
 {
-	ScopedResourceBarrier(ID3D12GraphicsCommandList& commandList, ID3D12Resource& resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState) :
+	ScopedResourceBarrier(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState) :
 		m_commandList(commandList),
-		m_resource(resource),
+		m_pResource(pResource),
 		m_beforeState(beforeState),
 		m_afterState(afterState)
 	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_beforeState, m_afterState);
-		m_commandList.ResourceBarrier(1, &barrier);
+		if (m_pResource)
+		{
+			auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pResource, m_beforeState, m_afterState);
+			m_commandList.ResourceBarrier(1, &barrier);
+		}
 	}
 
 	~ScopedResourceBarrier()
 	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(&m_resource, m_afterState, m_beforeState);
-		m_commandList.ResourceBarrier(1, &barrier);
+		if (m_pResource)
+		{
+			auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pResource, m_afterState, m_beforeState);
+			m_commandList.ResourceBarrier(1, &barrier);
+		}
 	}
 
 private:
 	ID3D12GraphicsCommandList& m_commandList;
-	ID3D12Resource& m_resource;
+	ID3D12Resource* m_pResource;
 	D3D12_RESOURCE_STATES m_beforeState;
 	D3D12_RESOURCE_STATES m_afterState;
 };
@@ -186,7 +192,7 @@ public:
 	friend class TextureAllocator;
 private:
 	void UpdateOutputSettings(const OutputSettings& outputSettings);
-	ID3D12Resource* GetOutputResource(OutputType outputType);
+	D3D12_GPU_DESCRIPTOR_HANDLE GetOutputSRV(OutputType outputType);
 
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);

@@ -947,20 +947,38 @@ void TracerBoy::AllocateBufferWithData(const void* pData, UINT dataSize, ComPtr<
 	pBuffer->Unmap(0, nullptr);
 }
 
-ID3D12Resource* TracerBoy::GetOutputResource(OutputType outputType)
+D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 {
+	UINT slot;
 	switch (outputType)
 	{
 	case OutputType::Lit:
 	default:
-		return m_pPostProcessOutput.Get();
+		slot = ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex;
+		break;
 	case OutputType::Albedo:
-		return m_pAOVAlbedo.Get();
+		slot = ViewDescriptorHeapSlots::AOVAlbedoSRV;
+		break;
 	case OutputType::Normals:
-		return m_pAOVNormals.Get();
+		slot = ViewDescriptorHeapSlots::AOVNormalsSRV;
+		break;
 	}
+	return GetGPUDescriptorHandle(slot);
 }
 
+UINT ShaderOutputType(TracerBoy::OutputType type)
+{
+	switch (type)
+	{
+	default:
+	case TracerBoy::OutputType::Lit:
+		return OUTPUT_TYPE_LIT;
+	case TracerBoy::OutputType::Normals:
+		return OUTPUT_TYPE_NORMAL;
+	case TracerBoy::OutputType::Albedo:
+		return OUTPUT_TYPE_ALBEDO;
+	}
+}
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, const OutputSettings& outputSettings)
 {
@@ -1051,16 +1069,16 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVSDRHistogram.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVAlbedo.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex);
-	if(outputSettings.m_denoiserSettings.m_bEnabled)
+	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);
+	if(outputSettings.m_denoiserSettings.m_bEnabled && outputSettings.m_OutputType == OutputType::Lit)
 	{
-		ScopedResourceBarrier normalsBarrier(commandList, *m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		ScopedResourceBarrier intersectPositionsBarrier(commandList, *m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		ScopedResourceBarrier histogramBarrier(commandList, *m_pAOVSDRHistogram.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 		PostProcessInput = m_pDenoiserPass->Run(commandList,
 			m_pDenoiserBuffers,
 			outputSettings.m_denoiserSettings,
@@ -1084,6 +1102,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		postProcessConstants.ExposureMultiplier = postProcessSettings.m_ExposureMultiplier;
 		postProcessConstants.UseGammaCorrection = postProcessSettings.m_bEnableGammaCorrection;
 		postProcessConstants.UseToneMapping = postProcessSettings.m_bEnableToneMapping;
+		postProcessConstants.OutputType = ShaderOutputType(outputSettings.m_OutputType);
 
 		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, sizeof(postProcessConstants) / sizeof(UINT32), &postProcessConstants, 0);
 		commandList.SetComputeRootDescriptorTable(
@@ -1096,19 +1115,23 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 
 	{
-		ID3D12Resource* pResourceToPresent = GetOutputResource(outputSettings.m_OutputType);
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(pResourceToPresent, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pPostProcessOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST)
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
-		commandList.CopyResource(pBackBuffer, pResourceToPresent);
+		commandList.CopyResource(pBackBuffer, m_pPostProcessOutput.Get());
 
 		D3D12_RESOURCE_BARRIER postCopyBarriers[] =
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(pResourceToPresent, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer,D3D12_RESOURCE_STATE_COPY_DEST,  D3D12_RESOURCE_STATE_RENDER_TARGET)
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pPostProcessOutput.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer,D3D12_RESOURCE_STATE_COPY_DEST,  D3D12_RESOURCE_STATE_RENDER_TARGET),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVSDRHistogram.Get(),  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVAlbedo.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
 	}

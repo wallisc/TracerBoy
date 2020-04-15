@@ -21,24 +21,67 @@ float3 GammaCorrect(float3 color)
     DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
+float3 ProcessLit(float4 color)
+{
+	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
+	float3 outputColor = color / FrameCount;
+
+	if (Constants.UseToneMapping)
+	{
+		outputColor *= Constants.ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+
+	if (Constants.UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
+	return outputColor;
+}
+
+float3 ProcessAlbedo(float4 color)
+{
+	float3 outputColor = color;
+	if (Constants.UseToneMapping)
+	{
+		outputColor *= Constants.ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+
+	if (Constants.UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
+	return outputColor;
+}
+
+float3 ProcessNormal(float4 color)
+{
+	uint frameCount = color.w;
+	float3 summedNormals = color.xyz;
+	return frameCount > 0 ? normalize(summedNormals / frameCount) : float3(0, 0, 0);
+}
+
 [RootSignature(ComputeRS)]
 [numthreads(1, 1, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
 {
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
-	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
-	float3 outputColor = InputTexture[DTid] / FrameCount;
-	
-	if (Constants.UseToneMapping)
+	float4 colorData = InputTexture[DTid.xy];
+	float3 outputColor;
+	switch (Constants.OutputType)
 	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
-	
-	if (Constants.UseGammaCorrection)
-	{
-		outputColor = GammaCorrect(outputColor);
+	case OUTPUT_TYPE_LIT:
+	default:
+		outputColor = ProcessLit(colorData);
+		break;
+	case OUTPUT_TYPE_ALBEDO:
+		outputColor = ProcessAlbedo(colorData);
+		break;
+	case OUTPUT_TYPE_NORMAL:
+		outputColor = ProcessNormal(colorData);
+		break;
 	}
 
 	OutputTexture[DTid] = float4(outputColor, 1);

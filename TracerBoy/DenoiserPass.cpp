@@ -66,7 +66,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 	UINT InputDenoiserBufferIndex = 1;
 	for (UINT i = 0; i < denoiserSettings.m_waveletIterations; i++)
 	{
-		ScopedResourceBarrier denoiserBarrier(commandList, *DenoiserBuffers[InputDenoiserBufferIndex].m_pResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ScopedResourceBarrier denoiserBarrier(commandList, DenoiserBuffers[InputDenoiserBufferIndex].m_pResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		DenoiserConstants constants;
 		constants.Resolution.x = width;
