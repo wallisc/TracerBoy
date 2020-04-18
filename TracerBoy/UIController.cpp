@@ -93,7 +93,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::Begin("TracerBoy");
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
-	const char* OutputTypes[] = { "Lit", "Albedo", "Normals" };
+	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance Variance" };
 
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
@@ -136,6 +136,10 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
 	}
 
+	if (ImGui::TreeNode("Debug"))
+	{
+		ImGui::InputFloat("Luminance Variance Multiplier", &m_outputSettings.m_VarianceMultiplier, 0.1f, 1.0f, "%.2f");
+	}
 
 	if (ImGui::TreeNode("Capture"))
 	{

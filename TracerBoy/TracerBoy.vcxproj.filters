@@ -36,6 +36,9 @@
     <ClCompile Include="DenoiserPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CalculateVariancePass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -80,6 +83,12 @@
     <ClInclude Include="SharedPostProcessStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="CalculateVariancePass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CalculateVarianceSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -101,6 +110,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="AnyHit.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="CalculateVarianceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

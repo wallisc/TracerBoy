@@ -5,7 +5,7 @@
 Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
 Texture2D AOVIntersectPosition : register(t2);
-StructuredBuffer<SDRHistogram> AOVSDRHistogram: register(t3);
+StructuredBuffer<CachedLuminance> AOVCachedLuminance: register(t3);
 Texture2D UndenoisedTexture : register(t4);
 
 RWTexture2D<float4> OutputTexture;
@@ -17,8 +17,10 @@ cbuffer DenoiserCB
 
 #define KERNEL_WIDTH 5
 
-float CalculateVariance(SDRHistogram histogram)
+float CalculateVariance(CachedLuminance cachedLuminance)
 {
+	return 0.0f;
+#if 0
 	float bucketSize = 1.0f / float(NUM_HISTOGRAM_BUCKETS);
 
 	uint totalCounts = 0;
@@ -45,6 +47,7 @@ float CalculateVariance(SDRHistogram histogram)
 	}
 
 	return lumaVarianceSum / float(totalCounts);
+#endif
 }
 
 float3 GetNormal(int2 coord)
@@ -106,7 +109,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float4 intersectedPositionData = AOVIntersectPosition[DTid.xy];
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
-	float luma = HDRToLuma(UndenoisedTexture[DTid.xy] / UndenoisedFrameCount);
+	float luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedFrameCount);
 
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);

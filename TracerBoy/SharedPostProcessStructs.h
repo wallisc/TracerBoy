@@ -13,4 +13,5 @@ struct PostProcessConstants
 	uint UseToneMapping;
 	uint UseGammaCorrection;
 	uint OutputType;
+	float VarianceMultiplier;
 };

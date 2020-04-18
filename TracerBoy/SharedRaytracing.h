@@ -13,8 +13,8 @@ cbuffer ConfigCB : register(b1)
 RWTexture2D<float4> OutputTexture : register(u0);
 RWTexture2D<float4> AOVNormals : register(u1);
 RWTexture2D<float4> AOVWorldPosition : register(u2);
-RWStructuredBuffer<SDRHistogram> AOVSDRHistogram : register(u3);
-RWTexture2D<float4> AOVAlbedo: register(u4);
+RWStructuredBuffer<CachedLuminance> AOVCachedLuminance : register(u3);
+RWTexture2D<float4> AOVAlbedo: register(u5);
 
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);

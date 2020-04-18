@@ -62,6 +62,12 @@ float3 ProcessNormal(float4 color)
 	return frameCount > 0 ? normalize(summedNormals / frameCount) : float3(0, 0, 0);
 }
 
+float3 ProcessLuminanceVariance(float4 color)
+{
+	uint frameCount = color.g;
+	return frameCount > 0 ? Constants.VarianceMultiplier * float3(color.r / frameCount, 0, 0) : float3(0, 0, 0);
+}
+
 [RootSignature(ComputeRS)]
 [numthreads(1, 1, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
@@ -81,6 +87,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_NORMAL:
 		outputColor = ProcessNormal(colorData);
+		break;
+	case OUTPUT_TYPE_VARIANCE:
+		outputColor = ProcessLuminanceVariance(colorData);
 		break;
 	}
 

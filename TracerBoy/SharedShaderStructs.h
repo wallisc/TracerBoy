@@ -22,10 +22,10 @@ struct RayPayload
 	float padding2;
 };
 
-#define NUM_HISTOGRAM_BUCKETS 16
-struct SDRHistogram
+#define NUM_CACHED_LUMINANCE_VALUES 8
+struct CachedLuminance
 {
-	uint Count[NUM_HISTOGRAM_BUCKETS];
+	float Luminance[NUM_CACHED_LUMINANCE_VALUES];
 };
 
 struct PerFrameConstants
@@ -46,6 +46,8 @@ struct PerFrameConstants
 
 	float fogScatterDistance;
 	float fogScatterDirection;
+
+	uint GlobalFrameCount;
 };
 
 struct ConfigConstants

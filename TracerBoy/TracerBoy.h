@@ -114,7 +114,8 @@ public:
 	{
 		Lit,
 		Albedo,
-		Normals
+		Normals,
+		LuminanceVariance
 	};
 
 	struct CameraOutputSettings
@@ -141,6 +142,8 @@ public:
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
+		float m_VarianceMultiplier;
+
 		bool m_EnableNormalMaps;
 
 		PostProcessSettings m_postProcessSettings;
@@ -153,6 +156,7 @@ public:
 	{
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
+		outputSettings.m_VarianceMultiplier = 1.0f;
 		outputSettings.m_EnableNormalMaps = false;
 		
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
@@ -295,7 +299,7 @@ private:
 	ComPtr<ID3D12PipelineState> m_pClearAOVs;
 
 	UINT32 m_mouseX, m_mouseY;
-	UINT m_FramesRendered;
+	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
@@ -304,10 +308,11 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVAlbedo;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
-	ComPtr<ID3D12Resource> m_pAOVSDRHistogram;
+	ComPtr<ID3D12Resource> m_pAOVCachedLuminance;
+	ComPtr<ID3D12Resource> m_pAOVSummedVariance;
 
-	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE);
-	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle);
+	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
+	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 	enum ViewDescriptorHeapSlots
 	{
@@ -320,13 +325,15 @@ private:
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
-		AOVSDRHistogramUAV,
+		AOVCachedLuminanceUAV,
+		AOVSummedVarianceUAV,
 		AOVAlbedoUAV,
 		AOVLastUAVSlot = AOVAlbedoUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
 		AOVWorldPositionSRV,
-		AOVSDRHistogramSRV,
+		AOVCachedLuminanceSRV,
+		AOVSummedVarianceSRV,
 		AOVAlbedoSRV,
 		AOVLastSRVSlot = AOVAlbedoSRV,
 		PathTracerOutputSRVBaseSlot,
@@ -343,6 +350,7 @@ private:
 
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
+	std::unique_ptr<CalculateVariancePass> m_pCalculateVariancePass;
 };
 
 class TextureAllocator

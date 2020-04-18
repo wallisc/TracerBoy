@@ -164,14 +164,14 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 	AOVWorldPosition[DispatchRaysIndex().xy] = float4(worldPosition, distanceToNeighbor);
 }
 
-void OutputSDRHistogram(float3 hdrColor)
+void OutputSampleColor(float3 color)
 {
 	int outputIndex = DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x;
-	float3 luma = SDRToLuma(Tonemap(hdrColor));
-	SDRHistogram histogram = AOVSDRHistogram[outputIndex];
-	int lumaIndex = luma / float(NUM_HISTOGRAM_BUCKETS);
-	histogram.Count[lumaIndex]++;
-	AOVSDRHistogram[outputIndex] = histogram;
+	float luma = ColorToLuma(color);
+	CachedLuminance cachedLuminance = AOVCachedLuminance[outputIndex];
+	int lumaIndex = perFrameConstants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
+	cachedLuminance.Luminance[lumaIndex] = luma;
+	AOVCachedLuminance[outputIndex] = cachedLuminance;
 }
 
 bool IsFogEnabled()
@@ -195,6 +195,5 @@ void RayGen()
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 	float4 outputColor = PathTrace(uv * GetResolution().xy);
-	OutputSDRHistogram(outputColor);
 	OutputTexture[DispatchRaysIndex().xy] = outputColor;
 }

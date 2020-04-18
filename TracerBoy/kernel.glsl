@@ -1546,7 +1546,10 @@ vec4 PathTrace(in vec2 pixelCoord)
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay, neighborCameraRay);
-    return vec4(accumulatedColor.rgb + min(result.rgb, perFrameConstants.FireflyClampValue), result.w);
+    vec3 outputColor = min(result.rgb, perFrameConstants.FireflyClampValue);
+    OutputSampleColor(outputColor);
+
+    return vec4(accumulatedColor.rgb + outputColor, result.w);
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
