@@ -58,6 +58,7 @@ float CalculateWeight(
 	int FrameCount)
 {
 	float luma = ColorToLuma(UndenoisedTexture[coord] / FrameCount);
+	float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
 	if (Constants.LumaWeightingMultiplier > 100.0f || Constants.GlobalFrameCount <= 2) lumaWeight = 1.0f;
 
 	float3 normal = GetNormal(coord);
