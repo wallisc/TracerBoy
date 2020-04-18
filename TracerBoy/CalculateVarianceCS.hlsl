@@ -28,5 +28,5 @@ void main( uint3 DTid : SV_DispatchThreadID )
 		summedVariance += (meanLuma - cachedLuminance.Luminance[i]) * (meanLuma - cachedLuminance.Luminance[i]);
 	}
 
-	AOVSummedVariance[DTid.xy] = AOVSummedVariance[DTid.xy] + float2(summedVariance / float(NUM_CACHED_LUMINANCE_VALUES), 1.0);
+	AOVSummedVariance[DTid.xy] = AOVSummedVariance[DTid.xy] + float2(summedVariance, NUM_CACHED_LUMINANCE_VALUES);
 }

@@ -1084,10 +1084,11 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
-	bool bLuminanceCacheFull = m_SamplesRendered % NUM_CACHED_LUMINANCE_VALUES == NUM_CACHED_LUMINANCE_VALUES - 1;
+	m_SamplesRendered++;
+	bool bLuminanceCacheFull = m_SamplesRendered % NUM_CACHED_LUMINANCE_VALUES == 0;
 	if (bLuminanceCacheFull)
 	{
-		ScopedResourceBarrier summedVarianceBarrier(commandList, m_pAOVCachedLuminance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ScopedResourceBarrier summedVarianceBarrier(commandList, m_pAOVSummedVariance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pCalculateVariancePass->Run(commandList,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex),
@@ -1106,6 +1107,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceSRV),
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedVarianceSRV),
+			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
 	}
@@ -1159,7 +1162,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	m_ActiveFrameIndex = (m_ActiveFrameIndex + 1) % MaxActiveFrames;
 	m_bInvalidateHistory = false;
-	m_SamplesRendered++;
 }
 
 

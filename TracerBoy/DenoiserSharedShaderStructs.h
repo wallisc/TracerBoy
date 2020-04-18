@@ -10,5 +10,6 @@ struct DenoiserConstants
 	float NormalWeightingExponential;
 	float IntersectionPositionWeightingMultiplier;
 	float LumaWeightingMultiplier;
+	uint GlobalFrameCount;
 };
 

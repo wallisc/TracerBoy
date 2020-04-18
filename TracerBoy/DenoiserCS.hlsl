@@ -6,7 +6,8 @@ Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
 Texture2D AOVIntersectPosition : register(t2);
 StructuredBuffer<CachedLuminance> AOVCachedLuminance: register(t3);
-Texture2D UndenoisedTexture : register(t4);
+Texture2D AOVSummedVariance : register(t4);
+Texture2D UndenoisedTexture : register(t5);
 
 RWTexture2D<float4> OutputTexture;
 
@@ -17,37 +18,25 @@ cbuffer DenoiserCB
 
 #define KERNEL_WIDTH 5
 
-float CalculateVariance(CachedLuminance cachedLuminance)
+float GetVariance(uint2 coord, float luma)
 {
-	return 0.0f;
-#if 0
-	float bucketSize = 1.0f / float(NUM_HISTOGRAM_BUCKETS);
-
-	uint totalCounts = 0;
-	float lumaSum = 0.0f;
-
-	[unroll]
-	for (uint i = 0; i < NUM_HISTOGRAM_BUCKETS; i++)
+	if (Constants.GlobalFrameCount <= 2)
 	{
-		float lumaValue = bucketSize * i + bucketSize * 0.5f;
-		uint count = histogram.Count[i];
-		lumaSum += count * lumaValue;
-		totalCounts += count;
+		return 0.0f;
 	}
 
-	float lumaAverage = lumaSum / float(totalCounts);
-	float lumaVarianceSum = 0.0f;
+	float2 summedVariance = AOVSummedVariance[coord];
+	uint numCachedValues = Constants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
+	CachedLuminance cachedLuminance = AOVCachedLuminance[coord.x + coord.y * Constants.Resolution.x];
 
-	[unroll]
-	for (uint i = 0; i < NUM_HISTOGRAM_BUCKETS; i++)
+	float cachedSummedVariance = 0.0f;
+	for (uint i = 0; i < numCachedValues; i++)
 	{
-		float lumaValue = bucketSize * i + bucketSize * 0.5f;
-		uint count = histogram.Count[i];
-		lumaVarianceSum += count * (lumaAverage - lumaValue) * (lumaAverage - lumaValue);
+		cachedSummedVariance += (luma - cachedLuminance.Luminance[i]) * (luma - cachedLuminance.Luminance[i]);
 	}
+	summedVariance += float2(cachedSummedVariance, numCachedValues);
 
-	return lumaVarianceSum / float(totalCounts);
-#endif
+	return summedVariance.r / (summedVariance.g - 1.0);
 }
 
 float3 GetNormal(int2 coord)
@@ -60,6 +49,7 @@ float3 GetNormal(int2 coord)
 
 float CalculateWeight(
 	float centerLuma,
+	float centerVarianceSqrt,
 	float3 centerNormal, 
 	float3 centerIntersectPosition, 
 	float distanceToNeighborPixel, 
@@ -67,13 +57,8 @@ float CalculateWeight(
 	int2 offset,
 	int FrameCount)
 {
-#if 0
-	SDRHistogram histogram = AOVSDRHistogram[coord.x + coord.y * Constants.Resolution.x];
-	float lumaVariance = CalculateVariance(histogram);
-	float luma = HDRToLuma(UndenoisedTexture[coord] / FrameCount);
-	float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * sqrt(lumaVariance) + EPSILON));
-#endif
-	float lumaWeight = 1.0f;
+	float luma = ColorToLuma(UndenoisedTexture[coord] / FrameCount);
+	if (Constants.LumaWeightingMultiplier > 100.0f || Constants.GlobalFrameCount <= 2) lumaWeight = 1.0f;
 
 	float3 normal = GetNormal(coord);
 	float normalWeightExponential = 128.0f;
@@ -110,6 +95,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
 	float luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedFrameCount);
+	float varianceSqrt = sqrt(GetVariance(DTid.xy, luma));
 
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);
@@ -128,7 +114,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 					continue;
 				}
 
-				float weight = CalculateWeight(luma, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord, UndenoisedFrameCount);
+				float weight = CalculateWeight(luma, varianceSqrt, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord, UndenoisedFrameCount);
 
 				accumulatedColor += weight * InputTexture[coord].xyz / FrameCount;
 				weightedSum += weight;

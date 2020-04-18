@@ -22,7 +22,9 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
-		D3D12_GPU_DESCRIPTOR_HANDLE sdrHistogramSRV,
+		D3D12_GPU_DESCRIPTOR_HANDLE cachedLuminanceSRV,
+		D3D12_GPU_DESCRIPTOR_HANDLE summedVarianceSRV,
+		UINT globalFrameCount,
 		UINT width,
 		UINT height);
 
@@ -36,7 +38,8 @@ private:
 		InputSRV,
 		AOVNormal,
 		AOVIntersectPosition,
-		AOVSDRHistogram,
+		AOVCachedLuminance,
+		AOVSummedVariance,
 		UndenoisedInputSRV,
 		OutputUAV,
 		NumRootSignatureParameters
