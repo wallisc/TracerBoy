@@ -138,7 +138,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	if (ImGui::TreeNode("Debug"))
 	{
-		ImGui::InputFloat("Luminance Variance Multiplier", &m_outputSettings.m_VarianceMultiplier, 0.1f, 1.0f, "%.2f");
+		auto& debugSettings = m_outputSettings.m_debugSettings;
+		ImGui::InputFloat("Luminance Variance Multiplier", &debugSettings.m_VarianceMultiplier, 0.1f, 1.0f, "%.2f");
+		ImGui::InputInt("Max Samples to render", &debugSettings.m_SampleLimit, 1, 16);
 	}
 
 	if (ImGui::TreeNode("Capture"))

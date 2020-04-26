@@ -139,14 +139,20 @@ public:
 		bool m_bEnableGammaCorrection;
 	};
 
+	struct DebugSettings 		
+	{
+		int m_SampleLimit;
+		float m_VarianceMultiplier;
+	};
+
 
 	struct OutputSettings
 	{
 		OutputType m_OutputType;
-		float m_VarianceMultiplier;
 
 		bool m_EnableNormalMaps;
 
+		DebugSettings m_debugSettings;
 		PostProcessSettings m_postProcessSettings;
 		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
@@ -157,9 +163,12 @@ public:
 	{
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
-		outputSettings.m_VarianceMultiplier = 1.0f;
 		outputSettings.m_EnableNormalMaps = false;
-		
+
+		DebugSettings debugSettings = outputSettings.m_debugSettings;
+		debugSettings.m_VarianceMultiplier = 1.0f;
+		debugSettings.m_SampleLimit = 0;
+
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
 		postProcessSettings.m_bEnableToneMapping = true;

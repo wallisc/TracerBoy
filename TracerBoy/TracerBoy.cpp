@@ -991,6 +991,7 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, const OutputSettings& outputSettings)
 {
+	bool bRender = outputSettings.m_debugSettings.m_SampleLimit == 0 || m_SamplesRendered < outputSettings.m_debugSettings.m_SampleLimit;
 	UpdateOutputSettings(outputSettings);
 
 	ResizeBuffersIfNeeded(pBackBuffer);
@@ -1075,7 +1076,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
 	dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 	dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry
-	pRaytracingCommandList->DispatchRays(&dispatchDesc);
+
+	if (bRender)
+	{
+		pRaytracingCommandList->DispatchRays(&dispatchDesc);
+		m_SamplesRendered++;
+	}
 
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
@@ -1087,7 +1093,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
-	m_SamplesRendered++;
 	bool bLuminanceCacheFull = m_SamplesRendered % NUM_CACHED_LUMINANCE_VALUES == 0;
 	if (bLuminanceCacheFull)
 	{
@@ -1129,7 +1134,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		postProcessConstants.UseGammaCorrection = postProcessSettings.m_bEnableGammaCorrection;
 		postProcessConstants.UseToneMapping = postProcessSettings.m_bEnableToneMapping;
 		postProcessConstants.OutputType = ShaderOutputType(outputSettings.m_OutputType);
-		postProcessConstants.VarianceMultiplier = outputSettings.m_VarianceMultiplier;
+		postProcessConstants.VarianceMultiplier = outputSettings.m_debugSettings.m_VarianceMultiplier;
 
 		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, sizeof(postProcessConstants) / sizeof(UINT32), &postProcessConstants, 0);
 		commandList.SetComputeRootDescriptorTable(
@@ -1163,7 +1168,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		commandList.ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
 	}
 
-	m_ActiveFrameIndex = (m_ActiveFrameIndex + 1) % MaxActiveFrames;
+	if (bRender)
+	{
+		m_ActiveFrameIndex = (m_ActiveFrameIndex + 1) % MaxActiveFrames;
+	}
 	m_bInvalidateHistory = false;
 }
 
