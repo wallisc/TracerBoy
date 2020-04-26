@@ -39,6 +39,25 @@ float3 ProcessLit(float4 color)
 	return outputColor;
 }
 
+float3 ProcessLuminance(float4 color) {
+	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
+	float3 outputColor = color / FrameCount;
+
+	if (Constants.UseToneMapping)
+	{
+		outputColor *= Constants.ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+
+	outputColor = ColorToLuma(outputColor);
+
+	if (Constants.UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
+	return outputColor;
+}
+
 float3 ProcessAlbedo(float4 color)
 {
 	float3 outputColor = color;
@@ -87,6 +106,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_NORMAL:
 		outputColor = ProcessNormal(colorData);
+		break;
+	case OUTPUT_TYPE_LUMINANCE:
+		outputColor = ProcessLuminance(colorData);
 		break;
 	case OUTPUT_TYPE_VARIANCE:
 		outputColor = ProcessLuminanceVariance(colorData);

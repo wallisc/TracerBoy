@@ -93,7 +93,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::Begin("TracerBoy");
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
-	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance Variance" };
+	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance", "Luminance Variance" };
 
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");

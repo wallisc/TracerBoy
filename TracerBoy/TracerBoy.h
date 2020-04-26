@@ -115,6 +115,7 @@ public:
 		Lit,
 		Albedo,
 		Normals,
+		Luminance,
 		LuminanceVariance
 	};
 

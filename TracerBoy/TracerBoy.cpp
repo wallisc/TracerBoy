@@ -954,6 +954,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 	switch (outputType)
 	{
 	case OutputType::Lit:
+	case OutputType::Luminance:
 	default:
 		slot = ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex;
 		break;
@@ -983,6 +984,8 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 		return OUTPUT_TYPE_ALBEDO;
 	case TracerBoy::OutputType::LuminanceVariance:
 		return OUTPUT_TYPE_VARIANCE;
+	case TracerBoy::OutputType::Luminance:
+		return OUTPUT_TYPE_LUMINANCE;
 	}
 }
 
