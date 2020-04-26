@@ -20,23 +20,58 @@ cbuffer DenoiserCB
 
 float GetVariance(uint2 coord, float luma)
 {
-	if (Constants.GlobalFrameCount <= 2)
+	float neighborVariance = 0.0;
+	float temporalVariance = 0.0;
+	const uint cFramesToRelyOnNeighbor = 8;
+	if (Constants.GlobalFrameCount <= cFramesToRelyOnNeighbor)
 	{
-		return 0.0f;
+		const int kernelWidth = 7;
+		uint count = 0;
+		float summedLuma = 0.0;
+		for (int x = -kernelWidth / 2; x < kernelWidth / 2; x++)
+		{
+			for (int y = -kernelWidth / 2; y < kernelWidth / 2; y++)
+			{
+				int2 sampleCoord = int2(coord)+int2(x, y);
+				if (sampleCoord.x < 0 || sampleCoord.y < 0 ||
+					sampleCoord.x >= Constants.Resolution.x || sampleCoord.y >= Constants.Resolution.y) continue;
+				summedLuma += ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount);
+				count++;
+			}
+		}
+		float  lumaMean = summedLuma / count;
+
+		float summedVariance = 0.0;
+		for (int x = -kernelWidth / 2; x < kernelWidth / 2; x++)
+		{
+			for (int y = -kernelWidth / 2; y < kernelWidth / 2; y++)
+			{
+				int2 sampleCoord = int2(coord)+int2(x, y);
+				if (sampleCoord.x < 0 || sampleCoord.y < 0 ||
+					sampleCoord.x >= Constants.Resolution.x || sampleCoord.y >= Constants.Resolution.y) continue;
+				summedVariance += (lumaMean - ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount)) * (lumaMean - ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount));
+			}
+		}
+
+		neighborVariance = summedVariance / (count - 1);
 	}
 
-	float2 summedVariance = AOVSummedVariance[coord];
-	uint numCachedValues = Constants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
-	CachedLuminance cachedLuminance = AOVCachedLuminance[coord.x + coord.y * Constants.Resolution.x];
-
-	float cachedSummedVariance = 0.0f;
-	for (uint i = 0; i < numCachedValues; i++)
+	if (Constants.GlobalFrameCount > 1)
 	{
-		cachedSummedVariance += (luma - cachedLuminance.Luminance[i]) * (luma - cachedLuminance.Luminance[i]);
-	}
-	summedVariance += float2(cachedSummedVariance, numCachedValues);
+		float2 summedVariance = AOVSummedVariance[coord];
+		uint numCachedValues = Constants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
+		CachedLuminance cachedLuminance = AOVCachedLuminance[coord.x + coord.y * Constants.Resolution.x];
 
-	return summedVariance.r / (summedVariance.g - 1.0);
+		float cachedSummedVariance = 0.0f;
+		for (uint i = 0; i < numCachedValues; i++)
+		{
+			cachedSummedVariance += (luma - cachedLuminance.Luminance[i]) * (luma - cachedLuminance.Luminance[i]);
+		}
+		summedVariance += float2(cachedSummedVariance, numCachedValues);
+		temporalVariance = summedVariance.r / (summedVariance.g - 1.0);
+	}
+
+	return lerp(neighborVariance, temporalVariance, min(float(Constants.GlobalFrameCount) / float(cFramesToRelyOnNeighbor), 1.0f));
 }
 
 float3 GetNormal(int2 coord)
@@ -59,7 +94,7 @@ float CalculateWeight(
 {
 	float luma = ColorToLuma(UndenoisedTexture[coord] / FrameCount);
 	float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
-	if (Constants.LumaWeightingMultiplier > 100.0f || Constants.GlobalFrameCount <= 2) lumaWeight = 1.0f;
+	if (Constants.LumaWeightingMultiplier > 100.0f) lumaWeight = 1.0f;
 
 	float3 normal = GetNormal(coord);
 	float normalWeightExponential = 128.0f;
