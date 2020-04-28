@@ -22,7 +22,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float FrameCount = PathTracingOutput[float2(0, Constants.Resolution.y - 1)].x;
 	
 	float neighborVariance = 0.0;
-	const uint cFramesToRelyOnNeighbor = 16;
+	const uint cFramesToRelyOnNeighbor = 4;
 	if (Constants.GlobalFrameCount <= cFramesToRelyOnNeighbor)
 	{
 		const int kernelWidth = 5;
@@ -55,7 +55,6 @@ void main( uint3 DTid : SV_DispatchThreadID )
 
 		neighborVariance = summedVariance / (count - 1);
 	}	
-	
 
 	float meanLuma = ColorToLuma(PathTracingOutput[DTid.xy] / FrameCount);
 	float lumaSquared = SummedLumaSquared[DTid.xy] / FrameCount;

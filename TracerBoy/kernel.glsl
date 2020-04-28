@@ -1113,7 +1113,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
-			    OutputPrimaryNormal(normal);
+			    OutputPrimaryNormal(detailNormal);
 			}
             float RayDirectionDotN = dot(normal, ray.direction);
             bool IsInsidePrimitve = RayDirectionDotN > 0.0;
