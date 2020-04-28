@@ -165,7 +165,7 @@ public:
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
 
-		DebugSettings debugSettings = outputSettings.m_debugSettings;
+		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
 		debugSettings.m_SampleLimit = 0;
 
@@ -318,8 +318,8 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVAlbedo;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
-	ComPtr<ID3D12Resource> m_pAOVCachedLuminance;
-	ComPtr<ID3D12Resource> m_pAOVSummedVariance;
+	ComPtr<ID3D12Resource> m_pAOVLumaSquared;
+	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 
 	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -335,17 +335,17 @@ private:
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
-		AOVCachedLuminanceUAV,
-		AOVSummedVarianceUAV,
+		AOVSummedLumaSquaredUAV,
 		AOVAlbedoUAV,
 		AOVLastUAVSlot = AOVAlbedoUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
 		AOVWorldPositionSRV,
-		AOVCachedLuminanceSRV,
-		AOVSummedVarianceSRV,
+		AOVSummedLumaSquaredSRV,
 		AOVAlbedoSRV,
 		AOVLastSRVSlot = AOVAlbedoSRV,
+		LuminanceVarianceSRV,
+		LuminanceVarianceUAV,
 		PathTracerOutputSRVBaseSlot,
 		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		PathTracerOutputUAVBaseSlot,

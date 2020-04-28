@@ -965,7 +965,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 		slot = ViewDescriptorHeapSlots::AOVNormalsSRV;
 		break;
 	case OutputType::LuminanceVariance:
-		slot = ViewDescriptorHeapSlots::AOVSummedVarianceSRV;
+		slot = ViewDescriptorHeapSlots::LuminanceVarianceSRV;
 		break;
 	}
 	return GetGPUDescriptorHandle(slot);
@@ -1088,19 +1088,17 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput[m_ActiveFrameIndex].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCachedLuminance.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVAlbedo.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVLumaSquared.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
-	bool bLuminanceCacheFull = m_SamplesRendered % NUM_CACHED_LUMINANCE_VALUES == 0;
-	if (bLuminanceCacheFull)
 	{
-		ScopedResourceBarrier summedVarianceBarrier(commandList, m_pAOVSummedVariance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ScopedResourceBarrier luminanceVarianceBarrier(commandList, m_pLuminanceVariance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pCalculateVariancePass->Run(commandList,
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceSRV),
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedVarianceUAV),
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceUAV),
 			viewport.Width,
 			viewport.Height);
 	}
@@ -1114,8 +1112,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			PostProcessInput,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceSRV),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedVarianceSRV),
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV),
 			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
@@ -1161,9 +1158,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer,D3D12_RESOURCE_STATE_COPY_DEST,  D3D12_RESOURCE_STATE_RENDER_TARGET),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCachedLuminance.Get(),  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVAlbedo.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVLumaSquared.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
 	}
@@ -1399,47 +1395,23 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			}
 
 			{
-				D3D12_RESOURCE_DESC summedVarianceDesc = postProcessOutput;
-				summedVarianceDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
-				m_pAOVSummedVariance = CreateUAVandSRV(
-					summedVarianceDesc,
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedVarianceUAV),
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedVarianceSRV),
+				D3D12_RESOURCE_DESC summedLumaSquaredDesc = postProcessOutput;
+				summedLumaSquaredDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+				m_pAOVLumaSquared = CreateUAVandSRV(
+					summedLumaSquaredDesc,
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredUAV),
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredSRV),
 					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			}
 
 			{
-				UINT numElements = backBufferDesc.Width * backBufferDesc.Height;
-				D3D12_RESOURCE_DESC aovHistogramDesc = CD3DX12_RESOURCE_DESC::Buffer(
-					sizeof(CachedLuminance) * numElements, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-				
-				const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-				VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-					&defaultHeapDesc,
-					D3D12_HEAP_FLAG_NONE,
-					&aovHistogramDesc,
-					D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-					nullptr,
-					IID_PPV_ARGS(m_pAOVCachedLuminance.ReleaseAndGetAddressOf())));
-
-				D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-				uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-				uavDesc.Buffer.StructureByteStride = sizeof(CachedLuminance);
-				uavDesc.Buffer.FirstElement = 0;
-				uavDesc.Buffer.NumElements = numElements;
-				m_pDevice->CreateUnorderedAccessView(m_pAOVCachedLuminance.Get(), nullptr, &uavDesc,
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceUAV));
-				
-				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-				srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-				srvDesc.Buffer.FirstElement = 0;
-				srvDesc.Buffer.NumElements = numElements;
-				srvDesc.Buffer.StructureByteStride = sizeof(CachedLuminance);
-				m_pDevice->CreateShaderResourceView(m_pAOVCachedLuminance.Get(), &srvDesc,
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCachedLuminanceSRV));
+				D3D12_RESOURCE_DESC varianceDesc = postProcessOutput;
+				varianceDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+				m_pLuminanceVariance = CreateUAVandSRV(
+					varianceDesc,
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceUAV),
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV), 
+					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			}
 
 			auto viewDescriptorHeapBase = m_pViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart();

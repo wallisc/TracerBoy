@@ -11,7 +11,7 @@ CalculateVariancePass::CalculateVariancePass(ID3D12Device& device)
 
 	CD3DX12_DESCRIPTOR_RANGE1 InputSRVDescriptor;
 	InputSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-	Parameters[CalculateVarianceRootSignatureParameters::CachedLuminanceSRV].InitAsDescriptorTable(1, &InputSRVDescriptor);
+	Parameters[CalculateVarianceRootSignatureParameters::SummedLumaSquaredSRV].InitAsDescriptorTable(1, &InputSRVDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 PathTracedOutputSRVDescriptor;
 	PathTracedOutputSRVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
@@ -19,7 +19,7 @@ CalculateVariancePass::CalculateVariancePass(ID3D12Device& device)
 
 	CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
 	OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-	Parameters[CalculateVarianceRootSignatureParameters::SummedVarianceUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
+	Parameters[CalculateVarianceRootSignatureParameters::LuminanceVarianceUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
 
 	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 	rootSignatureDesc.pParameters = Parameters;
@@ -38,9 +38,9 @@ CalculateVariancePass::CalculateVariancePass(ID3D12Device& device)
 }
 
 void CalculateVariancePass::Run(ID3D12GraphicsCommandList& commandList,
-	D3D12_GPU_DESCRIPTOR_HANDLE cachedLuminanceSRV,
+	D3D12_GPU_DESCRIPTOR_HANDLE summedLumaSquaredSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE pathTracedOutputSRV,
-	D3D12_GPU_DESCRIPTOR_HANDLE summedVarianceUAV,
+	D3D12_GPU_DESCRIPTOR_HANDLE lumianceVarianceUAV,
 	UINT width,
 	UINT height)
 {
@@ -51,9 +51,9 @@ void CalculateVariancePass::Run(ID3D12GraphicsCommandList& commandList,
 	constants.Resolution = { width, height };
 	commandList.SetComputeRoot32BitConstants(CalculateVarianceRootSignatureParameters::RootConstants, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
-	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::CachedLuminanceSRV, cachedLuminanceSRV);
+	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::SummedLumaSquaredSRV, summedLumaSquaredSRV);
 	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::PathTracedOutputSRV, pathTracedOutputSRV);
-	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::SummedVarianceUAV, summedVarianceUAV);
+	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::LuminanceVarianceUAV, lumianceVarianceUAV);
 
 	commandList.Dispatch(width, height, 1);
 

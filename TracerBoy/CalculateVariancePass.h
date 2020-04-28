@@ -6,9 +6,9 @@ public:
 	CalculateVariancePass(ID3D12Device& device);
 
 	void Run(ID3D12GraphicsCommandList& commandList,
-		D3D12_GPU_DESCRIPTOR_HANDLE cachedLuminanceSRV,
+		D3D12_GPU_DESCRIPTOR_HANDLE summedLumaSquaredSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE pathTracedOutputSRV,
-		D3D12_GPU_DESCRIPTOR_HANDLE summedVarianceUAV,
+		D3D12_GPU_DESCRIPTOR_HANDLE lumianceVarianceUAV,
 		UINT width,
 		UINT height);
 
@@ -19,9 +19,9 @@ private:
 	enum CalculateVarianceRootSignatureParameters
 	{
 		RootConstants,
-		CachedLuminanceSRV,
+		SummedLumaSquaredSRV,
 		PathTracedOutputSRV,
-		SummedVarianceUAV,
+		LuminanceVarianceUAV,
 		NumRootSignatureParameters
 	};
 };

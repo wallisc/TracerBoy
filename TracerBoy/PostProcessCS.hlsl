@@ -83,8 +83,7 @@ float3 ProcessNormal(float4 color)
 
 float3 ProcessLuminanceVariance(float4 color)
 {
-	uint frameCount = color.g;
-	return frameCount > 0 ? Constants.VarianceMultiplier * float3(color.r / frameCount, 0, 0) : float3(0, 0, 0);
+	return Constants.VarianceMultiplier * float3(color.r , 0, 0);
 }
 
 [RootSignature(ComputeRS)]

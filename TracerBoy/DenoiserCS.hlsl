@@ -5,9 +5,8 @@
 Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
 Texture2D AOVIntersectPosition : register(t2);
-StructuredBuffer<CachedLuminance> AOVCachedLuminance: register(t3);
-Texture2D AOVSummedVariance : register(t4);
-Texture2D UndenoisedTexture : register(t5);
+Texture2D LuminanceVariance : register(t3);
+Texture2D UndenoisedTexture : register(t4);
 
 RWTexture2D<float4> OutputTexture;
 
@@ -58,17 +57,8 @@ float GetVariance(uint2 coord, float luma)
 
 	if (Constants.GlobalFrameCount > 1)
 	{
-		float2 summedVariance = AOVSummedVariance[coord];
-		uint numCachedValues = Constants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
-		CachedLuminance cachedLuminance = AOVCachedLuminance[coord.x + coord.y * Constants.Resolution.x];
-
-		float cachedSummedVariance = 0.0f;
-		for (uint i = 0; i < numCachedValues; i++)
-		{
-			cachedSummedVariance += (luma - cachedLuminance.Luminance[i]) * (luma - cachedLuminance.Luminance[i]);
-		}
-		summedVariance += float2(cachedSummedVariance, numCachedValues);
-		temporalVariance = summedVariance.r / (summedVariance.g - 1.0);
+		float2 summedVariance = LuminanceVariance[coord];
+		temporalVariance = summedVariance.r;
 	}
 
 	return lerp(neighborVariance, temporalVariance, min(float(Constants.GlobalFrameCount) / float(cFramesToRelyOnNeighbor), 1.0f));

@@ -166,12 +166,7 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 
 void OutputSampleColor(float3 color)
 {
-	int outputIndex = DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x;
 	float luma = ColorToLuma(color);
-	CachedLuminance cachedLuminance = AOVCachedLuminance[outputIndex];
-	int lumaIndex = perFrameConstants.GlobalFrameCount % NUM_CACHED_LUMINANCE_VALUES;
-	cachedLuminance.Luminance[lumaIndex] = luma;
-	AOVCachedLuminance[outputIndex] = cachedLuminance;
 }
 
 bool IsFogEnabled()

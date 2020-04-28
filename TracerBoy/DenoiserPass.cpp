@@ -24,16 +24,12 @@ DenoiserPass::DenoiserPass(ID3D12Device& device)
 	AOVIntersectPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::AOVIntersectPosition].InitAsDescriptorTable(1, &AOVIntersectPositionDescriptor);
 
-	CD3DX12_DESCRIPTOR_RANGE1 AOVCachedLuminanceDescriptor;
-	AOVCachedLuminanceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-	Parameters[DenoiserRootSignatureParameters::AOVCachedLuminance].InitAsDescriptorTable(1, &AOVCachedLuminanceDescriptor);
-
-	CD3DX12_DESCRIPTOR_RANGE1 AOVSummedVarianceDescriptor;
-	AOVSummedVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-	Parameters[DenoiserRootSignatureParameters::AOVSummedVariance].InitAsDescriptorTable(1, &AOVSummedVarianceDescriptor);
+	CD3DX12_DESCRIPTOR_RANGE1 LuminanceVarianceDescriptor;
+	LuminanceVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	Parameters[DenoiserRootSignatureParameters::LuminanceVarianceSRV].InitAsDescriptorTable(1, &LuminanceVarianceDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 UndenoisedInputDescriptor;
-	UndenoisedInputDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	UndenoisedInputDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::UndenoisedInputSRV].InitAsDescriptorTable(1, &UndenoisedInputDescriptor);
 
 
@@ -59,8 +55,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 	D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
-	D3D12_GPU_DESCRIPTOR_HANDLE cachedLuminanceSRV,
-	D3D12_GPU_DESCRIPTOR_HANDLE summedVarianceSRV,
+	D3D12_GPU_DESCRIPTOR_HANDLE luminanceVarianceSRV,
 	UINT globalFrameCount,
 	UINT width,
 	UINT height) 
@@ -90,8 +85,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::OutputUAV, DenoiserBuffers[OutputDenoiserBufferIndex].m_uavHandle);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVNormal, normalsSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVIntersectPosition, intersectPositionSRV);
-		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVSummedVariance, summedVarianceSRV);
-		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVCachedLuminance, cachedLuminanceSRV);
+		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::LuminanceVarianceSRV, luminanceVarianceSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::UndenoisedInputSRV, inputSRV);
 		commandList.Dispatch(width / DENOISER_THREAD_GROUP_WIDTH, height / DENOISER_THREAD_GROUP_HEIGHT, 1);
 

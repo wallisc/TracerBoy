@@ -22,12 +22,6 @@ struct RayPayload
 	float padding2;
 };
 
-#define NUM_CACHED_LUMINANCE_VALUES 8
-struct CachedLuminance
-{
-	float Luminance[NUM_CACHED_LUMINANCE_VALUES];
-};
-
 struct PerFrameConstants
 {
 	float3 CameraPosition;
