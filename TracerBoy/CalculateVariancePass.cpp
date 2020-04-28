@@ -42,13 +42,15 @@ void CalculateVariancePass::Run(ID3D12GraphicsCommandList& commandList,
 	D3D12_GPU_DESCRIPTOR_HANDLE pathTracedOutputSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE lumianceVarianceUAV,
 	UINT width,
-	UINT height)
+	UINT height,
+	UINT globalFrameCount)
 {
 	commandList.SetPipelineState(m_pPSO.Get());
 	commandList.SetComputeRootSignature(m_pRootSignature.Get());
 
 	CalculateVarianceConstants constants;
 	constants.Resolution = { width, height };
+	constants.GlobalFrameCount = globalFrameCount;
 	commandList.SetComputeRoot32BitConstants(CalculateVarianceRootSignatureParameters::RootConstants, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
 	commandList.SetComputeRootDescriptorTable(CalculateVarianceRootSignatureParameters::SummedLumaSquaredSRV, summedLumaSquaredSRV);

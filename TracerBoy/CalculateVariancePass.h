@@ -10,7 +10,8 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE pathTracedOutputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE lumianceVarianceUAV,
 		UINT width,
-		UINT height);
+		UINT height,
+		UINT globalFrameCount);
 
 private:
 	ComPtr<ID3D12RootSignature> m_pRootSignature;

@@ -6,5 +6,6 @@
 struct CalculateVarianceConstants
 {
 	uint2 Resolution;
+	uint GlobalFrameCount;
 };
 

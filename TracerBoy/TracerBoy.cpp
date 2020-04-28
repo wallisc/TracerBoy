@@ -1100,7 +1100,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceUAV),
 			viewport.Width,
-			viewport.Height);
+			viewport.Height,
+			m_SamplesRendered);
 	}
 
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);

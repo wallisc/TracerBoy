@@ -19,49 +19,7 @@ cbuffer DenoiserCB
 
 float GetVariance(uint2 coord, float luma)
 {
-	float neighborVariance = 0.0;
-	float temporalVariance = 0.0;
-	const uint cFramesToRelyOnNeighbor = 8;
-	if (Constants.GlobalFrameCount <= cFramesToRelyOnNeighbor)
-	{
-		const int kernelWidth = 7;
-		uint count = 0;
-		float summedLuma = 0.0;
-		for (int x = -kernelWidth / 2; x < kernelWidth / 2; x++)
-		{
-			for (int y = -kernelWidth / 2; y < kernelWidth / 2; y++)
-			{
-				int2 sampleCoord = int2(coord)+int2(x, y);
-				if (sampleCoord.x < 0 || sampleCoord.y < 0 ||
-					sampleCoord.x >= Constants.Resolution.x || sampleCoord.y >= Constants.Resolution.y) continue;
-				summedLuma += ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount);
-				count++;
-			}
-		}
-		float  lumaMean = summedLuma / count;
-
-		float summedVariance = 0.0;
-		for (int x = -kernelWidth / 2; x < kernelWidth / 2; x++)
-		{
-			for (int y = -kernelWidth / 2; y < kernelWidth / 2; y++)
-			{
-				int2 sampleCoord = int2(coord)+int2(x, y);
-				if (sampleCoord.x < 0 || sampleCoord.y < 0 ||
-					sampleCoord.x >= Constants.Resolution.x || sampleCoord.y >= Constants.Resolution.y) continue;
-				summedVariance += (lumaMean - ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount)) * (lumaMean - ColorToLuma(UndenoisedTexture[sampleCoord] / Constants.GlobalFrameCount));
-			}
-		}
-
-		neighborVariance = summedVariance / (count - 1);
-	}
-
-	if (Constants.GlobalFrameCount > 1)
-	{
-		float2 summedVariance = LuminanceVariance[coord];
-		temporalVariance = summedVariance.r;
-	}
-
-	return lerp(neighborVariance, temporalVariance, min(float(Constants.GlobalFrameCount) / float(cFramesToRelyOnNeighbor), 1.0f));
+	return LuminanceVariance[coord];
 }
 
 float3 GetNormal(int2 coord)
