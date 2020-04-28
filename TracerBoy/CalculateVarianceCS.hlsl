@@ -20,4 +20,5 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float FrameCount = PathTracingOutput[float2(0, Constants.Resolution.y - 1)].x;
 	float meanLuma = ColorToLuma(PathTracingOutput[DTid.xy] / FrameCount);
 	float lumaSquared = SummedLumaSquared[DTid.xy] / FrameCount;
+	LuminanceVariance[DTid.xy] = abs(lumaSquared - meanLuma * meanLuma);
 }

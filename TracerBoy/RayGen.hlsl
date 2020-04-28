@@ -167,6 +167,7 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 void OutputSampleColor(float3 color)
 {
 	float luma = ColorToLuma(color);
+	AOVSummedLumaSquared[DispatchRaysIndex().xy] = AOVSummedLumaSquared[DispatchRaysIndex().xy] + float4(luma * luma, 0.0, 0, 0);
 }
 
 bool IsFogEnabled()
