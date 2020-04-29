@@ -151,7 +151,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 
 void OutputPrimaryAlbedo(float3 albedo)
 {
-	AOVAlbedo[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
 }
 
 void OutputPrimaryNormal(float3 normal)

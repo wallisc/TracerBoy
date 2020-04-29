@@ -14,7 +14,7 @@ RWTexture2D<float4> OutputTexture : register(u0);
 RWTexture2D<float4> AOVNormals : register(u1);
 RWTexture2D<float4> AOVWorldPosition : register(u2);
 RWTexture2D<float4> AOVSummedLumaSquared : register(u3);
-RWTexture2D<float4> AOVAlbedo: register(u4);
+RWTexture2D<float4> AOVCustomOutput : register(u4);
 
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);

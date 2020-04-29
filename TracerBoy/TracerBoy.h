@@ -316,7 +316,7 @@ private:
 	PassResource m_pDenoiserBuffers[2];
 
 	ComPtr<ID3D12Resource> m_pAOVNormals;
-	ComPtr<ID3D12Resource> m_pAOVAlbedo;
+	ComPtr<ID3D12Resource> m_pAOVCustomOutput;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
 	ComPtr<ID3D12Resource> m_pAOVLumaSquared;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
@@ -336,14 +336,14 @@ private:
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
 		AOVSummedLumaSquaredUAV,
-		AOVAlbedoUAV,
-		AOVLastUAVSlot = AOVAlbedoUAV,
+		AOVCustomOutputUAV,
+		AOVLastUAVSlot = AOVCustomOutputUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
 		AOVWorldPositionSRV,
 		AOVSummedLumaSquaredSRV,
-		AOVAlbedoSRV,
-		AOVLastSRVSlot = AOVAlbedoSRV,
+		AOVCustomOutputSRV,
+		AOVLastSRVSlot = AOVCustomOutputSRV,
 		LuminanceVarianceSRV,
 		LuminanceVarianceUAV,
 		PathTracerOutputSRVBaseSlot,
