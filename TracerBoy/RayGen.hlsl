@@ -183,13 +183,33 @@ void ClearAOVs()
 #include "GLSLCompat.h"
 #include "kernel.glsl"
 
+#define USE_ADAPTIVE_RAY_DISPATCHING 0
+
 [shader("raygeneration")]
 void RayGen()
 {
 	ClearAOVs();
+
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
+
+	float luminanceVariance = min(LuminanceVariance[DispatchRaysIndex().xy].x, LuminanceVariance[DispatchRaysIndex().xy].b);
+	luminanceVariance *= perFrameConstants.VarianceMultplier;
+	luminanceVariance = WaveActiveMax(lerp(1.0, luminanceVariance, clamp(float(perFrameConstants.GlobalFrameCount) / float(perFrameConstants.SamplesToTarget), 0, 1)));
+	
+#if USE_ADAPTIVE_RAY_DISPATCHING
+	bool SkipRay = WaveReadLaneFirst( perFrameConstants.GlobalFrameCount > 2 && rand() > max(luminanceVariance, 0.0));
+	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (LastFrameTexture[DispatchRaysIndex().xy] / LastFrameTexture[DispatchRaysIndex().xy].w);
+	if (SkipRay)
+	{
+		OutputTexture[DispatchRaysIndex().xy] = LastFrameTexture[DispatchRaysIndex().xy];
+		return;
+	}
+#endif
+
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 	float4 outputColor = PathTrace(uv * GetResolution().xy);
 	OutputTexture[DispatchRaysIndex().xy] = outputColor;
+
+
 }

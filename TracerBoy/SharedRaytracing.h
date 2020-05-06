@@ -22,6 +22,7 @@ Texture2D EnvironmentMap : register(t4);
 StructuredBuffer<float> RandSeedBuffer : register(t5);
 StructuredBuffer<Material> MaterialBuffer : register(t6);
 StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
+Texture2D LuminanceVariance : register(t8);
 Texture2D<float4> ImageTextures[] : register(t0, space1);
 
 SamplerState PointSampler : register(s0);

@@ -5,6 +5,7 @@
 #define OUTPUT_TYPE_NORMAL 2
 #define OUTPUT_TYPE_LUMINANCE 3
 #define OUTPUT_TYPE_VARIANCE 4
+#define OUTPUT_TYPE_LIVE_PIXELS 5
 
 struct PostProcessConstants
 {

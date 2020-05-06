@@ -23,7 +23,7 @@ float3 GammaCorrect(float3 color)
 
 float3 ProcessLit(float4 color)
 {
-	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
+	float FrameCount = color.w;
 	float3 outputColor = color / FrameCount;
 
 	if (Constants.UseToneMapping)
@@ -40,7 +40,7 @@ float3 ProcessLit(float4 color)
 }
 
 float3 ProcessLuminance(float4 color) {
-	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
+	float FrameCount = color.w;
 	float3 outputColor = color / FrameCount;
 
 	if (Constants.UseToneMapping)
@@ -86,6 +86,16 @@ float3 ProcessLuminanceVariance(float4 color)
 	return Constants.VarianceMultiplier * float3(color.r , 0, 0);
 }
 
+float3 PassThroughColor(float4 color)
+{
+	float3 outputColor = color;
+	if (Constants.UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
+	return outputColor;
+}
+
 [RootSignature(ComputeRS)]
 [numthreads(1, 1, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
@@ -111,6 +121,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_VARIANCE:
 		outputColor = ProcessLuminanceVariance(colorData);
+		break;
+	case OUTPUT_TYPE_LIVE_PIXELS:
+		outputColor = PassThroughColor(colorData);
 		break;
 	}
 

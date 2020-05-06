@@ -116,7 +116,8 @@ public:
 		Albedo,
 		Normals,
 		Luminance,
-		LuminanceVariance
+		LuminanceVariance,
+		LivePixels,
 	};
 
 	struct CameraOutputSettings
@@ -139,9 +140,16 @@ public:
 		bool m_bEnableGammaCorrection;
 	};
 
+	struct PerformanceSettings
+	{
+		int m_SampleTarget;
+		float m_VarianceMultiplier;
+	};
+
 	struct DebugSettings 		
 	{
 		int m_SampleLimit;
+		float m_TimeLimitInSeconds;
 		float m_VarianceMultiplier;
 	};
 
@@ -157,6 +165,7 @@ public:
 		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
 		FogSettings m_fogSettings;
+		PerformanceSettings m_performanceSettings;
 	};
 
 	static OutputSettings GetDefaultOutputSettings()
@@ -168,6 +177,7 @@ public:
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
 		debugSettings.m_SampleLimit = 0;
+		debugSettings.m_TimeLimitInSeconds = 0.0f;
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
@@ -190,6 +200,10 @@ public:
 		FogSettings& fogSettings = outputSettings.m_fogSettings;
 		fogSettings.ScatterDistance = 0.0f;
 		fogSettings.ScatterDirection = 0.0f;
+
+		PerformanceSettings& performanceSettings = outputSettings.m_performanceSettings;
+		performanceSettings.m_SampleTarget = 256;
+		performanceSettings.m_VarianceMultiplier = 1.0f;
 
 		return outputSettings;
 	}
@@ -283,6 +297,7 @@ private:
 		MaterialBufferSRV,
 		TextureDataSRV,
 		ImageTextureTable,
+		LuminanceVarianceParam,
 		NumRayTracingParameters
 	};
 	
@@ -357,6 +372,8 @@ private:
 	OutputSettings m_CachedOutputSettings;
 	Camera m_camera;
 	bool m_flipTextureUVs;
+
+	std::chrono::steady_clock::time_point m_RenderStartTime;
 
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;

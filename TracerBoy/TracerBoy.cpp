@@ -351,7 +351,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
 		VERIFY(!pPlasticMaterial->map_ks);
 		VERIFY(!pPlasticMaterial->map_roughness);
-		//VERIFY(!pPlasticMaterial->map_bump);
+		VERIFY(!pPlasticMaterial->map_bump);
 
 		material.Flags |= DEFAULT_MATERIAL_FLAG;
 	}
@@ -415,6 +415,10 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
 		Parameters[RayTracingRootSignatureParameters::MaterialBufferSRV].InitAsShaderResourceView(6);
 		Parameters[RayTracingRootSignatureParameters::TextureDataSRV].InitAsShaderResourceView(7);
+
+		CD3DX12_DESCRIPTOR_RANGE1 LuminanceVarianceDescriptor;
+		LuminanceVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8);
+		Parameters[RayTracingRootSignatureParameters::LuminanceVarianceParam].InitAsDescriptorTable(1, &LuminanceVarianceDescriptor);
 
 		CD3DX12_DESCRIPTOR_RANGE1 ImageTextureTableDescriptor;
 		ImageTextureTableDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
@@ -959,6 +963,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 		slot = ViewDescriptorHeapSlots::PathTracerOutputSRVBaseSlot + m_ActiveFrameIndex;
 		break;
 	case OutputType::Albedo:
+	case OutputType::LivePixels:
 		slot = ViewDescriptorHeapSlots::AOVCustomOutputSRV;
 		break;
 	case OutputType::Normals:
@@ -986,12 +991,17 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 		return OUTPUT_TYPE_VARIANCE;
 	case TracerBoy::OutputType::Luminance:
 		return OUTPUT_TYPE_LUMINANCE;
+	case TracerBoy::OutputType::LivePixels:
+		return OUTPUT_TYPE_LIVE_PIXELS;
 	}
 }
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer, const OutputSettings& outputSettings)
 {
-	bool bRender = outputSettings.m_debugSettings.m_SampleLimit == 0 || m_SamplesRendered < outputSettings.m_debugSettings.m_SampleLimit;
+	bool bUnderSampleLimit = outputSettings.m_debugSettings.m_SampleLimit == 0 || m_SamplesRendered < outputSettings.m_debugSettings.m_SampleLimit;
+	bool bUnderTimeLimit = outputSettings.m_debugSettings.m_TimeLimitInSeconds <= 0.0 || 
+		((float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_RenderStartTime).count() / 1000.0f) < outputSettings.m_debugSettings.m_TimeLimitInSeconds;
+	bool bRender = bUnderSampleLimit && bUnderTimeLimit;
 	UpdateOutputSettings(outputSettings);
 
 	ResizeBuffersIfNeeded(pBackBuffer);
@@ -1012,6 +1022,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		
 		commandList.Dispatch(viewport.Width, viewport.Height, 1);
 		m_SamplesRendered = 0;
+		m_RenderStartTime = std::chrono::steady_clock::now();
 	}
 
 	commandList.SetComputeRootSignature(m_pRayTracingRootSignature.Get());
@@ -1037,6 +1048,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.fogScatterDistance = outputSettings.m_fogSettings.ScatterDistance;
 	constants.fogScatterDirection = outputSettings.m_fogSettings.ScatterDirection;
 	constants.GlobalFrameCount = m_SamplesRendered;
+	constants.SamplesToTarget = outputSettings.m_performanceSettings.m_SampleTarget;
+	constants.VarianceMultplier = outputSettings.m_performanceSettings.m_VarianceMultiplier;
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
@@ -1048,6 +1061,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 	
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LuminanceVarianceParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV));
 
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{

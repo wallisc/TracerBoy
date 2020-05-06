@@ -1502,11 +1502,11 @@ vec4 PathTrace(in vec2 pixelCoord)
     bool HasSceneChanged = ShouldInvalidateHistory();
 
     // Sacrifice the top left pixel to store previous frame meta-data
-    if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)
-    {
-        float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
-        return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
-    }
+    //if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)
+    //{
+    //    float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
+    //    return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
+    //}
     //CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
 
 #if IS_SHADER_TOY
@@ -1549,7 +1549,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     vec3 outputColor = min(result.rgb, perFrameConstants.FireflyClampValue);
     OutputSampleColor(outputColor);
 
-    return vec4(accumulatedColor.rgb + outputColor, result.w);
+    return vec4(accumulatedColor.rgb + outputColor, accumulatedColor.w + 1.0);
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )

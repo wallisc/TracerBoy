@@ -42,6 +42,8 @@ struct PerFrameConstants
 	float fogScatterDirection;
 
 	uint GlobalFrameCount;
+	uint SamplesToTarget;
+	float VarianceMultplier;
 };
 
 struct ConfigConstants

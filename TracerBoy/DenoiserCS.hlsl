@@ -37,10 +37,9 @@ float CalculateWeight(
 	float3 centerIntersectPosition, 
 	float distanceToNeighborPixel, 
 	int2 coord, 
-	int2 offset,
-	int FrameCount)
+	int2 offset)
 {
-	float luma = ColorToLuma(UndenoisedTexture[coord] / FrameCount);
+	float luma = ColorToLuma(UndenoisedTexture[coord] / UndenoisedTexture[coord].w);
 	float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
 	if (Constants.LumaWeightingMultiplier > 100.0f) lumaWeight = 1.0f;
 
@@ -67,18 +66,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
-	if (DTid.x == 0 && DTid.y == Constants.Resolution.y - 1)
-	{
-		OutputTexture[DTid.xy] = float4(1, 1, 1, 1);
-	}
-
-	float FrameCount = InputTexture[float2(0, Constants.Resolution.y - 1)].x;
-	float UndenoisedFrameCount = UndenoisedTexture[float2(0, Constants.Resolution.y - 1)].x;
 	float3 normal = GetNormal(DTid.xy);
 	float4 intersectedPositionData = AOVIntersectPosition[DTid.xy];
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
-	float luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedFrameCount);
+	float luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedTexture[DTid.xy].w);
 	float varianceSqrt = sqrt(GetVariance(DTid.xy, luma));
 
 	float weightedSum = 0.0f;
@@ -98,16 +90,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
 					continue;
 				}
 
-				float weight = CalculateWeight(luma, varianceSqrt, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord, UndenoisedFrameCount);
+				float weight = CalculateWeight(luma, varianceSqrt, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
 
-				accumulatedColor += weight * InputTexture[coord].xyz / FrameCount;
+				accumulatedColor += weight * InputTexture[coord].xyz / InputTexture[coord].w;
 				weightedSum += weight;
 			}
 		}
 	}
 	else
 	{
-		accumulatedColor = InputTexture[DTid.xy].xyz / FrameCount;
+		accumulatedColor = InputTexture[DTid.xy].xyz / InputTexture[DTid.xy].w;
 		weightedSum = 1.0f;
 	}
 	

@@ -12,7 +12,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
 #if 0
 	ComPtr<ID3D12Debug> debugController;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))p
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
 	{
 		debugController->EnableDebugLayer();
 	}
