@@ -61,29 +61,79 @@ bool ValidNormal(float3 normal)
 	return normal.x != 0.0f || normal.y != 0.0f || normal.z != 0.0f;
 }
 
+#define MEDIAN_KERNEL_SIZE 3
+struct LumaAndCoord
+{
+	float Luma;
+	int2 Coord;
+};
+
+uint2 GetMedianCoord(uint2 DTid)
+{
+	int index = 0;
+	const uint cArraySize = MEDIAN_KERNEL_SIZE * MEDIAN_KERNEL_SIZE;
+	LumaAndCoord lumaAndCoordArray[cArraySize];
+	for (int x = -MEDIAN_KERNEL_SIZE / 2; x <= MEDIAN_KERNEL_SIZE / 2; x++)
+	{
+		for (int y = -MEDIAN_KERNEL_SIZE / 2; y <= MEDIAN_KERNEL_SIZE / 2; y++)
+		{
+			int2 Coord = int2(DTid) + int2(x, y);
+			lumaAndCoordArray[index].Luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedTexture[DTid.xy].w);
+			lumaAndCoordArray[index].Coord = Coord;
+			index++;
+		}
+	}
+
+	for (uint i = 0; i < cArraySize - 1; i++)
+	{
+		uint lowestLumaIndex = i;
+		for (uint j = i + 1; j < cArraySize; j++)
+		{
+			if (lumaAndCoordArray[j].Luma < lumaAndCoordArray[lowestLumaIndex].Luma)
+			{
+				lowestLumaIndex = j;
+			}
+		}
+		LumaAndCoord temp = lumaAndCoordArray[i];
+		lumaAndCoordArray[i] = lumaAndCoordArray[lowestLumaIndex];
+		lumaAndCoordArray[lowestLumaIndex] = temp;
+	}
+	return lumaAndCoordArray[5].Coord;
+}
+
+#define USE_MEDIAN_FILTER 0
+
 [numthreads(DENOISER_THREAD_GROUP_WIDTH, DENOISER_THREAD_GROUP_HEIGHT, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
-	float3 normal = GetNormal(DTid.xy);
-	float4 intersectedPositionData = AOVIntersectPosition[DTid.xy];
+	uint2 medianCoord = DTid.xy;
+#if USE_MEDIAN_FILTER
+	if (Constants.OffsetMultiplier <= 1.0f)
+	{
+		medianCoord = GetMedianCoord(DTid);
+	}
+#endif
+
+	float3 normal = GetNormal(medianCoord);
+	float4 intersectedPositionData = AOVIntersectPosition[medianCoord];
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
-	float luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedTexture[DTid.xy].w);
-	float varianceSqrt = sqrt(GetVariance(DTid.xy, luma));
+	float luma = ColorToLuma(UndenoisedTexture[medianCoord] / UndenoisedTexture[medianCoord].w);
+	float varianceSqrt = sqrt(GetVariance(medianCoord, luma));
 
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);
 
-	if(ValidNormal(normal) && DTid.x < Constants.Resolution.x / 2 )
+	if(ValidNormal(normal) && medianCoord.x < Constants.Resolution.x / 2 )
 	{
 		for (int xOffset = -KERNEL_WIDTH / 2; xOffset <= KERNEL_WIDTH / 2; xOffset++)
 		{
 			for (int yOffset = -KERNEL_WIDTH / 2; yOffset <= KERNEL_WIDTH / 2; yOffset++)
 			{
 				int2 offsetCoord = int2(xOffset, yOffset) * Constants.OffsetMultiplier;
-				int2 coord = DTid.xy + offsetCoord;
+				int2 coord = medianCoord + offsetCoord;
 
 				if (coord.x < 0 || coord.y < 0 || coord.x > Constants.Resolution.x || coord.y > Constants.Resolution.y)
 				{
@@ -99,7 +149,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	}
 	else
 	{
-		accumulatedColor = InputTexture[DTid.xy].xyz / InputTexture[DTid.xy].w;
+		accumulatedColor = InputTexture[medianCoord].xyz / InputTexture[medianCoord].w;
 		weightedSum = 1.0f;
 	}
 	
