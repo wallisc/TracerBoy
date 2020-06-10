@@ -31,8 +31,8 @@ struct PerFrameConstants
 	float3 CameraUp;
 	float Padding;
 	float3 CameraRight;
-
 	float DOFFocusDistance;
+
 	float DOFApertureWidth;
 	uint EnableNormalMaps;
 	float FocalDistance;
@@ -40,10 +40,14 @@ struct PerFrameConstants
 
 	float fogScatterDistance;
 	float fogScatterDirection;
-
 	uint GlobalFrameCount;
 	uint SamplesToTarget;
+
 	float VarianceMultplier;
+	float3 VolumeMin;
+	
+	float3 VolumeMax;
+
 };
 
 struct ConfigConstants

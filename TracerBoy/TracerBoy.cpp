@@ -420,6 +420,10 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		LuminanceVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8);
 		Parameters[RayTracingRootSignatureParameters::LuminanceVarianceParam].InitAsDescriptorTable(1, &LuminanceVarianceDescriptor);
 
+		CD3DX12_DESCRIPTOR_RANGE1 VolumeDescriptor;
+		VolumeDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 9);
+		Parameters[RayTracingRootSignatureParameters::VolumeSRVParam].InitAsDescriptorTable(1, &VolumeDescriptor);
+
 		CD3DX12_DESCRIPTOR_RANGE1 ImageTextureTableDescriptor;
 		ImageTextureTableDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(1, &ImageTextureTableDescriptor);
@@ -438,7 +442,14 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 				D3D12_FILTER_MIN_MAG_MIP_LINEAR,
 				D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 				D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-				D3D12_TEXTURE_ADDRESS_MODE_WRAP)
+				D3D12_TEXTURE_ADDRESS_MODE_WRAP),
+
+			CD3DX12_STATIC_SAMPLER_DESC(
+				2u,
+				D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				D3D12_TEXTURE_ADDRESS_MODE_CLAMP)
 		};
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
@@ -544,7 +555,99 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
 	
+
+	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
+#if USE_OPENVDB
+		std::string volumeFileName = "C:\\Users\\chris\\Documents\\GitHub\\TracerBoy\\Scenes\\bunny_cloud.vdb";
+		openvdb::initialize();
+
+		// Create a VDB file object.
+		openvdb::io::File file(volumeFileName);
+		file.open();
+		openvdb::GridPtrVecPtr gridVec = file.getGrids();
+		file.close();
+
+		VERIFY(gridVec->size() == 1);
+		openvdb::GridBase::Ptr gridPtr = (*gridVec)[0];
+
+		openvdb::FloatGrid::Ptr floatGridPtr = openvdb::gridPtrCast<openvdb::FloatGrid>(gridPtr);
+		VERIFY(floatGridPtr != nullptr);
+
+		openvdb::GridBase& grid = *gridPtr;
+		openvdb::VecType type = grid.getVectorType();
+		openvdb::math::CoordBBox boundingBox;
+		grid.baseTree().evalLeafBoundingBox(boundingBox);
+
+		m_volumeMin = {
+			(float)boundingBox.getStart().x(),
+			(float)boundingBox.getStart().y(),
+			(float)boundingBox.getStart().z()
+		};
+
+		m_volumeMax = {
+			(float)boundingBox.getEnd().x(),
+			(float)boundingBox.getEnd().y(),
+			(float)boundingBox.getEnd().z()
+		};
+
+		UINT width = (UINT)(boundingBox.getEnd().x() - boundingBox.getStart().x());
+		UINT height = (UINT)(boundingBox.getEnd().y() - boundingBox.getStart().y());
+		UINT depth = (UINT)(boundingBox.getEnd().z() - boundingBox.getStart().z());
+
+		D3D12_RESOURCE_DESC volumeDesc = CD3DX12_RESOURCE_DESC::Tex3D(DXGI_FORMAT_R32_FLOAT, width, height, depth, 1);
+		VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+			&defaultHeapDesc,
+			D3D12_HEAP_FLAG_NONE,
+			&volumeDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(m_pVolume.ReleaseAndGetAddressOf())));
+
+		m_pDevice->CreateShaderResourceView(m_pVolume.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::VolumeSRVSlot));
+
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT volumeFootprint;
+		UINT numRows;
+		UINT64 rowSizeInBytes, totalSizeInBytes;
+		m_pDevice->GetCopyableFootprints(&volumeDesc, 0, 1, 0, &volumeFootprint, &numRows, &rowSizeInBytes, &totalSizeInBytes);
+		UINT64 rowPitch = volumeFootprint.Footprint.RowPitch;
+		UINT64 slicePitch = volumeFootprint.Footprint.RowPitch * rowSizeInBytes;
+
+		ComPtr<ID3D12Resource> pVolumeUpload;
+		AllocateUploadBuffer(GetRequiredIntermediateSizeHelper(m_pDevice.Get(), m_pVolume.Get(), 0, 1), pVolumeUpload);
+		resourcesToDelete.push_back(pVolumeUpload);
+
+		std::vector<float> data;
+		openvdb::FloatGrid::Accessor accessor = floatGridPtr->getAccessor();
+		for (int z = 0; z < depth; z++)
+		{
+			for (int y = 0; y < height; y++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					openvdb::Coord coord(
+						boundingBox.getStart().x() + (float)x + 0.5f,
+						boundingBox.getStart().y() + (float)y + 0.5f,
+						boundingBox.getStart().z() + (float)z + 0.5f);
+					float density = accessor.getValue(coord);
+					data.push_back(density);
+				}
+			}
+		}
+		const void* pData;
+		LONG_PTR RowPitch;
+		LONG_PTR SlicePitch;
+		D3D12_SUBRESOURCE_DATA subresourceData = { data.data(), width * sizeof(float), width * height * sizeof(float) };
+		UpdateSubresourcesHelper(m_pDevice.Get(), &commandList, m_pVolume.Get(), pVolumeUpload.Get(), 0, 0, 1, &subresourceData);
+
+		D3D12_RESOURCE_BARRIER volumeBarriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pVolume.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		commandList.ResourceBarrier(ARRAYSIZE(volumeBarriers), volumeBarriers);
+#endif
+
 #if USE_ASSIMP
 		AssimpImporter::ScratchData assimpScratchData;
 #endif
@@ -735,7 +838,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		}
 		resourcesToDelete.push_back(pEnvironmentMapScratchBuffer);
 
-		const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 		{
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildBottomLevelDesc = {};
 			buildBottomLevelDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
@@ -869,6 +971,10 @@ void TracerBoy::InitializeTexture(
 	else if (fileExt.compare(L".dds") == 0)
 	{
 		VERIFY_HRESULT(DirectX::LoadFromDDSFile(fullTextureName.c_str(), DDS_FLAGS_NO_16BPP, &texMetaData, scratchImage));
+	}
+	else if (fileExt.compare(L".tga") == 0)
+	{
+		VERIFY_HRESULT(DirectX::LoadFromTGAFile(fullTextureName.c_str(), &texMetaData, scratchImage));
 	}
 	else
 	{
@@ -1050,6 +1156,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.SamplesToTarget = outputSettings.m_performanceSettings.m_SampleTarget;
 	constants.VarianceMultplier = outputSettings.m_performanceSettings.m_VarianceMultiplier;
+	constants.VolumeMin = { m_volumeMin.x/ 2.0f - constants.fogScatterDirection, m_volumeMin.y / 2.0f, m_volumeMin.z / 2.0f - constants.fogScatterDirection };
+	constants.VolumeMax = { m_volumeMax.x/ 2.0f - constants.fogScatterDirection, m_volumeMax.y / 2.0f, m_volumeMax.z / 2.0f - constants.fogScatterDirection };
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
@@ -1062,6 +1170,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LuminanceVarianceParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV));
+	if (m_pVolume)
+	{
+		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::VolumeSRVParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::VolumeSRVSlot));
+	}
 
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{

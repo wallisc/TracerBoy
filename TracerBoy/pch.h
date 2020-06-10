@@ -1,6 +1,7 @@
 #pragma once
 
 #define USE_ASSIMP 1
+#define USE_OPENVDB 0
 
 #include <memory>
 #include <deque>
@@ -42,6 +43,13 @@ using namespace DirectX;
 #include <assimp/postprocess.h>     // Post processing flags
 #include <assimp/scene.h>
 #include "AssimpImporter.h"
+#endif
+
+#define _USE_MATH_DEFINES // for C++
+#include <cmath>
+
+#if USE_OPENVDB
+#include "openvdb/openvdb.h"
 #endif
 
 #include "SharedShaderStructs.h"

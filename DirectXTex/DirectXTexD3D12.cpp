@@ -463,7 +463,7 @@ HRESULT DirectX::CreateTextureEx(
     }
 
     UINT alignment = 1;
-    if (format == DXGI_FORMAT_BC5_UNORM)
+    if (format == DXGI_FORMAT_BC5_UNORM || format == DXGI_FORMAT_BC1_UNORM || format == DXGI_FORMAT_BC3_UNORM)
     {
         alignment = 4;
     }

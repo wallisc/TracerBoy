@@ -23,10 +23,12 @@ StructuredBuffer<float> RandSeedBuffer : register(t5);
 StructuredBuffer<Material> MaterialBuffer : register(t6);
 StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
 Texture2D LuminanceVariance : register(t8);
+Texture3D Volume : register(t9);
 Texture2D<float4> ImageTextures[] : register(t0, space1);
 
 SamplerState PointSampler : register(s0);
 SamplerState BilinearSampler : register(s1);
+SamplerState BilinearSamplerClamp : register(s2);
 
 Material GetMaterial_NonRecursive(int MaterialID)
 {

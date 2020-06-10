@@ -31,11 +31,11 @@ float rand();
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
+	LightPosition = float3(-0.172, -0.818, 0.549) * -10000.0f;
 	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
 
 	LightColor = float3(1.0, 1.0, 1.0) * 0.5;
-	PDFValue = 1.0;
+	PDFValue = 0.0;
 }
 
 #define GLOBAL static
@@ -172,6 +172,7 @@ void OutputSampleColor(float3 color)
 
 bool IsFogEnabled()
 {
+	return false;
 	return perFrameConstants.fogScatterDistance > EPSILON;
 }
 

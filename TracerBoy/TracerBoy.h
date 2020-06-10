@@ -298,6 +298,7 @@ private:
 		TextureDataSRV,
 		ImageTextureTable,
 		LuminanceVarianceParam,
+		VolumeSRVParam,
 		NumRayTracingParameters
 	};
 	
@@ -335,9 +336,12 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
 	ComPtr<ID3D12Resource> m_pAOVLumaSquared;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
+	ComPtr<ID3D12Resource> m_pVolume;
 
 	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+
 
 	enum ViewDescriptorHeapSlots
 	{
@@ -361,6 +365,7 @@ private:
 		AOVLastSRVSlot = AOVCustomOutputSRV,
 		LuminanceVarianceSRV,
 		LuminanceVarianceUAV,
+		VolumeSRVSlot,
 		PathTracerOutputSRVBaseSlot,
 		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
 		PathTracerOutputUAVBaseSlot,
@@ -368,6 +373,9 @@ private:
 		NumReservedViewSlots,
 		NumTotalViews = 4096
 	};
+
+	Vector3 m_volumeMax;
+	Vector3 m_volumeMin;
 
 	OutputSettings m_CachedOutputSettings;
 	Camera m_camera;
