@@ -1073,7 +1073,8 @@ float BeerLambert(float absorption, float dist)
     return exp(-absorption * dist);
 }
 
-
+#define USE_RUSSIAN_ROULETTE 1
+#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
 {
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
@@ -1086,6 +1087,21 @@ vec4 Trace(Ray ray, Ray neighborRay)
     
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
+#if USE_RUSSIAN_ROULETTE
+        if(i > MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE)
+        {
+            float p = max(max(accumulatedIndirectLightMultiplier.r, accumulatedIndirectLightMultiplier.g), accumulatedIndirectLightMultiplier.b);
+            if(p < rand())
+            {
+                break;
+            }
+            else
+            {
+                accumulatedIndirectLightMultiplier *= 1.0 / p;
+            }
+        }
+#endif
+
         bool bLastRay = (i == MAX_BOUNCES - 1);
         bool bLimitRayCastDistance = IsFogEnabled() && !bLastRay;
         float marchDistance = bLimitRayCastDistance ? max(-log(rand()), 0.1) * perFrameConstants.fogScatterDistance : 999999.0f;
