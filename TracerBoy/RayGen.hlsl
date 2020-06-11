@@ -31,7 +31,7 @@ float rand();
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = float3(-0.172, -0.818, 0.549) * -10000.0f;
+	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
 	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
 
 	LightColor = float3(1.0, 1.0, 1.0) * 0.5;
@@ -193,13 +193,15 @@ void RayGen()
 
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 
+#if USE_ADAPTIVE_RAY_DISPATCHING
 	float luminanceVariance = min(LuminanceVariance[DispatchRaysIndex().xy].x, LuminanceVariance[DispatchRaysIndex().xy].b);
 	luminanceVariance *= perFrameConstants.VarianceMultplier;
 	luminanceVariance = WaveActiveMax(lerp(1.0, luminanceVariance, clamp(float(perFrameConstants.GlobalFrameCount) / float(perFrameConstants.SamplesToTarget), 0, 1)));
-	
-#if USE_ADAPTIVE_RAY_DISPATCHING
-	bool SkipRay = WaveReadLaneFirst( perFrameConstants.GlobalFrameCount > 2 && rand() > max(luminanceVariance, 0.0));
+	// WaveReadLaneFirst causes a state object crash so don't use that
+	bool SkipRay = /*WaveReadLaneFirst*/( perFrameConstants.GlobalFrameCount > 2 && rand() > max(luminanceVariance, 0.0));
+	SkipRay = WaveActiveAnyTrue(WaveIsFirstLane() && SkipRay);
 	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (LastFrameTexture[DispatchRaysIndex().xy] / LastFrameTexture[DispatchRaysIndex().xy].w);
+	
 	if (SkipRay)
 	{
 		OutputTexture[DispatchRaysIndex().xy] = LastFrameTexture[DispatchRaysIndex().xy];
