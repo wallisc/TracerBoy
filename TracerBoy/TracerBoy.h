@@ -262,18 +262,12 @@ private:
 	std::vector<ComPtr<ID3D12Resource>> m_pTextures;
 
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	enum OutputUAVs
-	{
-		PathTracerOutputUAV0 = 0,
-		PathTracerOutputUAV1,
-		NumPathTracerOutputUAVs
-	};
-	static const UINT MaxActiveFrames = NumPathTracerOutputUAVs;
+	static const UINT MaxActiveFrames = 2;
 
 	ComPtr<ID3D12Resource> m_pRandSeedBuffer[MaxActiveFrames];
 	void UpdateRandSeedBuffer(UINT bufferIndex);
 
-	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput[OutputUAVs::NumPathTracerOutputUAVs];
+	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput;
 	UINT8 m_ActiveFrameIndex;
 
 	enum LocalRayTracingRootSignatureParameters
@@ -289,7 +283,6 @@ private:
 		PerFrameConstantsParam = 0,
 		ConfigConstantsParam,
 		EnvironmentMapSRV,
-		LastFrameSRV,
 		AOVDescriptorTable,
 		OutputUAV,
 		AccelerationStructureRootSRV,
@@ -366,10 +359,8 @@ private:
 		LuminanceVarianceSRV,
 		LuminanceVarianceUAV,
 		VolumeSRVSlot,
-		PathTracerOutputSRVBaseSlot,
-		PathTracerOutputSRVLastSlot = PathTracerOutputSRVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
-		PathTracerOutputUAVBaseSlot,
-		PathTracerOutputUAVLastSlot = PathTracerOutputUAVBaseSlot + OutputUAVs::NumPathTracerOutputUAVs - 1,
+		PathTracerOutputSRV,
+		PathTracerOutputUAV,
 		NumReservedViewSlots,
 		NumTotalViews = 4096
 	};

@@ -43,11 +43,11 @@ float GetTime() { return perFrameConstants.Time; }
 float3 GetResolution() { return float3(DispatchRaysDimensions()); }
 float4 GetMouse() { return float4(0.0, 0.0, 0.0, 0.0); }
 float4 GetLastFrameData() {
-	return LastFrameTexture.SampleLevel(PointSampler, float2(0, 1), 0);
+	return OutputTexture[float2(0, DispatchRaysDimensions().y - 1)];
 }
-float4 GetAccumulatedColor(float2 uv) {
-	uv.y = 1.0 - uv.y;
-	return LastFrameTexture.SampleLevel(PointSampler, uv, 0);
+float4 GetAccumulatedColor(float2 uv) 
+{
+	return OutputTexture[DispatchRaysIndex().xy];
 }
 bool NeedsToSaveLastFrameData() { return false; } // Handled by the CPU
 
@@ -204,7 +204,7 @@ void RayGen()
 	
 	if (SkipRay)
 	{
-		OutputTexture[DispatchRaysIndex().xy] = LastFrameTexture[DispatchRaysIndex().xy];
+		//OutputTexture[DispatchRaysIndex().xy] = LastFrameTexture[DispatchRaysIndex().xy];
 		return;
 	}
 #endif
