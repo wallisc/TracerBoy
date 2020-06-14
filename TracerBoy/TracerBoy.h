@@ -337,8 +337,9 @@ private:
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 	ComPtr<ID3D12Resource> m_pVolume;
 
-	ComPtr<ID3D12Resource> CreateUAV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
-	ComPtr<ID3D12Resource> CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	
+	ComPtr<ID3D12Resource> CreateUAV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
+	ComPtr<ID3D12Resource> CreateUAVandSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 
 

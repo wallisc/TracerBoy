@@ -1442,7 +1442,11 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	}
 }
 
-ComPtr<ID3D12Resource> TracerBoy::CreateUAV(const D3D12_RESOURCE_DESC &uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_RESOURCE_STATES defaultState)
+ComPtr<ID3D12Resource> TracerBoy::CreateUAV(
+	const std::wstring &resourceName,
+	const D3D12_RESOURCE_DESC &uavDesc, 
+	D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, 
+	D3D12_RESOURCE_STATES defaultState)
 {
 	ComPtr<ID3D12Resource> pResource;
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
@@ -1455,15 +1459,17 @@ ComPtr<ID3D12Resource> TracerBoy::CreateUAV(const D3D12_RESOURCE_DESC &uavDesc, 
 		IID_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
 
 	m_pDevice->CreateUnorderedAccessView(pResource.Get(), nullptr, nullptr, uavHandle);
+	pResource->SetName(resourceName.c_str());
 	return pResource;
 }
 ComPtr<ID3D12Resource> TracerBoy::CreateUAVandSRV(
+	const std::wstring &resourceName,
 	const D3D12_RESOURCE_DESC& uavDesc, 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, 
 	D3D12_RESOURCE_STATES defaultState)
 {
-	ComPtr<ID3D12Resource> pResource = CreateUAV(uavDesc, uavHandle, defaultState);
+	ComPtr<ID3D12Resource> pResource = CreateUAV(resourceName, uavDesc, uavHandle, defaultState);
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, srvHandle);
 	return pResource;
 }
@@ -1495,20 +1501,18 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 		{
-			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-				&defaultHeapDesc,
-				D3D12_HEAP_FLAG_NONE,
-				&pathTracerOutput,
-				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-				nullptr,
-				IID_PPV_ARGS(m_pAccumulatedPathTracerOutput.ReleaseAndGetAddressOf())));
 
-			m_pDevice->CreateShaderResourceView(m_pAccumulatedPathTracerOutput.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRV));
-			m_pDevice->CreateUnorderedAccessView(m_pAccumulatedPathTracerOutput.Get(), nullptr, nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV));
+			m_pAccumulatedPathTracerOutput = CreateUAVandSRV(
+				L"PathTracerOutput",
+				pathTracerOutput,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV),
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRV),
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		}
 
 		{
 			m_pJitteredAccumulatedPathTracerOutput = CreateUAVandSRV(
+				L"JitteredPathTracerOutput",
 				pathTracerOutput,
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV),
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputSRV),
@@ -1553,6 +1557,7 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			{
 				D3D12_RESOURCE_DESC aovDesc = postProcessOutput;
 				m_pAOVCustomOutput = CreateUAVandSRV(
+					L"AOVCustomOutput",
 					aovDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputUAV),
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputSRV));
@@ -1562,6 +1567,7 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				D3D12_RESOURCE_DESC worldPositionDesc = postProcessOutput;
 				worldPositionDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 				m_pAOVWorldPosition = CreateUAVandSRV(
+					L"AOVWorldPosition",
 					worldPositionDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionUAV),
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV));
@@ -1571,6 +1577,7 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				D3D12_RESOURCE_DESC normalDesc = postProcessOutput;
 				normalDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 				m_pAOVNormals = CreateUAVandSRV(
+					L"AOVNormals",
 					normalDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsUAV), 
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV));
@@ -1580,16 +1587,17 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				D3D12_RESOURCE_DESC summedLumaSquaredDesc = postProcessOutput;
 				summedLumaSquaredDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 				m_pAOVLumaSquared = CreateUAVandSRV(
+					L"AOVSummedLumaSquared",
 					summedLumaSquaredDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredUAV),
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredSRV),
-					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredSRV));
 			}
 
 			{
 				D3D12_RESOURCE_DESC varianceDesc = postProcessOutput;
 				varianceDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 				m_pLuminanceVariance = CreateUAVandSRV(
+					L"LuminanceVariance",
 					varianceDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceUAV),
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV), 
