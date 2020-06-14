@@ -89,6 +89,12 @@ float3 ProcessLuminanceVariance(float4 color)
 float3 PassThroughColor(float4 color)
 {
 	float3 outputColor = color;
+	if (Constants.UseToneMapping)
+	{
+		outputColor *= Constants.ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+
 	if (Constants.UseGammaCorrection)
 	{
 		outputColor = GammaCorrect(outputColor);

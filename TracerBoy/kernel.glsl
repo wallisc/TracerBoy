@@ -1703,7 +1703,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     vec3 outputColor = min(result.rgb, perFrameConstants.FireflyClampValue);
     OutputSampleColor(outputColor);
 
-    return vec4(accumulatedColor.rgb + outputColor, accumulatedColor.w + 1.0);
+    return vec4(outputColor, 1.0);
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )

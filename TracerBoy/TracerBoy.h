@@ -144,6 +144,8 @@ public:
 	{
 		int m_SampleTarget;
 		float m_VarianceMultiplier;
+		float m_TargetFrameRate;
+		float m_ConvergencePercentage;
 	};
 
 	struct DebugSettings 		
@@ -204,6 +206,8 @@ public:
 		PerformanceSettings& performanceSettings = outputSettings.m_performanceSettings;
 		performanceSettings.m_SampleTarget = 256;
 		performanceSettings.m_VarianceMultiplier = 1.0f;
+		performanceSettings.m_TargetFrameRate = 0.0f;
+		performanceSettings.m_ConvergencePercentage = 0.001;
 
 		return outputSettings;
 	}
@@ -268,6 +272,7 @@ private:
 	void UpdateRandSeedBuffer(UINT bufferIndex);
 
 	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput;
+	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
 	UINT8 m_ActiveFrameIndex;
 
 	enum LocalRayTracingRootSignatureParameters
@@ -285,6 +290,7 @@ private:
 		EnvironmentMapSRV,
 		AOVDescriptorTable,
 		OutputUAV,
+		JitteredOutputUAV,
 		AccelerationStructureRootSRV,
 		RandSeedRootSRV,
 		MaterialBufferSRV,
@@ -361,6 +367,8 @@ private:
 		VolumeSRVSlot,
 		PathTracerOutputSRV,
 		PathTracerOutputUAV,
+		JitteredPathTracerOutputSRV,
+		JitteredPathTracerOutputUAV,
 		NumReservedViewSlots,
 		NumTotalViews = 4096
 	};
@@ -373,6 +381,11 @@ private:
 	bool m_flipTextureUVs;
 
 	std::chrono::steady_clock::time_point m_RenderStartTime;
+
+	std::chrono::steady_clock::time_point m_LastFrameTime;
+	const UINT  FramesPerConvergencePercentIncrement = 5;
+	float m_ConvergenceIncrement;
+	float m_ConvergencePercentPad;
 
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;

@@ -8,7 +8,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 
-#define USE_ANYHIT 0
+#define USE_ANYHIT 1
 
 struct HitGroupShaderRecord
 {
@@ -402,8 +402,12 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[RayTracingRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
 
+		CD3DX12_DESCRIPTOR_RANGE1 JitteredOutputUAVDescriptor;
+		JitteredOutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1);
+		Parameters[RayTracingRootSignatureParameters::JitteredOutputUAV].InitAsDescriptorTable(1, &JitteredOutputUAVDescriptor);
+
 		CD3DX12_DESCRIPTOR_RANGE1 AOVDescriptor;
-		AOVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ViewDescriptorHeapSlots::AOVLastUAVSlot - ViewDescriptorHeapSlots::AOVBaseUAVSlot + 1, 1);
+		AOVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ViewDescriptorHeapSlots::AOVLastUAVSlot - ViewDescriptorHeapSlots::AOVBaseUAVSlot + 1, 2);
 		Parameters[RayTracingRootSignatureParameters::AOVDescriptorTable].InitAsDescriptorTable(1, &AOVDescriptor);
 
 
@@ -1104,6 +1108,45 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	bool bUnderTimeLimit = outputSettings.m_debugSettings.m_TimeLimitInSeconds <= 0.0 || 
 		((float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_RenderStartTime).count() / 1000.0f) < outputSettings.m_debugSettings.m_TimeLimitInSeconds;
 	bool bRender = bUnderSampleLimit && bUnderTimeLimit;
+
+	const float DefaultConvergenceIncrement = 0.0001;
+	if (m_SamplesRendered == 0)
+	{
+		m_ConvergenceIncrement = DefaultConvergenceIncrement;
+		m_ConvergencePercentPad = 0.1;
+		m_LastFrameTime = std::chrono::steady_clock::now();
+	}
+	else if (m_SamplesRendered % FramesPerConvergencePercentIncrement ==  0)
+	{
+		float frameTime = ((float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_LastFrameTime).count()) / (float)FramesPerConvergencePercentIncrement;
+		float targetFrame = 1000.0f / (float)outputSettings.m_performanceSettings.m_TargetFrameRate;
+		if (frameTime < targetFrame && m_ConvergenceIncrement > 0.0)
+		{
+			// If we're going faster than the target frame rate, decrease convergence percent to increase active waves
+			m_ConvergenceIncrement = -DefaultConvergenceIncrement;
+		}
+		else if (frameTime > targetFrame && m_ConvergenceIncrement < 0.0)
+		{
+			// If we're going slower than the target frame rate, increase convergence percent to decrease active waves
+			m_ConvergenceIncrement = DefaultConvergenceIncrement;
+		}
+		else
+		{
+			float IncrementMultiplier = std::min(1.0 + 0.25 * abs(frameTime - targetFrame) / frameTime, 2.0);;
+			m_ConvergenceIncrement *= IncrementMultiplier;
+		}
+
+		if (abs(m_ConvergenceIncrement) > m_ConvergencePercentPad * 0.25)
+		{
+			m_ConvergenceIncrement = (m_ConvergencePercentPad * 0.25) * (m_ConvergenceIncrement > 0.0 ? 1.0 : -1.0);
+		}
+
+		m_ConvergencePercentPad += m_ConvergenceIncrement;
+		m_ConvergencePercentPad = std::max(0.0f, m_ConvergencePercentPad);
+		m_LastFrameTime = std::chrono::steady_clock::now();
+
+	}
+
 	UpdateOutputSettings(outputSettings);
 
 	ResizeBuffersIfNeeded(pBackBuffer);
@@ -1150,7 +1193,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.fogScatterDistance = outputSettings.m_fogSettings.ScatterDistance;
 	constants.fogScatterDirection = outputSettings.m_fogSettings.ScatterDirection;
 	constants.GlobalFrameCount = m_SamplesRendered;
-	constants.SamplesToTarget = outputSettings.m_performanceSettings.m_SampleTarget;
+	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
+	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
+	{
+		constants.MinConvergence += m_ConvergencePercentPad;
+	}
+		
 	constants.VarianceMultplier = outputSettings.m_performanceSettings.m_VarianceMultiplier;
 	constants.VolumeMin = { m_volumeMin.x/ 2.0f - constants.fogScatterDirection, m_volumeMin.y / 2.0f, m_volumeMin.z / 2.0f - constants.fogScatterDirection };
 	constants.VolumeMax = { m_volumeMax.x/ 2.0f - constants.fogScatterDirection, m_volumeMax.y / 2.0f, m_volumeMax.z / 2.0f - constants.fogScatterDirection };
@@ -1174,11 +1222,13 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(preDispatchRaysBarrier), preDispatchRaysBarrier);
 
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::EnvironmentMapSRV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::OutputUAV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::JitteredOutputUAV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::ImageTextureTable, m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVBaseUAVSlot));
 
@@ -1206,6 +1256,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -1406,7 +1457,11 @@ ComPtr<ID3D12Resource> TracerBoy::CreateUAV(const D3D12_RESOURCE_DESC &uavDesc, 
 	m_pDevice->CreateUnorderedAccessView(pResource.Get(), nullptr, nullptr, uavHandle);
 	return pResource;
 }
-ComPtr<ID3D12Resource> TracerBoy::CreateUAVandSRV(const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState)
+ComPtr<ID3D12Resource> TracerBoy::CreateUAVandSRV(
+	const D3D12_RESOURCE_DESC& uavDesc, 
+	D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, 
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, 
+	D3D12_RESOURCE_STATES defaultState)
 {
 	ComPtr<ID3D12Resource> pResource = CreateUAV(uavDesc, uavHandle, defaultState);
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, srvHandle);
@@ -1450,6 +1505,14 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 
 			m_pDevice->CreateShaderResourceView(m_pAccumulatedPathTracerOutput.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRV));
 			m_pDevice->CreateUnorderedAccessView(m_pAccumulatedPathTracerOutput.Get(), nullptr, nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV));
+		}
+
+		{
+			m_pJitteredAccumulatedPathTracerOutput = CreateUAVandSRV(
+				pathTracerOutput,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV),
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputSRV),
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		}
 
 		for(UINT i = 0; i < ARRAYSIZE(m_pDenoiserBuffers); i++)

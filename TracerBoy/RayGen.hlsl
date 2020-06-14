@@ -35,7 +35,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
 
 	LightColor = float3(1.0, 1.0, 1.0) * 0.5;
-	PDFValue = 0.0;
+	PDFValue = 1.0;
 }
 
 #define GLOBAL static
@@ -151,7 +151,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 
 void OutputPrimaryAlbedo(float3 albedo)
 {
-	AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	//AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
 }
 
 void OutputPrimaryNormal(float3 normal)
@@ -184,7 +184,7 @@ void ClearAOVs()
 #include "GLSLCompat.h"
 #include "kernel.glsl"
 
-#define USE_ADAPTIVE_RAY_DISPATCHING 0
+#define USE_ADAPTIVE_RAY_DISPATCHING 1
 
 [shader("raygeneration")]
 void RayGen()
@@ -194,25 +194,33 @@ void RayGen()
 	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
-	float luminanceVariance = min(LuminanceVariance[DispatchRaysIndex().xy].x, LuminanceVariance[DispatchRaysIndex().xy].b);
-	luminanceVariance *= perFrameConstants.VarianceMultplier;
-	luminanceVariance = WaveActiveMax(lerp(1.0, luminanceVariance, clamp(float(perFrameConstants.GlobalFrameCount) / float(perFrameConstants.SamplesToTarget), 0, 1)));
-	// WaveReadLaneFirst causes a state object crash so don't use that
-	bool SkipRay = /*WaveReadLaneFirst*/( perFrameConstants.GlobalFrameCount > 2 && rand() > max(luminanceVariance, 0.0));
-	SkipRay = WaveActiveAnyTrue(WaveIsFirstLane() && SkipRay);
-	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (LastFrameTexture[DispatchRaysIndex().xy] / LastFrameTexture[DispatchRaysIndex().xy].w);
-	
-	if (SkipRay)
+	bool SkipRay = false;
+	if(perFrameConstants.GlobalFrameCount > 16)
 	{
-		//OutputTexture[DispatchRaysIndex().xy] = LastFrameTexture[DispatchRaysIndex().xy];
-		return;
+		float4 jitteredOutput = JitteredOutputTexture[DispatchRaysIndex().xy];
+		float4 output = OutputTexture[DispatchRaysIndex().xy];
+		float3 jitteredColor = jitteredOutput.rgb / jitteredOutput.a;
+		float3 color = output.rgb / output.a;
+		
+		float error = (abs(jitteredColor.r - color.r) + abs(jitteredColor.g - color.g) + abs(jitteredColor.b - color.b)) / sqrt(color.r + color.g + color.b);
+		error = WaveActiveSum(error) / WaveActiveSum(1.0);
+		SkipRay = error < perFrameConstants.MinConvergence;
 	}
+	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
+	
+	if (SkipRay) return;
 #endif
 
 	float2 dispatchUV = float2(DispatchRaysIndex().xy + 0.5) / float2(DispatchRaysDimensions().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 	float4 outputColor = PathTrace(uv * GetResolution().xy);
-	OutputTexture[DispatchRaysIndex().xy] = outputColor;
+	float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? OutputTexture[DispatchRaysIndex().xy] : float4(0, 0, 0, 0);
+	OutputTexture[DispatchRaysIndex().xy] = outputColor + accumulatedColor;
+	if (perFrameConstants.GlobalFrameCount % 2 == 0)
+	{
+		float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? JitteredOutputTexture[DispatchRaysIndex().xy] : float4(0, 0, 0, 0);
+		JitteredOutputTexture[DispatchRaysIndex().xy] = outputColor + accumulatedColor;
+	}
 
 
 }

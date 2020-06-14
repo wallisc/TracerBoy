@@ -41,7 +41,7 @@ struct PerFrameConstants
 	float fogScatterDistance;
 	float fogScatterDirection;
 	uint GlobalFrameCount;
-	uint SamplesToTarget;
+	float MinConvergence;
 
 	float VarianceMultplier;
 	float3 VolumeMin;
