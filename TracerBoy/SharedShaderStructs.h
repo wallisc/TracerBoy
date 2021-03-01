@@ -47,6 +47,7 @@ struct PerFrameConstants
 	float3 VolumeMin;
 	
 	float3 VolumeMax;
+	uint UseBlueNoise;
 
 };
 

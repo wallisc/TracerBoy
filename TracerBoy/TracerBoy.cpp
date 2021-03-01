@@ -8,7 +8,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 
-#define USE_ANYHIT 1
+#define USE_ANYHIT 0
 
 struct HitGroupShaderRecord
 {
@@ -231,6 +231,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	pbrt::MatteMaterial::SP pMatteMaterial = std::dynamic_pointer_cast<pbrt::MatteMaterial>(pPbrtMaterial);
 	pbrt::DisneyMaterial::SP pDisneyMaterial = std::dynamic_pointer_cast<pbrt::DisneyMaterial>(pPbrtMaterial);
 	pbrt::PlasticMaterial::SP pPlasticMaterial = std::dynamic_pointer_cast<pbrt::PlasticMaterial>(pPbrtMaterial);
+	pbrt::SubSurfaceMaterial::SP pSubsurfaceMaterial = std::dynamic_pointer_cast<pbrt::SubSurfaceMaterial>(pPbrtMaterial);
 	
 	if (pDisneyMaterial)
 	{
@@ -266,8 +267,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 
 		VERIFY(!pUberMaterial->map_uRoughness); // Not supporting textures
 		VERIFY(pUberMaterial->uRoughness == pUberMaterial->vRoughness); // Not supporting multi dimension rougness
-		VERIFY(pUberMaterial->uRoughness == 0.0f); // Not supporting multi dimension rougness
-		material.roughness = pUberMaterial->roughness;
+		
+		material.roughness = pUberMaterial->uRoughness > 0.0 ? pUberMaterial->uRoughness : pUberMaterial->roughness;
 
 		if (ChannelAverage(pUberMaterial->opacity) < 1.0)
 		{
@@ -355,6 +356,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 
 		material.Flags |= DEFAULT_MATERIAL_FLAG;
 	}
+	else if (pSubsurfaceMaterial)
+	{
+	}
 	else
 	{
 		VERIFY(false);
@@ -412,9 +416,16 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
-		Parameters[RayTracingRootSignatureParameters::RandSeedRootSRV].InitAsShaderResourceView(5);
 		Parameters[RayTracingRootSignatureParameters::MaterialBufferSRV].InitAsShaderResourceView(6);
 		Parameters[RayTracingRootSignatureParameters::TextureDataSRV].InitAsShaderResourceView(7);
+
+		CD3DX12_DESCRIPTOR_RANGE1 BlueNoise0Descriptor;
+		BlueNoise0Descriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5);
+		Parameters[RayTracingRootSignatureParameters::BlueNoise0SRV].InitAsDescriptorTable(1, &BlueNoise0Descriptor);
+
+		CD3DX12_DESCRIPTOR_RANGE1 BlueNoise1Descriptor;
+		BlueNoise1Descriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 10);
+		Parameters[RayTracingRootSignatureParameters::BlueNoise1SRV].InitAsDescriptorTable(1, &BlueNoise1Descriptor);
 
 		CD3DX12_DESCRIPTOR_RANGE1 LuminanceVarianceDescriptor;
 		LuminanceVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8);
@@ -930,6 +941,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		textureAllocator.ExtractScratchResources(resourcesToDelete);
 	}
 
+	{
+		ComPtr<ID3D12Resource> pBlueNoise0UploadHeap;
+		ComPtr<ID3D12Resource> pBlueNoise1UploadHeap;
+		InitializeTexture(L"Textures/LDR_RGBA_0.png", commandList, m_pBlueNoise0Texture, ViewDescriptorHeapSlots::BlueNoise0SRVSlot, pBlueNoise0UploadHeap, true);
+		InitializeTexture(L"Textures/LDR_RGBA_1.png", commandList, m_pBlueNoise1Texture, ViewDescriptorHeapSlots::BlueNoise1SRVSlot, pBlueNoise1UploadHeap, true);
+
+		resourcesToDelete.push_back(pBlueNoise0UploadHeap);
+		resourcesToDelete.push_back(pBlueNoise1UploadHeap);
+	}
+	
 }
 
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
@@ -939,7 +960,8 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
 		m_CachedOutputSettings.m_fogSettings.ScatterDirection != outputSettings.m_fogSettings.ScatterDirection ||
-		m_CachedOutputSettings.m_fogSettings.ScatterDistance != outputSettings.m_fogSettings.ScatterDistance)
+		m_CachedOutputSettings.m_fogSettings.ScatterDistance != outputSettings.m_fogSettings.ScatterDistance ||
+		m_CachedOutputSettings.m_performanceSettings.m_bEnableBlueNoise != outputSettings.m_performanceSettings.m_bEnableBlueNoise)
 	{
 		m_bInvalidateHistory = true;
 	}
@@ -952,14 +974,17 @@ void TracerBoy::InitializeTexture(
 	ID3D12GraphicsCommandList& commandList,
 	ComPtr<ID3D12Resource>& pResource,
 	UINT SRVSlot,
-	ComPtr<ID3D12Resource>& pUploadResource)
+	ComPtr<ID3D12Resource>& pUploadResource,
+	bool bIsInternalAsset )
 {
 	std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
-	std::wstring fullTextureName = directory + textureName;
+	std::wstring fullTextureName = bIsInternalAsset ? textureName : directory + textureName;
 
 	DirectX::TexMetadata texMetaData = {};
 	DirectX::ScratchImage scratchImage = {};
 	std::wstring fileExt = textureName.substr(textureName.size() - 4, 4);
+
+	auto start = textureName.find_last_of('\\');
 	if (fileExt.compare(L".hdr") == 0)
 	{
 		VERIFY_HRESULT(DirectX::LoadFromHDRFile(fullTextureName.c_str(), &texMetaData, scratchImage));
@@ -971,10 +996,6 @@ void TracerBoy::InitializeTexture(
 	else if (fileExt.compare(L".dds") == 0)
 	{
 		VERIFY_HRESULT(DirectX::LoadFromDDSFile(fullTextureName.c_str(), DDS_FLAGS_NO_16BPP, &texMetaData, scratchImage));
-	}
-	else if (fileExt.compare(L".tga") == 0)
-	{
-		VERIFY_HRESULT(DirectX::LoadFromTGAFile(fullTextureName.c_str(), &texMetaData, scratchImage));
 	}
 	else
 	{
@@ -1152,8 +1173,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	ResizeBuffersIfNeeded(pBackBuffer);
 	VERIFY(m_pAccumulatedPathTracerOutput && m_pPostProcessOutput);
 
-	UpdateRandSeedBuffer(m_ActiveFrameIndex);
-
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
@@ -1194,6 +1213,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.fogScatterDirection = outputSettings.m_fogSettings.ScatterDirection;
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
+	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{
 		constants.MinConvergence += m_ConvergencePercentPad;
@@ -1205,7 +1225,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	
 	commandList.SetComputeRoot32BitConstants(RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	commandList.SetComputeRootConstantBufferView(RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
-	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RandSeedRootSRV, m_pRandSeedBuffer[m_ActiveFrameIndex]->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::MaterialBufferSRV, m_pMaterialList->GetGPUVirtualAddress());
 	if (m_pTextureDataList)
 	{
@@ -1214,6 +1233,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::LuminanceVarianceParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::BlueNoise0SRV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::BlueNoise0SRVSlot));
+	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::BlueNoise1SRV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::BlueNoise1SRVSlot));
 	if (m_pVolume)
 	{
 		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::VolumeSRVParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::VolumeSRVSlot));
@@ -1264,6 +1285,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 
+	if(outputSettings.m_denoiserSettings.m_bEnabled)
 	{
 		ScopedResourceBarrier luminanceVarianceBarrier(commandList, m_pLuminanceVariance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pCalculateVariancePass->Run(commandList,
@@ -1312,7 +1334,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::OutputTexture,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV));
-		commandList.Dispatch(postProcessConstants.Resolution.x, postProcessConstants.Resolution.y, 1);
+		commandList.Dispatch(postProcessConstants.Resolution.x / 8, postProcessConstants.Resolution.y, 1);
 	}
 
 	{
@@ -1616,22 +1638,5 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				CD3DX12_CPU_DESCRIPTOR_HANDLE(viewDescriptorHeapBase, ViewDescriptorHeapSlots::PostProcessOutputUAV, viewDescriptorSize));
 
 		}
-
-		for (auto& pRandBuffer : m_pRandSeedBuffer)
-		{
-			AllocateUploadBuffer(sizeof(float) * backBufferDesc.Width * backBufferDesc.Height, pRandBuffer);
-		}
 	}
-}
-
-void TracerBoy::UpdateRandSeedBuffer(UINT bufferIndex)
-{
-	UINT numSeeds = m_pRandSeedBuffer[bufferIndex]->GetDesc().Width / sizeof(UINT32);
-	float* pData;
-	VERIFY_HRESULT(m_pRandSeedBuffer[bufferIndex]->Map(0, nullptr, (void**)&pData));
-	for (UINT i = 0; i < numSeeds; i++)
-	{
-		pData[i] = 10000.0f * (float)rand() / (float)RAND_MAX;
-	}
-	m_pRandSeedBuffer[bufferIndex]->Unmap(0, nullptr);
 }

@@ -146,6 +146,7 @@ public:
 		float m_VarianceMultiplier;
 		float m_TargetFrameRate;
 		float m_ConvergencePercentage;
+		bool m_bEnableBlueNoise;
 	};
 
 	struct DebugSettings 		
@@ -208,6 +209,7 @@ public:
 		performanceSettings.m_VarianceMultiplier = 1.0f;
 		performanceSettings.m_TargetFrameRate = 0.0f;
 		performanceSettings.m_ConvergencePercentage = 0.001;
+		performanceSettings.m_bEnableBlueNoise = true;
 
 		return outputSettings;
 	}
@@ -235,7 +237,8 @@ private:
 		ID3D12GraphicsCommandList& commandList,
 		ComPtr<ID3D12Resource>& pResource,
 		UINT SRVSlot,
-		ComPtr<ID3D12Resource>& pUploadResource);
+		ComPtr<ID3D12Resource>& pUploadResource,
+		bool bIsInternalAsset = false);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(UINT slot);
@@ -268,9 +271,6 @@ private:
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	static const UINT MaxActiveFrames = 2;
 
-	ComPtr<ID3D12Resource> m_pRandSeedBuffer[MaxActiveFrames];
-	void UpdateRandSeedBuffer(UINT bufferIndex);
-
 	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput;
 	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
 	UINT8 m_ActiveFrameIndex;
@@ -292,8 +292,9 @@ private:
 		OutputUAV,
 		JitteredOutputUAV,
 		AccelerationStructureRootSRV,
-		RandSeedRootSRV,
 		MaterialBufferSRV,
+		BlueNoise0SRV,
+		BlueNoise1SRV,
 		TextureDataSRV,
 		ImageTextureTable,
 		LuminanceVarianceParam,
@@ -336,6 +337,8 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVLumaSquared;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 	ComPtr<ID3D12Resource> m_pVolume;
+	ComPtr<ID3D12Resource> m_pBlueNoise0Texture;
+	ComPtr<ID3D12Resource> m_pBlueNoise1Texture;
 
 	
 	ComPtr<ID3D12Resource> CreateUAV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
@@ -350,6 +353,8 @@ private:
 		DenoiserOuputLastSRV,
 		DenoiserOutputBaseUAV,
 		DenoiserOutputLastUAV,
+		BlueNoise0SRVSlot,
+		BlueNoise1SRVSlot,
 		EnvironmentMapSRVSlot,
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,

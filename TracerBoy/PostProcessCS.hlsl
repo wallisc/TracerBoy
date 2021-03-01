@@ -103,7 +103,7 @@ float3 PassThroughColor(float4 color)
 }
 
 [RootSignature(ComputeRS)]
-[numthreads(1, 1, 1)]
+[numthreads(8, 8, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
 {
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;

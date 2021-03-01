@@ -45,7 +45,7 @@ struct Ray
 
 vec3 SampleEnvironmentMap(vec3 v)
 {
-    const float EnvironmentLightMultipier = 0.15;
+    const float EnvironmentLightMultipier = 0.05;
 	return EnvironmentLightMultipier * texture(iChannel1, v).xyz;
 }
 
@@ -695,11 +695,10 @@ vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
     return v.x * xAxis + v.y * normal + v.z * zAxis;
 }
 
-vec3 GenerateCosineWeightedDirection(out float pdfValue)
+vec3 GenerateCosineWeightedDirection(float rand0, float rand1, out float pdfValue)
 {
-	float rand0 = rand();
     float r = sqrt(rand0);
-    float theta = 2.0 * PI * rand();
+    float theta = 2.0 * PI * rand1;
  
     float x = r * cos(theta);
 	float y = sqrt(max(EPSILON, 1.0 - rand0));
@@ -709,17 +708,22 @@ vec3 GenerateCosineWeightedDirection(out float pdfValue)
     return vec3(x, y, z);
 }
 
-vec3 GenerateCosineWeightedDirection(vec3 normal, out float pdfValue)
+vec3 GenerateCosineWeightedDirection(vec3 normal, float rand0, float rand1, out float pdfValue)
 {
-	vec3 direction = GenerateCosineWeightedDirection(pdfValue);
+    vec3 direction = GenerateCosineWeightedDirection(rand0, rand1, pdfValue);
 	return ReorientVectorAroundNormal(direction, normal);
 }
 
-vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out float PDFValue)
+vec3 GenerateRandomCosineWeightedDirection(vec3 normal, out float pdfValue)
+{
+	return GenerateCosineWeightedDirection(normal, rand(), rand(), pdfValue);
+}
+
+vec3 GenerateImportanceSampledDirection(vec3 normal, float roughness, float rand0, float rand1, out float PDFValue)
 { 
     float lobeMultiplier = pow(1.0 - roughness, 5.0) * 1000.0;
         
-    float u1 = rand(), u2 = rand();
+    float u1 = rand0, u2 = rand1;
     float theta = 2.0 * PI * u2;
     float phi = acos(sqrt(pow(u1, 1.0/(lobeMultiplier + 1.0))));
  
@@ -731,6 +735,11 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
     PDFValue = (lobeMultiplier + 1.0) * pow(cos(phi), lobeMultiplier) / (2.0 * PI);
     
 	return ReorientVectorAroundNormal(direction, normal);
+}
+
+vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out float PDFValue)
+{ 
+    return GenerateImportanceSampledDirection(normal, roughness, rand(), rand(), PDFValue);
 }
 
 #if IS_SHADER_TOY
@@ -1074,12 +1083,14 @@ float BeerLambert(float absorption, float dist)
 }
 
 #define USE_RUSSIAN_ROULETTE 1
-#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
+#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 1
 vec4 Trace(Ray ray, Ray neighborRay)
 {
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
     uint FirstPrimitiveID = uint(-1); 
+    BlueNoiseData BlueNoise = GetBlueNoise();
+
     
 	float lightPDF;
     vec3 lightPosition, lightColor;
@@ -1088,7 +1099,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
 #if USE_RUSSIAN_ROULETTE
-        if(i > MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE)
+        if(i >= MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE)
         {
             float p = max(max(accumulatedIndirectLightMultiplier.r, accumulatedIndirectLightMultiplier.g), accumulatedIndirectLightMultiplier.b);
             if(p < rand())
@@ -1103,6 +1114,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 #endif
 
         bool bLastRay = (i == MAX_BOUNCES - 1);
+        bool bFirstRay = (i == 0);
         bool bLimitRayCastDistance = IsFogEnabled() && !bLastRay;
         float marchDistance = bLimitRayCastDistance ? max(-log(rand()), 0.1) * perFrameConstants.fogScatterDistance : 999999.0f;
 
@@ -1110,6 +1122,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
         vec3 tangent;
         vec2 uv;
         uint PrimitiveID;
+
 	    vec2 result = IntersectWithMaxDistance(ray, marchDistance, normal, tangent, uv, PrimitiveID);
 
         if(i == 0)
@@ -1126,6 +1139,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             break;
         }
 
+#if SUPPORT_VOLUMES
         vec3 VolumeDimensions = perFrameConstants.VolumeMax - perFrameConstants.VolumeMin;
         float entryT, exitT;
         if(RayAABIntersect(
@@ -1210,7 +1224,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             }
 
         }
-
+#endif
 
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
@@ -1283,7 +1297,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 }
                 else
                 {
-                    ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
+                    ray.direction = bFirstRay ? 
+                        GenerateImportanceSampledDirection(ReflectedDirection, material.roughness, BlueNoise.SecondaryRayDirection.x, BlueNoise.SecondaryRayDirection.y, PDFValue) :
+                        GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
                     if(PDFValue < EPSILON)
                     {
                         // This ray is satistically not relevant, attempt to find a better ray
@@ -1340,7 +1356,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 else 
                 {
 					float PDFValue;
-                    ray.direction = GenerateCosineWeightedDirection(normal, PDFValue);
+                    ray.direction = bFirstRay ? 
+                        GenerateCosineWeightedDirection(normal, BlueNoise.SecondaryRayDirection.x, BlueNoise.SecondaryRayDirection.y, PDFValue) :
+                        GenerateRandomCosineWeightedDirection(normal, PDFValue);
                     accumulatedIndirectLightMultiplier /= PDFValue;
                 }
             }
@@ -1349,94 +1367,94 @@ vec4 Trace(Ray ray, Ray neighborRay)
             vec3 lightPosition, lightColor;
             GetOneLightSample(lightPosition, lightColor, lightPDF);
                 
-                if(IsSubsurfaceScattering(material) && !bSpecularRay)
+            if(IsSubsurfaceScattering(material) && !bSpecularRay)
+            {
+                // Hack required to avoid black edges on translucent spheres
+                // due to rays coming in at grazing angles
+                ray.origin += -normal * 0.05;
+                    
+                #define MAX_SSS_BOUNCES 5
+                bool noScatter = material.scattering < EPSILON;
+                // TODO: may want to consider the reciprocal be defined in the material to
+                // avoid a divide
+                float DistancePerScatter =  1.0 / material.scattering; 
+                float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
+                bool exittingPrimitive = false;
+                    
+                vec3 AccumulatedSSLightSamples = vec3(0.0, 0.0, 0.0);;
+                int NumLightSamples = 0;
+                for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
                 {
-                    // Hack required to avoid black edges on translucent spheres
-                    // due to rays coming in at grazing angles
-                    ray.origin += -normal * 0.05;
-                    
-                    #define MAX_SSS_BOUNCES 5
-                    bool noScatter = material.scattering < EPSILON;
-                    // TODO: may want to consider the reciprocal be defined in the material to
-                    // avoid a divide
-                    float DistancePerScatter =  1.0 / material.scattering; 
-                    float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
-                    bool exittingPrimitive = false;
-                    
-                    vec3 AccumulatedSSLightSamples = vec3(0.0, 0.0, 0.0);;
-                    int NumLightSamples = 0;
-                    for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
+                    if(i != 0 && lightPDF > EPSILON)
                     {
-                        if(i != 0 && lightPDF > EPSILON)
-                        {
-                            vec3 lightDirection = normalize(lightPosition - ray.origin);
+                        vec3 lightDirection = normalize(lightPosition - ray.origin);
                         
-                            Ray lightRay;
-                            lightRay.origin = ray.origin;
-                            lightRay.direction = lightDirection;
-                            vec3 unused;
-							vec2 unusedUV;
-                            uint unusedUint;
-                            vec2 lightResult = Intersect(lightRay, unused, unused, unusedUV, unusedUint);
-                            vec3 lightEntryPoint = GetRayPoint(lightRay, lightResult.x);
-                            float lightDistance = length(lightEntryPoint - ray.origin);
+                        Ray lightRay;
+                        lightRay.origin = ray.origin;
+                        lightRay.direction = lightDirection;
+                        vec3 unused;
+						vec2 unusedUV;
+                        uint unusedUint;
+                        vec2 lightResult = Intersect(lightRay, unused, unused, unusedUV, unusedUint);
+                        vec3 lightEntryPoint = GetRayPoint(lightRay, lightResult.x);
+                        float lightDistance = length(lightEntryPoint - ray.origin);
 
-                            float extinctionChancePerUnitLength = material.absorption + material.scattering;
-                            float distancePerExtinction = 1.0 / extinctionChancePerUnitLength;
-                            if(lightDistance < distancePerExtinction)
-                            {
-                                vec3 remainingLightColor = lightColor * (1.0 - lightDistance / distancePerExtinction);
-                                AccumulatedSSLightSamples += remainingLightColor * accumulatedIndirectLightMultiplier;
-                                NumLightSamples++;
-                            }
-                        }
-                        
-                        float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
-
-                        ray.origin += ray.direction * EPSILON;
-                        uint unusedPrimitiveID;
-                        result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
-                        
-                        result.x = min(travelDistance, result.x);
-                        float distanceTravelledBeforeScatter = result.x;
-                        
-                        exittingPrimitive = result.x < travelDistance || noScatter;
-
-                        bool lastRay = (i == MAX_SSS_BOUNCES - 1);
-                        if(lastRay && !exittingPrimitive)
+                        float extinctionChancePerUnitLength = material.absorption + material.scattering;
+                        float distancePerExtinction = 1.0 / extinctionChancePerUnitLength;
+                        if(lightDistance < distancePerExtinction)
                         {
-                            // Couldn't find an exit point
-                            accumulatedColor = vec3(0.0, 0.0, 0.0);
-                            accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
+                            vec3 remainingLightColor = lightColor * (1.0 - lightDistance / distancePerExtinction);
+                            AccumulatedSSLightSamples += remainingLightColor * accumulatedIndirectLightMultiplier;
+                            NumLightSamples++;
                         }
-
-                        RayPoint = GetRayPoint(ray, result.x);
-                        ray.origin = RayPoint + normal * EPSILON;
-
-                        vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
-                        accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * distanceTravelledBeforeScatter * material.absorption);
-                        if(exittingPrimitive)
-                        {
-                            previousDirection = ray.direction;
-                        }
-                        else
-                        {
-                            float pdfValue;
-                            ray.direction = GenerateNewDirectionFromBSDF(ray.direction, 0.0, pdfValue); 
-                            // TODO: Divide by pdfValue
-                        }
-
                     }
-                    if(NumLightSamples > 0)
+                        
+                    float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
+
+                    ray.origin += ray.direction * EPSILON;
+                    uint unusedPrimitiveID;
+                    result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
+                        
+                    result.x = min(travelDistance, result.x);
+                    float distanceTravelledBeforeScatter = result.x;
+                        
+                    exittingPrimitive = result.x < travelDistance || noScatter;
+
+                    bool lastRay = (i == MAX_SSS_BOUNCES - 1);
+                    if(lastRay && !exittingPrimitive)
                     {
-                        accumulatedColor += AccumulatedSSLightSamples / float(NumLightSamples);
+                        // Couldn't find an exit point
+                        accumulatedColor = vec3(0.0, 0.0, 0.0);
+                        accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
                     }
 
-                    
-                    // TODO: We know the exact primitive it will hit, should just intersect against
-                    // that specific primitive
+                    RayPoint = GetRayPoint(ray, result.x);
+                    ray.origin = RayPoint + normal * EPSILON;
+
+                    vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
+                    accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * distanceTravelledBeforeScatter * material.absorption);
+                    if(exittingPrimitive)
+                    {
+                        previousDirection = ray.direction;
+                    }
+                    else
+                    {
+                        float pdfValue;
+                        ray.direction = GenerateNewDirectionFromBSDF(ray.direction, 0.0, pdfValue); 
+                        // TODO: Divide by pdfValue
+                    }
 
                 }
+                if(NumLightSamples > 0)
+                {
+                    accumulatedColor += AccumulatedSSLightSamples / float(NumLightSamples);
+                }
+
+                    
+                // TODO: We know the exact primitive it will hit, should just intersect against
+                // that specific primitive
+
+            }
             else
             {
 				if(lightPDF > EPSILON)
@@ -1454,7 +1472,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         vec3 shadowTangent;
 						vec2 shadowUV;
 						uint shadowPrimitiveID;
-						vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
+                        vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
+                        //vec2 shadowResult = IntersectAnything(shadowFeeler, 999999.0, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
 						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
                      
 						int materialID = int(shadowResult.y);
@@ -1462,6 +1481,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						// TODO: This shouldn't really be possible unless we're talking a directional light...
 						if(materialID == INVALID_MATERIAL_ID)
 						{
+#if SUPPORTS_VOLUMES
                             float lightStartT, lightEndT;
                             if(RayAABIntersect(
                                 lightStartT, 
@@ -1482,12 +1502,14 @@ vec4 Trace(Ray ray, Ray neighborRay)
                                     currentT += marchSize;
                                 }
                             }
+#endif
 							break;
 						}
 						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV);
 
-						if(IsLight(material))
-						{
+						//if(IsLight(material))
+						if(false)
+                        {
 							break;
 						}
 						else if(false)//IsSubsurfaceScattering(material))
@@ -1669,7 +1691,8 @@ vec4 PathTrace(in vec2 pixelCoord)
 	vec4 accumulatedColor = GetAccumulatedColor(uv);
 
     // Add some jitter for anti-aliasing
-    uv += (vec2(rand(), rand()) - vec2(0.5, 0.5)) * pixelUVSize;
+	BlueNoiseData BlueNoise = GetBlueNoise();
+    uv += (BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5)) * pixelUVSize;
     
     float aspectRatio = GetResolution().x / GetResolution().y ; 
     vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
@@ -1691,7 +1714,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     if(perFrameConstants.DOFFocusDistance > 0.0f)
     {
         vec3 FocusPoint = GetRayPoint(cameraRay, perFrameConstants.DOFFocusDistance);
-        vec2 FocalJitter = (vec2(rand(), rand()) - vec2(0.5, 0.5)) * perFrameConstants.DOFApertureWidth;
+        vec2 FocalJitter = (BlueNoise.DOFJitter - vec2(0.5, 0.5)) * perFrameConstants.DOFApertureWidth;
         cameraRay.origin += FocalJitter.x * GetCameraRight() + FocalJitter.y * GetCameraUp();
     
         cameraRay.direction = normalize(FocusPoint - cameraRay.origin);

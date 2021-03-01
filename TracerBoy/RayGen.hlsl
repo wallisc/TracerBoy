@@ -4,7 +4,7 @@
 #include "Tonemap.h"
 
 #define IS_SHADER_TOY 0
-
+#define SUPPORT_VOLUMES 0
 
 bool ShouldInvalidateHistory() { return perFrameConstants.InvalidateHistory; }
 float3 GetCameraPosition() { return perFrameConstants.CameraPosition; }
@@ -24,17 +24,75 @@ float3 SampleEnvironmentMap(float3 v)
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(viewDir.y) / (3.14);
 
-	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return 0.3 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 float rand();
 
+// halton low discrepancy sequence, from https://www.shadertoy.com/view/tl2GDw
+float Halton(int b, int i)
+{
+    float r = 0.0;
+    float f = 1.0;
+    while (i > 0) {
+        f = f / float(b);
+        r = r + f * float(i % b);
+        i = int(floor(float(i) / float(b)));
+    }
+    return r;
+}
+
+float Halton2(int i)
+{
+	return Halton(2, i);
+}
+
+float2 Halton23(int i)
+{
+    return float2(Halton2(i), Halton(3, i));
+}
+
+struct BlueNoiseData
+{
+	float2 PrimaryJitter;
+	float2 SecondaryRayDirection;
+	float2 AreaLightJitter;
+	float2 DOFJitter;
+};
+
+float2 ApplyLDSToNoise(float2 Noise)
+{
+	return frac(Noise + Halton23(perFrameConstants.GlobalFrameCount));
+}
+
+BlueNoiseData GetBlueNoise()
+{
+	BlueNoiseData data;
+	if (!perFrameConstants.UseBlueNoise || DispatchRaysIndex().x > 400)
+	{
+		data.PrimaryJitter = float2(rand(), rand());
+		data.SecondaryRayDirection = float2(rand(), rand());
+		data.AreaLightJitter = float2(rand(), rand());
+		data.DOFJitter = float2(rand(), rand());
+	}
+	else
+	{
+		data.PrimaryJitter = ApplyLDSToNoise( BlueNoise0Texture[(DispatchRaysIndex().xy % 256)].xy);
+		data.SecondaryRayDirection = ApplyLDSToNoise( BlueNoise0Texture[(DispatchRaysIndex().xy % 256)].zw);
+		data.AreaLightJitter = ApplyLDSToNoise( BlueNoise1Texture[(DispatchRaysIndex().xy % 256)].xy);
+		data.DOFJitter = ApplyLDSToNoise( BlueNoise1Texture[(DispatchRaysIndex().xy % 256)].zw);
+	}
+
+	return data;
+}
+
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
 	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
-	LightPosition.xz += float2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0) * 100.0f;
+	BlueNoiseData BlueNoise = GetBlueNoise();
+	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * 100.0f;
 
-	LightColor = float3(1.0, 1.0, 1.0) * 0.5;
+	LightColor = float3(1.0, 1.0, 1.0) * 1;
 	PDFValue = 1.0;
 }
 
@@ -149,6 +207,35 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	return result;
 }
 
+float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
+{
+	RayDesc dxrRay;
+	dxrRay.Origin = ray.origin;
+	dxrRay.Direction = ray.direction;
+	dxrRay.TMin = 0.001;
+	dxrRay.TMax = maxT;
+
+	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
+	TraceRay(AS, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, ~0, 0, 1, 0, dxrRay, payload);
+
+	float2 result;
+	result.x = payload.hitT;
+	bool hitFound = result.x < maxT;
+	if (hitFound)
+	{
+		result.y = payload.materialIndex;
+	}
+	else
+	{
+		result.y = -1;
+	}
+	PrimitiveID = 0;
+	normal = payload.normal;
+	uv = payload.uv;
+	tangent = payload.tangent;
+	return result;
+}
+
 void OutputPrimaryAlbedo(float3 albedo)
 {
 	//AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
@@ -186,12 +273,19 @@ void ClearAOVs()
 
 #define USE_ADAPTIVE_RAY_DISPATCHING 1
 
+float hash13(vec3 p3)
+{
+	p3  = fract(p3 * .1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 [shader("raygeneration")]
 void RayGen()
 {
 	ClearAOVs();
 
-	seed = RandSeedBuffer[DispatchRaysIndex().x + DispatchRaysIndex().y * DispatchRaysDimensions().x];
+	seed = hash13(float3(DispatchRaysIndex().x, DispatchRaysIndex().y, perFrameConstants.GlobalFrameCount));
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
 	bool SkipRay = false;
@@ -203,7 +297,7 @@ void RayGen()
 		float3 color = output.rgb / output.a;
 		
 		float error = (abs(jitteredColor.r - color.r) + abs(jitteredColor.g - color.g) + abs(jitteredColor.b - color.b)) / sqrt(color.r + color.g + color.b);
-		error = WaveActiveSum(error) / WaveActiveSum(1.0);
+		//error = WaveActiveSum(error) / WaveActiveSum(1.0);
 		SkipRay = error < perFrameConstants.MinConvergence;
 	}
 	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
@@ -216,7 +310,7 @@ void RayGen()
 	float4 outputColor = PathTrace(uv * GetResolution().xy);
 	float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? OutputTexture[DispatchRaysIndex().xy] : float4(0, 0, 0, 0);
 	OutputTexture[DispatchRaysIndex().xy] = outputColor + accumulatedColor;
-	if (perFrameConstants.GlobalFrameCount % 2 == 0)
+	if (perFrameConstants.GlobalFrameCount == 0 || rand() < 0.5)
 	{
 		float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? JitteredOutputTexture[DispatchRaysIndex().xy] : float4(0, 0, 0, 0);
 		JitteredOutputTexture[DispatchRaysIndex().xy] = outputColor + accumulatedColor;
