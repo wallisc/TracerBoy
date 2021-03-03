@@ -8,7 +8,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 
-#define USE_ANYHIT 0
+#define USE_ANYHIT 1
 
 struct HitGroupShaderRecord
 {
@@ -210,16 +210,22 @@ pbrt::vec3f GetAreaLightColor(pbrt::AreaLight::SP pAreaLight)
 	return emissive;
 }
 
-Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive, MaterialTracker &materialTracker, TextureAllocator &textureAlloator)
+Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pAlphaTexture,  pbrt::vec3f emissive, MaterialTracker &materialTracker, TextureAllocator &textureAlloator)
 {
 	Material material = {};
 	material.IOR = 1.5f;
 	material.albedoIndex = UINT_MAX;
+	material.alphaIndex = UINT_MAX;
 	material.normalMapIndex = UINT_MAX;
 	material.emissiveIndex = UINT_MAX;
 	material.specularMapIndex = UINT_MAX;
 	material.emissive = ConvertFloat3(emissive);
 	material.Flags = ChannelAverage(emissive) > 0.0 ? LIGHT_MATERIAL_FLAG : DEFAULT_MATERIAL_FLAG;
+
+	if (pAlphaTexture)
+	{
+		material.alphaIndex = textureAlloator.CreateTexture(*pAlphaTexture);
+	}
 
 	pbrt::SubstrateMaterial::SP pSubstrateMaterial = std::dynamic_pointer_cast<pbrt::SubstrateMaterial>(pPbrtMaterial);
 	pbrt::UberMaterial::SP pUberMaterial = std::dynamic_pointer_cast<pbrt::UberMaterial>(pPbrtMaterial);
@@ -232,8 +238,13 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	pbrt::DisneyMaterial::SP pDisneyMaterial = std::dynamic_pointer_cast<pbrt::DisneyMaterial>(pPbrtMaterial);
 	pbrt::PlasticMaterial::SP pPlasticMaterial = std::dynamic_pointer_cast<pbrt::PlasticMaterial>(pPbrtMaterial);
 	pbrt::SubSurfaceMaterial::SP pSubsurfaceMaterial = std::dynamic_pointer_cast<pbrt::SubSurfaceMaterial>(pPbrtMaterial);
+	pbrt::TranslucentMaterial::SP pTranslucentMaterial = std::dynamic_pointer_cast<pbrt::TranslucentMaterial>(pPbrtMaterial);
 	
-	if (pDisneyMaterial)
+	if (!pPbrtMaterial)
+	{
+		// Stick with the default properties if null material
+	}
+	else if (pDisneyMaterial)
 	{
 		material.albedo = ConvertFloat3(pDisneyMaterial->color);
 		material.roughness = pDisneyMaterial->roughness;
@@ -279,8 +290,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 	}
 	else if (pMixMaterial)
 	{
-		UINT mat0Index = materialTracker.AddMaterial(pMixMaterial->material0.get(), CreateMaterial(pMixMaterial->material0, emissive, materialTracker, textureAlloator));
-		UINT mat1Index = materialTracker.AddMaterial(pMixMaterial->material1.get(), CreateMaterial(pMixMaterial->material1, emissive, materialTracker, textureAlloator));
+		UINT mat0Index = materialTracker.AddMaterial(pMixMaterial->material0.get(), CreateMaterial(pMixMaterial->material0, nullptr, emissive, materialTracker, textureAlloator));
+		UINT mat1Index = materialTracker.AddMaterial(pMixMaterial->material1.get(), CreateMaterial(pMixMaterial->material1, nullptr, emissive, materialTracker, textureAlloator));
 		material.Flags = MIX_MATERIAL_FLAG;
 
 		// TODO: gross
@@ -350,14 +361,27 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::vec3f emissive,
 		}
 		material.albedo = ConvertFloat3(pPlasticMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
-		VERIFY(!pPlasticMaterial->map_ks);
-		VERIFY(!pPlasticMaterial->map_roughness);
-		VERIFY(!pPlasticMaterial->map_bump);
+		//VERIFY(!pPlasticMaterial->map_ks);
+		//VERIFY(!pPlasticMaterial->map_roughness);
+		//VERIFY(!pPlasticMaterial->map_bump);
 
 		material.Flags |= DEFAULT_MATERIAL_FLAG;
 	}
 	else if (pSubsurfaceMaterial)
 	{
+	}
+	else if (pTranslucentMaterial)
+	{
+		if (pTranslucentMaterial->map_kd)
+		{
+			material.albedoIndex = textureAlloator.CreateTexture(pTranslucentMaterial->map_kd);
+		}
+		else
+		{
+			material.albedo = { };
+			material.absorption = 0.001;
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+		}
 	}
 	else
 	{
@@ -686,7 +710,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		pbrt::vec3f CameraView = pbrt::vec3f(0.0, 0.0, 1.0);
 		CameraPosition = pCamera->frame * CameraPosition;
 		CameraView = pbrt::math::normalize(pbrt::math::xfmVector(pCamera->frame, CameraView));
-		pbrt::vec3f CameraRight = pbrt::math::cross(pbrt::vec3f(0, 1, 0), CameraView);
+		pbrt::vec3f CameraRight = pbrt::math::cross(
+			IS_Y_AXIS_UP ? pbrt::vec3f(0, 1, 0) : pbrt::vec3f(0, 0, 1), 
+			CameraView);
 		pbrt::vec3f CameraUp = pbrt::math::cross(CameraView, CameraRight);
 
 		auto pfnConvertVector3 = [](const pbrt::vec3f& v) -> Vector3
@@ -714,9 +740,22 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		const void* pHitGroupShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"HitGroup");
 		UINT geometryCount = 0;
 		UINT triangleCount = 0;
-		for (UINT geometryIndex = 0; geometryIndex < pScene->world->shapes.size(); geometryIndex++)
+		for (UINT i = 0; i < pScene->world->shapes.size() + pScene->world->instances.size(); i++)
 		{
-			auto& pGeometry = pScene->world->shapes[geometryIndex];
+			pbrt::Shape::SP pGeometry;
+			pbrt::affine3f transform = pbrt::affine3f::identity();
+			if (i < pScene->world->shapes.size())
+			{
+				UINT geometryIndex = i;
+				pGeometry = pScene->world->shapes[geometryIndex];
+			}
+			else
+			{
+				UINT instanceIndex = i - pScene->world->shapes.size();
+				auto& pInstance = pScene->world->instances[instanceIndex];
+				transform = pInstance->xfm;
+				pGeometry = pInstance->object->shapes[0];
+			}
 			pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
 			if (!pTriangleMesh)
 			{
@@ -737,7 +776,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 			else
 			{
-				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material.get(), CreateMaterial(pTriangleMesh->material, emissive, materialTracker, textureAllocator));
+				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material.get(), CreateMaterial(
+					pTriangleMesh->material, 
+					pTriangleMesh->textures.find("alpha") != pTriangleMesh->textures.end() ? &pTriangleMesh->textures["alpha"] : nullptr,
+					emissive, 
+					materialTracker, 
+					textureAllocator));
 			}
 
 			ComPtr<ID3D12Resource> pVertexBuffer;
@@ -750,16 +794,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				VERIFY_HRESULT(pVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
 				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 				{
-					auto& parserVertex = pTriangleMesh->vertex[v];
+					auto parserVertex = transform * pTriangleMesh->vertex[v];
 					pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
 					pbrt::vec3f parserTangent(0, 0, 1);
 					if (bNormalsProvided)
 					{
-						parserNormal = pTriangleMesh->normal[v];
+						parserNormal = normalize(xfmNormal(transform, pTriangleMesh->normal[v]));
 					}
 					if (v < pTriangleMesh->tangents.size())
 					{
-						parserTangent = pTriangleMesh->tangents[v];
+						parserTangent = normalize(xfmNormal(transform, pTriangleMesh->tangents[v]));
 					}
 					pbrt::vec2f uv(0.0, 0.0);
 					if (v < pTriangleMesh->texcoord.size())
@@ -1407,12 +1451,12 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	XMVECTOR LookAt = XMVectorSet(m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, 1.0);
 	XMVECTOR ViewDir = LookAt - Position;
 
-	XMVECTOR GlobalUp = XMVectorSet(0.0, 1.0, 0.0, 1.0);
-	XMVECTOR XZAlignedRight = XMVector3Normalize(XMVectorSet(XMVectorGetX(RightAxis), 0.0f, XMVectorGetZ(RightAxis), 1.0f));
+	XMVECTOR GlobalUp = IS_Y_AXIS_UP ?  XMVectorSet(0.0, 1.0, 0.0, 1.0) : XMVectorSet(0.0, 0.0, 1.0, 1.0);
+	XMVECTOR XZAlignedRight = XMVector3Normalize(XMVectorSet(XMVectorGetX(RightAxis), XMVectorGetY(RightAxis), 0.0, 1.0f));
 
 	XMMATRIX RotationMatrix = XMMatrixRotationAxis(GlobalUp, yaw) * XMMatrixRotationAxis(XZAlignedRight, pitch);
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));
-	RightAxis = XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), ViewDir));
+	RightAxis = XMVector3Normalize(XMVector3Cross(GlobalUp, ViewDir));
 	UpAxis = XMVector3Normalize(XMVector3Cross(ViewDir, RightAxis));
 	LookAt = Position + ViewDir;
 

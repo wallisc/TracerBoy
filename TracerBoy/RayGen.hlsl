@@ -19,12 +19,24 @@ float3 SampleEnvironmentMap(float3 v)
 {
 	float3 viewDir = normalize(v);
 	float2 uv;
-	float p = atan2(viewDir.z, viewDir.x);
+	float p = atan2(
+#if IS_Y_AXIS_UP
+		viewDir.z, 
+#else
+		viewDir.y, 
+#endif
+		viewDir.x);
 	p = p > 0 ? p : p + 2 * 3.14;
 	uv.x = p / (2 * 3.14);
-	uv.y = acos(viewDir.y) / (3.14);
+	uv.y = acos(
+#if IS_Y_AXIS_UP
+		viewDir.y
+#else
+		viewDir.z
+#endif
+	) / (3.14);
 
-	return 0.3 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 float rand();
@@ -68,7 +80,7 @@ float2 ApplyLDSToNoise(float2 Noise)
 BlueNoiseData GetBlueNoise()
 {
 	BlueNoiseData data;
-	if (!perFrameConstants.UseBlueNoise || DispatchRaysIndex().x > 400)
+	if (!perFrameConstants.UseBlueNoise)
 	{
 		data.PrimaryJitter = float2(rand(), rand());
 		data.SecondaryRayDirection = float2(rand(), rand());
@@ -88,11 +100,11 @@ BlueNoiseData GetBlueNoise()
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = float3(0.172, -0.818, -0.549) * -1000.0f;
+	LightPosition = float3(-0.05, 1.0, -0.03);
 	BlueNoiseData BlueNoise = GetBlueNoise();
-	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * 100.0f;
+	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * float2(0.235 , 0.19);
 
-	LightColor = float3(1.0, 1.0, 1.0) * 1;
+	LightColor = float3(17.0, 12.0, 4.0);
 	PDFValue = 1.0;
 }
 
@@ -238,7 +250,7 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 
 void OutputPrimaryAlbedo(float3 albedo)
 {
-	//AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
 }
 
 void OutputPrimaryNormal(float3 normal)
@@ -300,7 +312,7 @@ void RayGen()
 		//error = WaveActiveSum(error) / WaveActiveSum(1.0);
 		SkipRay = error < perFrameConstants.MinConvergence;
 	}
-	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
+	//AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
 	
 	if (SkipRay) return;
 #endif

@@ -92,7 +92,8 @@ struct CameraDescription
 
 bool AllowsSpecular(Material material)
 {
-    return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
+    return false;
+    //return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
 }
     
 bool IsMetallic(Material material)
@@ -1082,8 +1083,8 @@ float BeerLambert(float absorption, float dist)
     return exp(-absorption * dist);
 }
 
-#define USE_RUSSIAN_ROULETTE 1
-#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 1
+#define USE_RUSSIAN_ROULETTE 0
+#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 4
 vec4 Trace(Ray ray, Ray neighborRay)
 {
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
@@ -1302,7 +1303,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
                     if(PDFValue < EPSILON)
                     {
-                        // This ray is satistically not relevant, attempt to find a better ray
+                        // This ray is statistically not relevant, attempt to find a better ray
                         ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
                         
                         if(PDFValue < EPSILON)

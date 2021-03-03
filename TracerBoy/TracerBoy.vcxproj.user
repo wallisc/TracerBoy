@@ -9,11 +9,11 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>C:\Users\chris\Documents\GitHub\TracerBoy\Scenes\dragon\scene.pbrt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:\Users\chwallis\Documents\GitHub\TracerBoy\Scenes\dragon\multidragons.pbrt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>C:\Users\chris\Documents\GitHub\TracerBoy\Scenes\dragon\scene.pbrt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:\Users\chwallis\Documents\GitHub\TracerBoy\Scenes\cornell-box\scene.pbrt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

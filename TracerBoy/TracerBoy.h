@@ -209,7 +209,7 @@ public:
 		performanceSettings.m_VarianceMultiplier = 1.0f;
 		performanceSettings.m_TargetFrameRate = 0.0f;
 		performanceSettings.m_ConvergencePercentage = 0.001;
-		performanceSettings.m_bEnableBlueNoise = true;
+		performanceSettings.m_bEnableBlueNoise = false;
 
 		return outputSettings;
 	}
@@ -376,7 +376,7 @@ private:
 		JitteredPathTracerOutputSRV,
 		JitteredPathTracerOutputUAV,
 		NumReservedViewSlots,
-		NumTotalViews = 4096
+		NumTotalViews = 8192
 	};
 
 	Vector3 m_volumeMax;

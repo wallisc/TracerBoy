@@ -9,6 +9,8 @@ typedef UINT uint;
 struct uint2 { uint x; uint y; };
 #endif
 
+#define IS_Y_AXIS_UP 1
+
 struct RayPayload
 {
 	float2 uv;
@@ -76,6 +78,7 @@ struct Material
 {
 	float3 albedo;
 	uint albedoIndex;
+	uint alphaIndex;
 	uint normalMapIndex;
 	uint emissiveIndex;
 	uint specularMapIndex;
