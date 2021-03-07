@@ -92,8 +92,7 @@ struct CameraDescription
 
 bool AllowsSpecular(Material material)
 {
-    return false;
-    //return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
+    return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
 }
     
 bool IsMetallic(Material material)
@@ -690,7 +689,7 @@ vec3 GenerateRandomDirection(vec3 normal)
 
 vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
 {
-	vec3 axisToCross = normal.x < normal.z ? vec3(1, 0, 0) : vec3(0, 0, 1);
+	vec3 axisToCross = abs(normal.x) < abs(normal.z) ? vec3(1, 0, 0) : vec3(0, 0, 1);
     vec3 xAxis = cross(normal, axisToCross);
     vec3 zAxis = cross(normal, xAxis);
     return v.x * xAxis + v.y * normal + v.z * zAxis;
@@ -801,7 +800,6 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tan
 vec2 Intersect(Ray ray, out vec3 normal, out vec3 tangent, out vec2 uv, out uint PrimitiveID)
 {
 	vec2 result = IntersectWithMaxDistance(ray, 999999.0, normal, tangent, uv, PrimitiveID);
-    if(dot(normal, ray.direction) < 0.0) normal = -normal;
     return result;
 }
 
@@ -1083,8 +1081,8 @@ float BeerLambert(float absorption, float dist)
     return exp(-absorption * dist);
 }
 
-#define USE_RUSSIAN_ROULETTE 0
-#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 4
+#define USE_RUSSIAN_ROULETTE 1
+#define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
 {
     vec3 accumulatedColor = vec3(0.0, 0.0, 0.0);
@@ -1276,6 +1274,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 // so flip the normal if the ray is inside the primitive
                 normal = -normal;
                 RayDirectionDotN = -RayDirectionDotN;
+                detailNormal = -detailNormal;
             }
 
             float fresnelFactor = FresnelFactor(
@@ -1370,10 +1369,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 
             if(IsSubsurfaceScattering(material) && !bSpecularRay)
             {
-                // Hack required to avoid black edges on translucent spheres
-                // due to rays coming in at grazing angles
-                ray.origin += -normal * 0.05;
-                    
                 #define MAX_SSS_BOUNCES 5
                 bool noScatter = material.scattering < EPSILON;
                 // TODO: may want to consider the reciprocal be defined in the material to
@@ -1412,7 +1407,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         
                     float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
 
-                    ray.origin += ray.direction * EPSILON;
                     uint unusedPrimitiveID;
                     result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
                         
@@ -1430,7 +1424,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     }
 
                     RayPoint = GetRayPoint(ray, result.x);
-                    ray.origin = RayPoint + normal * EPSILON;
 
                     vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
                     accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * distanceTravelledBeforeScatter * material.absorption);

@@ -105,7 +105,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * float2(0.235 , 0.19);
 
 	LightColor = float3(17.0, 12.0, 4.0);
-	PDFValue = 1.0;
+	PDFValue = 0.0;
 }
 
 #define GLOBAL static
@@ -195,7 +195,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	RayDesc dxrRay;
 	dxrRay.Origin = ray.origin;
 	dxrRay.Direction = ray.direction;
-	dxrRay.TMin = 0.001;
+	dxrRay.TMin = EPSILON;
 	dxrRay.TMax = maxT;
 
 	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
