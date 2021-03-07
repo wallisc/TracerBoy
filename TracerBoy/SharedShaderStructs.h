@@ -93,6 +93,7 @@ struct Material
 };
 
 #define IMAGE_TEXTURE_TYPE 0
+#define CHECKER_TEXTURE_TYPE 1
 
 #define DEFAULT_TEXTURE_FLAG 0
 #define NEEDS_GAMMA_CORRECTION_TEXTURE_FLAG 0x1
@@ -101,6 +102,15 @@ struct TextureData
 	uint TextureType;
 	uint DescriptorHeapIndex;
 	uint TextureFlags;
+	uint Padding;
+
+	// TODO: these shoudl be in some type of union
+	float3 CheckerColor1;
+	float UScale;
+
+	float3 CheckerColor2;
+	float VScale;
+
 };
 
 struct AreaLightData

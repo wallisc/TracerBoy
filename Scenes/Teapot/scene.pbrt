@@ -12,7 +12,7 @@ WorldBegin
 	Shape "trianglemesh" "integer indices" [ 0 1 2 0 2 3 ] "point P" [ 0 -9.88498e-006 79.9533 -79.9533 0 0 0 9.88498e-006 -79.9533 79.9533 0 0 ] "normal N" [ 0 -1 -1.23634e-007 0 -1 -1.23634e-007 0 -1 -1.23634e-007 0 -1 -1.23634e-007 ] "float uv" [ 0 0 1 0 1 1 0 1 ] 
 	TransformBegin
 		Transform [ -0.386527 0 0.922278 0 -0.922278 0 -0.386527 0 0 1 0 0 0 0 0 1]
-		LightSource "infinite" "string mapname" [ "textures/envmap.pfm" ] 
+		LightSource "infinite" "string mapname" [ "textures/envmap.hdr" ] 
 	TransformEnd
 	NamedMaterial "Material" 
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 

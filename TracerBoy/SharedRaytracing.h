@@ -51,10 +51,36 @@ float4 GetTextureData(uint textureIndex, float2 uv)
 
 	float4 data = float4(0.0, 0.0, 0.0, 0.0);
 	TextureData textureData = TextureDataBuffer[textureIndex];
-	if (textureData.TextureType == IMAGE_TEXTURE_TYPE)
+	switch(textureData.TextureType)
 	{
-		data = ImageTextures[NonUniformResourceIndex(textureData.DescriptorHeapIndex)].SampleLevel(BilinearSampler, uv, 0);
+		case IMAGE_TEXTURE_TYPE:
+		{
+			data = ImageTextures[NonUniformResourceIndex(textureData.DescriptorHeapIndex)].SampleLevel(BilinearSampler, uv, 0);
+			break;
+		}
+		case CHECKER_TEXTURE_TYPE:
+		{
+			float2 ScaledUV = uv * float2(textureData.UScale, textureData.VScale);
+			data = float4(textureData.CheckerColor1, 1);
+			if(frac(ScaledUV.x) < 0.5)
+			{
+				if(frac(ScaledUV.y) < 0.5)
+				{
+					data = float4(textureData.CheckerColor2, 1);
+				}
+			}
+			else
+			{
+				if(frac(ScaledUV.y) > 0.5)
+				{
+					data = float4(textureData.CheckerColor2, 1);
+				}
+			}
+			break;
+		}
+		default: break;
 	}
+	
 
 	if (textureData.TextureFlags & NEEDS_GAMMA_CORRECTION_TEXTURE_FLAG)
 	{

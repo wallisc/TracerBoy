@@ -8,7 +8,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 
-#define USE_ANYHIT 1
+#define USE_ANYHIT 0
 
 struct HitGroupShaderRecord
 {
@@ -163,6 +163,7 @@ UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGamm
 {
 	TextureData texture;
 	pbrt::ImageTexture::SP pImageTexture = std::dynamic_pointer_cast<pbrt::ImageTexture>(pPbrtTexture);
+	pbrt::CheckerTexture::SP pCheckerTexture = std::dynamic_pointer_cast<pbrt::CheckerTexture>(pPbrtTexture);
 	if (pImageTexture)
 	{
 		ComPtr<ID3D12Resource> pTexture;
@@ -186,6 +187,15 @@ UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGamm
 
 		m_uploadResources.push_back(pUpload);
 		m_tracerboy.m_pTextures.push_back(pTexture);
+	}
+	else if (pCheckerTexture)
+	{ 
+		texture.TextureType = CHECKER_TEXTURE_TYPE;
+		texture.TextureFlags = DEFAULT_TEXTURE_FLAG;
+		texture.UScale = pCheckerTexture->uScale;
+		texture.VScale = pCheckerTexture->vScale;
+		texture.CheckerColor1 = ConvertFloat3(pCheckerTexture->tex1);
+		texture.CheckerColor2 = ConvertFloat3(pCheckerTexture->tex2);
 	}
 	else
 	{
