@@ -62,19 +62,9 @@ float4 GetTextureData(uint textureIndex, float2 uv)
 		{
 			float2 ScaledUV = uv * float2(textureData.UScale, textureData.VScale);
 			data = float4(textureData.CheckerColor1, 1);
-			if(frac(ScaledUV.x) < 0.5)
+			if(((int(ScaledUV.x) + int(ScaledUV.y)) % 2) == 0)
 			{
-				if(frac(ScaledUV.y) < 0.5)
-				{
-					data = float4(textureData.CheckerColor2, 1);
-				}
-			}
-			else
-			{
-				if(frac(ScaledUV.y) > 0.5)
-				{
-					data = float4(textureData.CheckerColor2, 1);
-				}
+				data = float4(textureData.CheckerColor2, 1);
 			}
 			break;
 		}

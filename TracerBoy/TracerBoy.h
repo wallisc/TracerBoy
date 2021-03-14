@@ -184,7 +184,7 @@ public:
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
-		postProcessSettings.m_bEnableToneMapping = true;
+		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
@@ -262,6 +262,9 @@ private:
 	ComPtr<ID3D12Resource> m_pConfigConstants;
 
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
+	pbrt::math::mat3f m_EnvironmentMapTransform;
+
+
 	ComPtr<ID3D12Resource> m_pMaterialList;
 	ComPtr<ID3D12Resource> m_pTextureDataList;
 

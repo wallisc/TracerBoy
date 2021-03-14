@@ -12,6 +12,14 @@ cbuffer CalculateVarianceCB
 	CalculateVarianceConstants Constants;
 }
 
+#define ComputeRS \
+    "RootConstants(num32BitConstants=3, b0),\
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
+
+
+[RootSignature(ComputeRS)]
 [numthreads(CALCULATE_VARIANCE_THREAD_GROUP_WIDTH, CALCULATE_VARIANCE_THREAD_GROUP_HEIGHT, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {

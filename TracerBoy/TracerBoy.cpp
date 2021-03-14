@@ -8,7 +8,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 
-#define USE_ANYHIT 0
+#define USE_ANYHIT 1
 
 struct HitGroupShaderRecord
 {
@@ -72,6 +72,11 @@ inline UINT64 GetRequiredIntermediateSizeHelper(
 float3 ConvertFloat3(const pbrt::vec3f& v)
 {
 	return { v.x, v.y, v.z };
+}
+
+float4 ConvertFloat4(const pbrt::vec3f& v, float w)
+{
+	return { v.x, v.y, v.z, w };
 }
 
 float ChannelAverage(const pbrt::vec3f& v)
@@ -734,7 +739,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		m_camera.Right = pfnConvertVector3(CameraRight);
 		m_camera.Up = pfnConvertVector3(CameraUp);
 		m_camera.LensHeight = 2.0;
-		m_camera.FocalDistance = 7.0;
+
+		float FOVAngle = pCamera->fov * M_PI / 180.0;
+		m_camera.FocalDistance = (m_camera.LensHeight / 2.0) / tan(FOVAngle / 2.0);
 
 		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
@@ -899,6 +906,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			{
 				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end());
 				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
+				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
 			}
 		}
 		resourcesToDelete.push_back(pEnvironmentMapScratchBuffer);
@@ -1258,7 +1266,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
-	constants.FocalDistance = outputSettings.m_cameraSettings.m_FocalDistance;
+	constants.FocalDistance = m_camera.FocalDistance;
 	constants.DOFFocusDistance = outputSettings.m_cameraSettings.m_DOFFocalDistance;
 	constants.DOFApertureWidth = outputSettings.m_cameraSettings.m_ApertureWidth;
 	constants.InvalidateHistory = m_bInvalidateHistory;
@@ -1268,6 +1276,11 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
+	constants.EnvironmentMapTransform.vx = ConvertFloat4(m_EnvironmentMapTransform.vx, 0.0);
+	constants.EnvironmentMapTransform.vy = ConvertFloat4(m_EnvironmentMapTransform.vy, 0.0);
+	constants.EnvironmentMapTransform.vz = ConvertFloat4(m_EnvironmentMapTransform.vz, 0.0);
+	constants.RandSeed = rand();
+
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{
 		constants.MinConvergence += m_ConvergencePercentPad;

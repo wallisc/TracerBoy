@@ -5,8 +5,16 @@
 #pragma once
 struct float2 { float x; float y; };
 struct float3 { float x; float y; float z; };
+struct float4 { float x; float y; float z; float w; };
+struct float4x3
+{ 
+	float4 vx;
+	float4 vy;
+	float4 vz;
+};
 typedef UINT uint;
 struct uint2 { uint x; uint y; };
+
 #endif
 
 #define IS_Y_AXIS_UP 1
@@ -51,6 +59,9 @@ struct PerFrameConstants
 	float3 VolumeMax;
 	uint UseBlueNoise;
 
+	float4x3 EnvironmentMapTransform;
+
+	uint RandSeed;
 };
 
 struct ConfigConstants

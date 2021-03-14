@@ -17,10 +17,11 @@ float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
 float3 SampleEnvironmentMap(float3 v)
 {
+	v = mul(v, (perFrameConstants.EnvironmentMapTransform)).xyz;
 	float3 viewDir = normalize(v);
 	float2 uv;
 	float p = atan2(
-#if IS_Y_AXIS_UP
+#if 0
 		viewDir.z, 
 #else
 		viewDir.y, 
@@ -29,7 +30,7 @@ float3 SampleEnvironmentMap(float3 v)
 	p = p > 0 ? p : p + 2 * 3.14;
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(
-#if IS_Y_AXIS_UP
+#if 0
 		viewDir.y
 #else
 		viewDir.z
@@ -250,7 +251,7 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 
 void OutputPrimaryAlbedo(float3 albedo)
 {
-	AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	//AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
 }
 
 void OutputPrimaryNormal(float3 normal)
@@ -297,7 +298,7 @@ void RayGen()
 {
 	ClearAOVs();
 
-	seed = hash13(float3(DispatchRaysIndex().x, DispatchRaysIndex().y, perFrameConstants.GlobalFrameCount));
+	seed = hash13(float3(DispatchRaysIndex().x, DispatchRaysIndex().y, perFrameConstants.GlobalFrameCount)) + perFrameConstants.RandSeed;
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
 	bool SkipRay = false;
@@ -312,7 +313,7 @@ void RayGen()
 		//error = WaveActiveSum(error) / WaveActiveSum(1.0);
 		SkipRay = error < perFrameConstants.MinConvergence;
 	}
-	//AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
+	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
 	
 	if (SkipRay) return;
 #endif

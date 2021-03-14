@@ -102,7 +102,16 @@ uint2 GetMedianCoord(uint2 DTid)
 }
 
 #define USE_MEDIAN_FILTER 0
+#define ComputeRS \
+    "RootConstants(num32BitConstants=7, b0),\
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t2, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t3, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t4, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
+[RootSignature(ComputeRS)]
 [numthreads(DENOISER_THREAD_GROUP_WIDTH, DENOISER_THREAD_GROUP_HEIGHT, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
