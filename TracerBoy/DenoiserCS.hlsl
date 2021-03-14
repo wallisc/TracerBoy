@@ -144,7 +144,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 				int2 offsetCoord = int2(xOffset, yOffset) * Constants.OffsetMultiplier;
 				int2 coord = medianCoord + offsetCoord;
 
-				if (coord.x < 0 || coord.y < 0 || coord.x > Constants.Resolution.x || coord.y > Constants.Resolution.y)
+				if (coord.x < 0 || coord.y < 0 || coord.x >= Constants.Resolution.x || coord.y >= Constants.Resolution.y)
 				{
 					continue;
 				}
