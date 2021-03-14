@@ -7,6 +7,7 @@
 #include "ClosestHit.h"
 #include "AnyHit.h"
 #include "Miss.h"
+#include "XInput.h"
 
 #define USE_ANYHIT 1
 
@@ -1457,6 +1458,20 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 		pitch = rotationScaler * 3.14f * ((float)mouseY - (float)m_mouseY) / (float)outputDesc.Height;
 	}
 
+	const float ControllerDeadzone = 0.2;
+	XINPUT_STATE state;
+    ZeroMemory( &state, sizeof(XINPUT_STATE) );
+	XInputGetState(0, &state);
+
+	float rightStickX = ((float)state.Gamepad.sThumbRX) / SHRT_MAX;
+	float rightStickY = ((float)state.Gamepad.sThumbRY) / SHRT_MAX;
+	if (abs(rightStickX) > ControllerDeadzone || abs(rightStickY) > ControllerDeadzone)
+	{
+		const float rotationScaler = 0.001f;
+		yaw += rightStickX * rotationScaler * dt;
+		pitch += -rightStickY * rotationScaler * dt;
+		bCameraMoved = true;
+	}
 
 	if (m_mouseX != mouseX || m_mouseY != mouseY)
 	{
@@ -1484,10 +1499,13 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	LookAt = Position + ViewDir;
 
 	const float cameraMoveSpeed = cameraSettings.m_movementSpeed;
-	if (keyboardInput['w'] || keyboardInput['W'])
+	float leftStickY = ((float)state.Gamepad.sThumbLY) / SHRT_MAX;
+	bool leftStickYActive = abs(leftStickY) > ControllerDeadzone;
+	if (keyboardInput['w'] || keyboardInput['W'] || leftStickYActive)
 	{
-		Position += dt * cameraMoveSpeed * ViewDir;
-		LookAt += dt * cameraMoveSpeed * ViewDir;
+		float multiplier = leftStickYActive ? leftStickY : 1;
+		Position += dt * cameraMoveSpeed * ViewDir * multiplier;
+		LookAt += dt * cameraMoveSpeed * ViewDir * multiplier;
 		bCameraMoved = true;
 	}
 	if (keyboardInput['s'] || keyboardInput['S'])
@@ -1496,28 +1514,43 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 		LookAt -= dt * cameraMoveSpeed * ViewDir;
 		bCameraMoved = true;
 	}
+
 	if (keyboardInput['a'] || keyboardInput['A'])
 	{
 		Position -= dt * cameraMoveSpeed * RightAxis;
 		LookAt -= dt * cameraMoveSpeed * RightAxis;
 		bCameraMoved = true;
 	}
-	if (keyboardInput['D'] || keyboardInput['d'])
+
+	float leftStickX = ((float)state.Gamepad.sThumbLX) / SHRT_MAX;
+	bool leftStickXActive = abs(leftStickX) > ControllerDeadzone;
+	if (keyboardInput['D'] || keyboardInput['d'] || leftStickXActive)
 	{
-		Position += dt * cameraMoveSpeed * RightAxis;
-		LookAt += dt * cameraMoveSpeed * RightAxis;
+		float multiplier = leftStickXActive ? leftStickX : 1;
+		Position += dt * cameraMoveSpeed * RightAxis * multiplier;
+		LookAt += dt * cameraMoveSpeed * RightAxis * multiplier;
 		bCameraMoved = true;
 	}
-	if (keyboardInput['Q'] || keyboardInput['q'])
+
+	float rightTrigger = ((float)state.Gamepad.bRightTrigger) / BYTE_MAX;
+	bool rightTriggerActive = rightTrigger > ControllerDeadzone;
+	if (keyboardInput['Q'] || keyboardInput['q'] || rightTriggerActive)
 	{
-		Position += dt * cameraMoveSpeed * UpAxis;
-		LookAt += dt * cameraMoveSpeed * UpAxis;
+		float multiplier = rightTriggerActive ? rightTrigger : 1;
+		Position += dt * cameraMoveSpeed * UpAxis * multiplier;
+		LookAt += dt * cameraMoveSpeed * UpAxis * multiplier;
 		bCameraMoved = true;
 	}
-	if (keyboardInput['E'] || keyboardInput['e'])
+
+
+
+	float leftTrigger = ((float)state.Gamepad.bLeftTrigger) / BYTE_MAX;
+	bool leftTriggerActive = leftTrigger > ControllerDeadzone;
+	if (keyboardInput['E'] || keyboardInput['e'] || leftTriggerActive)
 	{
-		Position -= dt * cameraMoveSpeed * UpAxis;
-		LookAt -= dt * cameraMoveSpeed * UpAxis;
+		float multiplier = leftTriggerActive ? leftTrigger : 1;
+		Position -= dt * cameraMoveSpeed * UpAxis * multiplier;
+		LookAt -= dt * cameraMoveSpeed * UpAxis * multiplier;
 		bCameraMoved = true;
 	}
 
