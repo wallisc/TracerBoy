@@ -108,7 +108,10 @@ void main( uint2 DTid : SV_DispatchThreadID )
 {
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
-	float4 colorData = InputTexture[DTid.xy];
+	const bool bFlipImageHorizontally = false;
+	uint2 InputIndex = bFlipImageHorizontally ? uint2(Constants.Resolution.x - DTid.x - 1, DTid.y) : DTid;
+
+	float4 colorData = InputTexture[InputIndex];
 	float3 outputColor;
 	switch (Constants.OutputType)
 	{
