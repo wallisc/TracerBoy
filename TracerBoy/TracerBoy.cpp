@@ -337,6 +337,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		}
 		material.albedo = ConvertFloat3(pSubstrateMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
+		material.SpecularCoef = ChannelAverage(pSubstrateMaterial->ks);
 
 		// not supporting different roughness
 		VERIFY(pSubstrateMaterial->uRoughness == pSubstrateMaterial->vRoughness);
@@ -377,6 +378,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		}
 		material.albedo = ConvertFloat3(pPlasticMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
+		material.SpecularCoef = ChannelAverage(pSubstrateMaterial->ks);
 		//VERIFY(!pPlasticMaterial->map_ks);
 		//VERIFY(!pPlasticMaterial->map_roughness);
 		//VERIFY(!pPlasticMaterial->map_bump);
@@ -724,25 +726,31 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		pbrt::vec3f CameraPosition = pbrt::vec3f(0);
 		pbrt::vec3f CameraView = pbrt::vec3f(0.0, 0.0, 1.0);
+		pbrt::vec3f CameraRight = pbrt::vec3f(1.0, 0.0, 0.0);
+		pbrt::vec3f CameraUp = pbrt::vec3f(0.0, 1.0, 0.0);
 		CameraPosition = pCamera->frame * CameraPosition;
 		CameraView = pbrt::math::normalize(pbrt::math::xfmVector(pCamera->frame, CameraView));
-		pbrt::vec3f CameraRight = pbrt::math::cross(
-			IS_Y_AXIS_UP ? pbrt::vec3f(0, 1, 0) : pbrt::vec3f(0, 0, 1), 
-			CameraView);
-		pbrt::vec3f CameraUp = pbrt::math::cross(CameraView, CameraRight);
+		CameraRight = pbrt::math::normalize(pbrt::math::xfmVector(pCamera->frame, CameraRight));
+
+		CameraUp = pbrt::math::xfmVector(pCamera->frame, CameraUp);
+		m_camera.LensHeight = 2.0 * sqrtf(pbrt::math::dot(CameraUp,CameraUp));
+		CameraUp = pbrt::math::normalize(CameraUp);
 
 		auto pfnConvertVector3 = [](const pbrt::vec3f& v) -> Vector3
 		{
 			return Vector3(v.x, v.y, v.z);
 		};
+
+		float FOVAngle = pCamera->fov * M_PI / 180.0;
+		m_camera.FocalDistance = (m_camera.LensHeight / 2.0) / tan(FOVAngle / 2.0);
+
+		// I think this is how PBRT thinks of camera position....maybe
+		CameraPosition = CameraPosition + (m_camera.FocalDistance + 0.01f) * CameraView;
+
 		m_camera.Position = pfnConvertVector3(CameraPosition);
 		m_camera.LookAt = pfnConvertVector3(CameraPosition + CameraView);
 		m_camera.Right = pfnConvertVector3(CameraRight);
 		m_camera.Up = pfnConvertVector3(CameraUp);
-		m_camera.LensHeight = 2.0;
-
-		float FOVAngle = pCamera->fov * M_PI / 180.0;
-		m_camera.FocalDistance = (m_camera.LensHeight / 2.0) / tan(FOVAngle / 2.0);
 
 		std::vector< HitGroupShaderRecord> hitGroupShaderTable;
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
@@ -1280,7 +1288,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.EnvironmentMapTransform.vx = ConvertFloat4(m_EnvironmentMapTransform.vx, 0.0);
 	constants.EnvironmentMapTransform.vy = ConvertFloat4(m_EnvironmentMapTransform.vy, 0.0);
 	constants.EnvironmentMapTransform.vz = ConvertFloat4(m_EnvironmentMapTransform.vz, 0.0);
-	constants.RandSeed = rand();
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{

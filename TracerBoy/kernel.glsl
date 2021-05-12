@@ -1,12 +1,14 @@
 #define MAX_BOUNCES 6
 #define EPSILON 0.000001
-#define PI 3.14
+#define PI 3.1415926535
 #define LARGE_NUMBER 1e20
 #define SMALL_NUMBER 0.01
 #define AIR_IOR 1.0
 #define PLASTIC_IOR 1.46f
 #define FLOOR_IOR 1.0
 #define MARCH_SIZE 3.0f
+#define MIN_ROUGHNESS 0.04
+#define MIN_ROUGHNESS_SQUARED (MIN_ROUGHNESS * MIN_ROUGHNESS)
 
 #ifndef IS_SHADER_TOY
 #define IS_SHADER_TOY 1
@@ -397,14 +399,14 @@ float GGXNormalDistributionFunction(
     vec3 HalfVector,
     float RoughnessSquared)
 {
+   RoughnessSquared = max(RoughnessSquared, MIN_ROUGHNESS_SQUARED);
+   float a2 = RoughnessSquared * RoughnessSquared;
    float nDotH = dot(Normal, HalfVector);
-   float Numerator =  (RoughnessSquared * RoughnessSquared);
-   float Denominator = (nDotH * nDotH * (RoughnessSquared * RoughnessSquared - 1.0)) + 1.0;
-   Denominator *= Denominator * PI;
+   float Numerator = a2;
+   float Denominator = PI * pow(nDotH * nDotH * (a2 - 1.0) + 1.0, 2.0);
     
    return Numerator / Denominator;
 }
-
 
 float NormalDistributionFunction(
     vec3 Normal,
@@ -667,32 +669,35 @@ GLOBAL Scene CurrentScene;
 vec3 GenerateRandomDirection()
 { 
     // Uniform hemisphere sampling from: http://www.rorydriscoll.com/2009/01/07/better-sampling/
-    float u1 = (rand() * 2.0 - 1.0), u2 = rand();
+    float u1 = rand(), u2 = rand();
     float r = sqrt(1.0 - u1 * u1);
     float phi = 2.0 * 3.14 * u2;
  
     return vec3(cos(phi) * r, sin(phi) * r, u1);
 }
 
-vec3 GenerateRandomDirection(vec3 normal)
-{ 
-    vec3 direction = GenerateRandomDirection();
-    if(dot(normal, direction) > 0.0)
+vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
+{
+    vec3 tangent;
+    if(abs(normal.x) > abs(normal.y))
     {
-        return direction;
+        tangent = vec3(-normal.z, 0, normal.x) / sqrt(normal.x * normal.x + normal.z * normal.z);
     }
     else
     {
-        return -direction;
+        tangent = vec3(0, normal.z, -normal.y) / sqrt(normal.y * normal.y + normal.z * normal.z);
     }
+
+    vec3 bitangent = cross(normal, tangent);
+    return normalize(v.x * tangent + v.y * normal + v.z * bitangent);
 }
 
-vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
-{
-	vec3 axisToCross = abs(normal.x) < abs(normal.z) ? vec3(1, 0, 0) : vec3(0, 0, 1);
-    vec3 xAxis = cross(normal, axisToCross);
-    vec3 zAxis = cross(normal, xAxis);
-    return v.x * xAxis + v.y * normal + v.z * zAxis;
+vec3 GenerateRandomDirection(vec3 normal)
+{ 
+    const float theta = PI * 2.0f * rand();
+    const float u     = rand();
+    const float r     = sqrt(1.0 - u * u);
+	return ReorientVectorAroundNormal(vec3(r * cos(theta), u, r * sin(theta)), normal);
 }
 
 vec3 GenerateCosineWeightedDirection(float rand0, float rand1, out float pdfValue)
@@ -703,8 +708,7 @@ vec3 GenerateCosineWeightedDirection(float rand0, float rand1, out float pdfValu
     float x = r * cos(theta);
 	float y = sqrt(max(EPSILON, 1.0 - rand0));
     float z = r * sin(theta);
-
-	pdfValue = y / PI;
+    pdfValue = y / PI;
     return vec3(x, y, z);
 }
 
@@ -735,6 +739,36 @@ vec3 GenerateImportanceSampledDirection(vec3 normal, float roughness, float rand
     PDFValue = (lobeMultiplier + 1.0) * pow(cos(phi), lobeMultiplier) / (2.0 * PI);
     
 	return ReorientVectorAroundNormal(direction, normal);
+}
+
+vec3 ImportanceSampleGGX(vec3 incomingRay, vec3 normal, float roughness)
+{ 
+    roughness = max(MIN_ROUGHNESS, roughness);
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float u1 = rand(), u2 = rand();
+    float theta = 2.0 * PI * u2;
+    float phi = acos(sqrt((1.0 - u1) / ((a2 - 1.0) * u1 + 1)));
+
+    vec3 direction = vec3(
+        sin(phi) * cos(theta),
+        cos(phi),
+        sin(phi) * sin(theta));
+    
+	float3 GGXSampledNormal = ReorientVectorAroundNormal(direction, normal);
+    return reflect(incomingRay, GGXSampledNormal);
+}
+
+float ImportanceSampleGGXPDF(vec3 normal, vec3 outgoingRay, vec3 halfVector, float roughness)
+{
+    roughness = max(MIN_ROUGHNESS, roughness);
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float cosTheta = abs(dot(normal, halfVector));
+    float exp = (a2 - 1.0) * cosTheta*cosTheta + 1.0;
+    if((exp) <= 0.0) return LARGE_NUMBER;
+    float d = a2 / (PI * exp * exp);
+    return d * abs(dot(halfVector, normal)) / (4.0 * abs(dot(outgoingRay, halfVector)));
 }
 
 vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out float PDFValue)
@@ -1050,7 +1084,6 @@ float BSDF_PDF(float cosTheta, float scatteringDirectionFactor)
         (PI * pow(1.0 + scatteringDirectionFactor * scatteringDirectionFactor - 2.0 * scatteringDirectionFactor * cosTheta, 1.5));
 }
 
-
 // Anisotropic BSDF taken from https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf
 vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFactor, out float pdfValue)
 {
@@ -1075,13 +1108,12 @@ vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFa
     }
 }
 
-
 float BeerLambert(float absorption, float dist)
 {
     return exp(-absorption * dist);
 }
 
-#define USE_RUSSIAN_ROULETTE 1
+#define USE_RUSSIAN_ROULETTE 0
 #define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
 {
@@ -1129,9 +1161,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             FirstPrimitiveID = PrimitiveID;
         }
 
-        if(accumulatedIndirectLightMultiplier.x < EPSILON && 
-          accumulatedIndirectLightMultiplier.y < EPSILON &&
-          accumulatedIndirectLightMultiplier.z < EPSILON)
+        if(all(accumulatedIndirectLightMultiplier < EPSILON))
         {
             // No longer tracking any reasonable amount of light,
             // early out
@@ -1284,36 +1314,24 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 ray.direction);
             
             vec3 previousDirection = ray.direction;
-            bool bSpecularRay = AllowsSpecular(material) && 
-				(IsMetallic(material) || rand() < fresnelFactor);
-
+            bool bSpecularRay = false;
+            if(AllowsSpecular(material))
+            {
+                if(IsMetallic(material))
+                {
+                    bSpecularRay = true;
+                }
+                else
+                {
+                    bSpecularRay = rand() < 0.5;
+                }
+            }
+            
             if(bSpecularRay)
             {
                 float PDFValue;
                 vec3 ReflectedDirection = reflect(ray.direction, normal);
-                if(UsePerfectSpecularOptimization(material.roughness))
-                {
-                    ray.direction = ReflectedDirection;
-                }
-                else
-                {
-                    ray.direction = bFirstRay ? 
-                        GenerateImportanceSampledDirection(ReflectedDirection, material.roughness, BlueNoise.SecondaryRayDirection.x, BlueNoise.SecondaryRayDirection.y, PDFValue) :
-                        GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
-                    if(PDFValue < EPSILON)
-                    {
-                        // This ray is statistically not relevant, attempt to find a better ray
-                        ray.direction = GenerateRandomImportanceSampledDirection(ReflectedDirection, material.roughness, PDFValue);
-                        
-                        if(PDFValue < EPSILON)
-                        {
-                            // Still no luck, call it quits
-                            break;
-                        }
-                    }
-                    accumulatedIndirectLightMultiplier /= PDFValue;
-
-                }
+                ray.direction = ImportanceSampleGGX(ray.direction, normal, material.roughness);
             }
             else
             {
@@ -1355,13 +1373,31 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 } 
                 else 
                 {
-					float PDFValue;
-                    ray.direction = bFirstRay ? 
-                        GenerateCosineWeightedDirection(normal, BlueNoise.SecondaryRayDirection.x, BlueNoise.SecondaryRayDirection.y, PDFValue) :
-                        GenerateRandomCosineWeightedDirection(normal, PDFValue);
-                    accumulatedIndirectLightMultiplier /= PDFValue;
+#if 0
+					float PDFValue; 
+                    ray.direction = GenerateRandomCosineWeightedDirection(normal, PDFValue);
+#endif
+                    ray.direction = GenerateRandomDirection(normal);
                 }
             }
+            
+            if(AllowsSpecular(material))
+            {
+                float3 halfVector = normalize(-previousDirection + ray.direction);
+
+                float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
+                float DistributionPDF = ImportanceSampleGGXPDF(normal, ray.direction, halfVector, material.roughness);
+                float SpecularPDF = DistributionPDF;
+                float DiffusePDF = 1.0f / (2.0f * PI);
+                float PDFValue = lerp(SpecularPDF, DiffusePDF, 0.5);
+                accumulatedIndirectLightMultiplier /= PDFValue;
+            }
+            else
+            {
+                float PDFValue = 1.0f /(2.0 * PI);
+                accumulatedIndirectLightMultiplier /= PDFValue;
+            }
+            
             
 			float lightPDF;
             vec3 lightPosition, lightColor;
@@ -1561,14 +1597,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
 				{
 					break;
 				}
-
-				if(bSpecularRay)
+				
+                if(IsMetallic(material))
                 {
-                    if(IsMetallic(material))
-                    {
-                        accumulatedIndirectLightMultiplier *= material.albedo;
-                    }
-                    
+                    accumulatedIndirectLightMultiplier *= material.albedo;
+                        
+                    // TODO: Move to the new GGX code
                     // Perfectly specular surfaces don't need to do the BRDF
                     // because they only trace the reflected ray
                     // and would result in a BRDF value of 1
@@ -1581,9 +1615,27 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             material.roughness);
                     }
                 }
-                else // diffuse ray
+                else
                 {
-                   accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, detailNormal); 
+                    if(AllowsSpecular(material))
+                    {
+                        float3 halfVector = normalize(-previousDirection + ray.direction);
+                        float ReflectionCoefficient = material.SpecularCoef;
+                        float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * pow(1.0 - dot(halfVector, -previousDirection), 5.0); 
+                        float3 diffuse = (material.albedo * 28.0 / (23.0 * PI))
+                            * (1.0 - ReflectionCoefficient)
+                            * (1.0 - pow(1.0 - 0.5 * dot(-previousDirection, normal), 5.0))
+                            * (1.0 - pow(1.0 - 0.5 * dot(ray.direction, normal), 5.0));
+
+                        float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
+                        float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
+                            (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
+                        accumulatedIndirectLightMultiplier *= (diffuse + specular * fresnel) * saturate(dot(ray.direction, normal));
+                    }
+                    else
+                    {
+                        accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, detailNormal); 
+                    }
                 }
             }
         }
@@ -1717,7 +1769,12 @@ vec4 PathTrace(in vec2 pixelCoord)
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay, neighborCameraRay);
-    vec3 outputColor = min(result.rgb, perFrameConstants.FireflyClampValue);
+    vec3 outputColor = result.rgb;
+    if(perFrameConstants.FireflyClampValue >= EPSILON)
+    {
+        outputColor = min(outputColor, perFrameConstants.FireflyClampValue);
+    }
+    
     OutputSampleColor(outputColor);
 
     return vec4(outputColor, 1.0);

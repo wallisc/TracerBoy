@@ -60,8 +60,6 @@ struct PerFrameConstants
 	uint UseBlueNoise;
 
 	float4x3 EnvironmentMapTransform;
-
-	uint RandSeed;
 };
 
 struct ConfigConstants
@@ -89,6 +87,7 @@ struct Material
 {
 	float3 albedo;
 	uint albedoIndex;
+
 	uint alphaIndex;
 	uint normalMapIndex;
 	uint emissiveIndex;
@@ -101,6 +100,8 @@ struct Material
 
 	float3 emissive;
 	int Flags;
+
+	float SpecularCoef;
 };
 
 #define IMAGE_TEXTURE_TYPE 0

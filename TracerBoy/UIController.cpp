@@ -3,9 +3,9 @@
 UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
 	m_cameraSpeed(0.003f),
-	m_captureLengthInSeconds(5.0),
-	m_captureFramesPerSecond(24),
-	m_captureSamplesPerFrame(1024)
+	m_captureLengthInSeconds(1.0),
+	m_captureFramesPerSecond(1),
+	m_captureSamplesPerFrame(1)
 {
 	SetDefaultSettings();
 

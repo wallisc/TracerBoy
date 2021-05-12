@@ -298,7 +298,7 @@ void RayGen()
 {
 	ClearAOVs();
 
-	seed = hash13(float3(DispatchRaysIndex().x, DispatchRaysIndex().y, perFrameConstants.GlobalFrameCount)) + perFrameConstants.RandSeed;
+	seed = hash13(float3(DispatchRaysIndex().x, DispatchRaysIndex().y, perFrameConstants.GlobalFrameCount));
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
 	bool SkipRay = false;

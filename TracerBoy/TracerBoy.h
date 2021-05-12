@@ -198,7 +198,7 @@ public:
 		denoiserSettings.m_normalWeightingExponential = 128.0f;
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
-		denoiserSettings.m_fireflyClampValue = 3.0f;
+		denoiserSettings.m_fireflyClampValue = 0.0f;
 
 		FogSettings& fogSettings = outputSettings.m_fogSettings;
 		fogSettings.ScatterDistance = 0.0f;
