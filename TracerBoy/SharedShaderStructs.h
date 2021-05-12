@@ -36,10 +36,13 @@ struct PerFrameConstants
 {
 	float3 CameraPosition;
 	float Time;
+
 	float3 CameraLookAt;
 	uint InvalidateHistory;
+
 	float3 CameraUp;
-	float Padding;
+	uint OutputMode;
+	
 	float3 CameraRight;
 	float DOFFocusDistance;
 
@@ -82,6 +85,13 @@ struct Vertex
 #define NO_SPECULAR_MATERIAL_FLAG 0x4
 #define MIX_MATERIAL_FLAG 0x8
 #define LIGHT_MATERIAL_FLAG 0x10
+
+#define OUTPUT_TYPE_LIT 0
+#define OUTPUT_TYPE_ALBEDO 1
+#define OUTPUT_TYPE_NORMAL 2
+#define OUTPUT_TYPE_LUMINANCE 3
+#define OUTPUT_TYPE_VARIANCE 4
+#define OUTPUT_TYPE_LIVE_PIXELS 5
 
 struct Material
 {

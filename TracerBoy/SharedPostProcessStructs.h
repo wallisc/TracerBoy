@@ -1,12 +1,5 @@
 #include "SharedShaderStructs.h"
 
-#define OUTPUT_TYPE_LIT 0
-#define OUTPUT_TYPE_ALBEDO 1
-#define OUTPUT_TYPE_NORMAL 2
-#define OUTPUT_TYPE_LUMINANCE 3
-#define OUTPUT_TYPE_VARIANCE 4
-#define OUTPUT_TYPE_LIVE_PIXELS 5
-
 struct PostProcessConstants
 {
 	uint2 Resolution;

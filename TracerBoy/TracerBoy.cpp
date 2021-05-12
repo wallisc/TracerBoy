@@ -1288,6 +1288,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.EnvironmentMapTransform.vx = ConvertFloat4(m_EnvironmentMapTransform.vx, 0.0);
 	constants.EnvironmentMapTransform.vy = ConvertFloat4(m_EnvironmentMapTransform.vy, 0.0);
 	constants.EnvironmentMapTransform.vz = ConvertFloat4(m_EnvironmentMapTransform.vz, 0.0);
+	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{

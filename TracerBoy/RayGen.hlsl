@@ -251,7 +251,18 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 
 void OutputPrimaryAlbedo(float3 albedo)
 {
-	//AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	if (perFrameConstants.OutputMode == OUTPUT_TYPE_ALBEDO)
+	{
+		AOVCustomOutput[DispatchRaysIndex().xy] = float4(albedo, 1.0);
+	}
+}
+
+void OutputLivePixels(bool bAlive)
+{
+	if (perFrameConstants.OutputMode == OUTPUT_TYPE_LIVE_PIXELS)
+	{
+		AOVCustomOutput[DispatchRaysIndex().xy] = (bAlive ? float4(1, 1, 1, 1) : float4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
+	}
 }
 
 void OutputPrimaryNormal(float3 normal)
@@ -313,8 +324,8 @@ void RayGen()
 		//error = WaveActiveSum(error) / WaveActiveSum(1.0);
 		SkipRay = error < perFrameConstants.MinConvergence;
 	}
-	AOVCustomOutput[DispatchRaysIndex().xy] = (SkipRay ? vec4(1, 1, 1, 1) : vec4(1, 0.2, 0.2, 1)) * (OutputTexture[DispatchRaysIndex().xy] / OutputTexture[DispatchRaysIndex().xy].w);
-	
+
+	OutputLivePixels(SkipRay);
 	if (SkipRay) return;
 #endif
 
