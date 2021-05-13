@@ -13,12 +13,12 @@
 
 struct HitGroupShaderRecord
 {
-	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
-	UINT GeometryIndex;
-	UINT MaterialIndex;
-	D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer;
-	D3D12_GPU_VIRTUAL_ADDRESS VertexBuffer;
-	BYTE Padding2[8];
+	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
+	UINT MaterialIndex; // 4
+	UINT GeometryIndex; // 4
+	D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer; // 8
+	D3D12_GPU_VIRTUAL_ADDRESS VertexBuffer; // 8
+	BYTE Padding2[8]; // 8
 };
 
 //------------------------------------------------------------------------------------------------
@@ -480,6 +480,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		CD3DX12_DESCRIPTOR_RANGE1 ImageTextureTableDescriptor;
 		ImageTextureTableDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(1, &ImageTextureTableDescriptor);
+
+		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -1328,6 +1330,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::JitteredOutputUAV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV));
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::ImageTextureTable, m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVBaseUAVSlot));
+	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::ShaderTable, m_pHitGroupShaderTable->GetGPUVirtualAddress());
+
 
 	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput->GetDesc();
 

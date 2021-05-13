@@ -49,10 +49,9 @@ MakeNamedMaterial "Car Paint - Glossy Blue"  "string type" "mix"
 MakeNamedMaterial "Metal - Chrome" 
         "float roughness" [ 0.01 ] 
         "string type" [ "metal" ] 
-        "spectrum k" "spds/Al.k.spd"
-        "spectrum eta" "spds/Al.eta.spd"
 MakeNamedMaterial "Mat.1"  # white painted stuff
-    "string type" "fourier" "string bsdffile" "bsdfs/ceramic.bsdf"
+        "float roughness" [ 0.01 ] 
+        "string type" [ "metal" ] 
 MakeNamedMaterial "Glass-Simple.1" 
         "string type" [ "glass" ] 
 MakeNamedMaterial "indicator_glass" 

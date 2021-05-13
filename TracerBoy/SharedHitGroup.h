@@ -1,7 +1,7 @@
 cbuffer LocalConstants : register(b2)
 {
-	uint GeometryIndex;
 	uint MaterialIndex;
+	uint GeometryIndex;
 }
 
 StructuredBuffer<uint> IndexBuffer : register(t2);

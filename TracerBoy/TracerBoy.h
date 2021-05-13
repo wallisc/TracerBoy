@@ -302,6 +302,7 @@ private:
 		ImageTextureTable,
 		LuminanceVarianceParam,
 		VolumeSRVParam,
+		ShaderTable,
 		NumRayTracingParameters
 	};
 	
