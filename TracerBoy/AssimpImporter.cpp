@@ -58,6 +58,7 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 
 	std::shared_ptr<pbrt::InfiniteLightSource> pLight = std::make_shared<pbrt::InfiniteLightSource>();
 	pLight->mapName = "../bistro/san_giuseppe_bridge_4k.hdr";
+	pLight->transform.l = pbrt::math::mat3f(pbrt::math::vec3f(1));
 	pScene->world->lightSources.push_back(pLight);
 	UINT numMaterials = pAiScene->mNumMaterials;
 
@@ -77,21 +78,6 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_EMISSIVE(0), pMaterial->map_emissive);
 		ConvertToPBRTTexture(*pAiMaterial, AI_MATKEY_TEXTURE_SPECULAR(0), pMaterial->map_specular);
 		
-#if 0
-			if (materialIndex == 0)
-			{
-				pMaterial->map_kd = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_S_qcnbS_8K_Albedo.tga");
-				pMaterial->map_specular = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_S_qcnbS_8K_Roughness.bmp");
-				pMaterial->map_normal = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_S_qcnbS_8K_Normal_LOD0.tga");
-			}
-			else
-			{
-				pMaterial->map_kd = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_X_qkofQ_8K_Albedo.tga");
-				pMaterial->map_specular = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_X_qkofQ_8K_Roughness.bmp");
-				pMaterial->map_normal = std::make_shared<pbrt::ImageTexture>("Aset_rock_volcanic_X_qkofQ_8K_Normal_LOD0.tga");
-			}
-#endif
-
 		ConvertToPBRTFloat3(*pAiMaterial, AI_MATKEY_COLOR_DIFFUSE, pMaterial->kd);
 		
 		for (UINT propertyIndex = 0; propertyIndex < numProperties; propertyIndex++)
