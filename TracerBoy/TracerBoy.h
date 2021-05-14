@@ -346,6 +346,7 @@ private:
 
 	
 	ComPtr<ID3D12Resource> CreateUAV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
+	ComPtr<ID3D12Resource> CreateSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 
@@ -380,7 +381,7 @@ private:
 		JitteredPathTracerOutputSRV,
 		JitteredPathTracerOutputUAV,
 		NumReservedViewSlots,
-		NumTotalViews = 8192
+		NumTotalViews = 1024 * 512
 	};
 
 	Vector3 m_volumeMax;

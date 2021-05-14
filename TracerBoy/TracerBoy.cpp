@@ -378,7 +378,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		}
 		material.albedo = ConvertFloat3(pPlasticMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
-		material.SpecularCoef = ChannelAverage(pSubstrateMaterial->ks);
+		material.SpecularCoef = ChannelAverage(pPlasticMaterial->ks);
 		//VERIFY(!pPlasticMaterial->map_ks);
 		//VERIFY(!pPlasticMaterial->map_roughness);
 		//VERIFY(!pPlasticMaterial->map_bump);
@@ -813,13 +813,14 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 
 			ComPtr<ID3D12Resource> pVertexBuffer;
+			ComPtr<ID3D12Resource> pUploadVertexBuffer;
 			UINT vertexSize = sizeof(Vertex);
 			UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
-			AllocateUploadBuffer(vertexBufferSize, pVertexBuffer);
+			AllocateUploadBuffer(vertexBufferSize, pUploadVertexBuffer);
 			bool bNormalsProvided = pTriangleMesh->normal.size();
 			Vertex* pVertexBufferData;
 			{
-				VERIFY_HRESULT(pVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
+				VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
 				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 				{
 					auto parserVertex = transform * pTriangleMesh->vertex[v];
@@ -843,16 +844,27 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 					pVertexBufferData[v].UV = { uv.x, uv.y };
 					pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
 				}
+
+				D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+				D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+				SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				SRVDesc.Format = DXGI_FORMAT_R32_UINT;
+				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				SRVDesc.Buffer.NumElements = desc.Width / 4;
+				pVertexBuffer = CreateSRV(L"VertexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(AllocateDescriptorHeapSlot()), D3D12_RESOURCE_STATE_COPY_DEST);
 			}
+
+
 
 
 			UINT indexSize = sizeof(UINT32);
 			UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
+			ComPtr<ID3D12Resource> pUploadIndexBuffer;
 			ComPtr<ID3D12Resource> pIndexBuffer;
 			{
-				AllocateUploadBuffer(indexBufferSize, pIndexBuffer);
+				AllocateUploadBuffer(indexBufferSize, pUploadIndexBuffer);
 				UINT32* pIndexBufferData;
-				VERIFY_HRESULT(pIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
+				VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
 				for (UINT i = 0; i < pTriangleMesh->index.size(); i++)
 				{
 					auto triangleIndices = pTriangleMesh->index[i];
@@ -870,6 +882,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 						pVertexBufferData[triangleIndices.z].Normal = { normal.x, normal.y, normal.z };
 					}
 				}
+				D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
+				D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+				SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				SRVDesc.Format = DXGI_FORMAT_R32_UINT;
+				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				SRVDesc.Buffer.NumElements = desc.Width / 4;
+				pIndexBuffer = CreateSRV(L"IndexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(AllocateDescriptorHeapSlot()), D3D12_RESOURCE_STATE_COPY_DEST);
 			}
 			triangleCount += pTriangleMesh->index.size() / 3;
 
@@ -896,8 +915,19 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			hitGroupShaderTable.push_back(shaderRecord);
 
+			commandList.CopyResource(pVertexBuffer.Get(), pUploadVertexBuffer.Get());
+			commandList.CopyResource(pIndexBuffer.Get(), pUploadIndexBuffer.Get());
+			D3D12_RESOURCE_BARRIER copyBarriers[] =
+			{
+				CD3DX12_RESOURCE_BARRIER::Transition(pVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
+				CD3DX12_RESOURCE_BARRIER::Transition(pIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
+			};
+			commandList.ResourceBarrier(ARRAYSIZE(copyBarriers), copyBarriers);
+
 			m_pBuffers.push_back(pIndexBuffer);
 			m_pBuffers.push_back(pVertexBuffer);
+			resourcesToDelete.push_back(pUploadIndexBuffer);
+			resourcesToDelete.push_back(pUploadVertexBuffer);
 		}
 
 		AllocateBufferWithData(hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable);
@@ -1596,6 +1626,29 @@ ComPtr<ID3D12Resource> TracerBoy::CreateUAV(
 	pResource->SetName(resourceName.c_str());
 	return pResource;
 }
+
+ComPtr<ID3D12Resource> TracerBoy::CreateSRV(
+	const std::wstring &resourceName,
+	const D3D12_RESOURCE_DESC &resourceDesc, 
+	const D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc,
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, 
+	D3D12_RESOURCE_STATES defaultState)
+{
+	ComPtr<ID3D12Resource> pResource;
+	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+		&defaultHeapDesc,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		defaultState,
+		nullptr,
+		IID_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
+
+	m_pDevice->CreateShaderResourceView(pResource.Get(), &srvDesc, srvHandle);
+	pResource->SetName(resourceName.c_str());
+	return pResource;
+}
+
 ComPtr<ID3D12Resource> TracerBoy::CreateUAVandSRV(
 	const std::wstring &resourceName,
 	const D3D12_RESOURCE_DESC& uavDesc, 

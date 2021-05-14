@@ -1,6 +1,7 @@
 #ifdef HLSL
 #define UINT_MAX 4294967295
 #define EPSILON 0.0001f
+ByteAddressBuffer ShaderTable: register(t11);
 #else
 #pragma once
 struct float2 { float x; float y; };
@@ -92,6 +93,7 @@ struct Vertex
 #define OUTPUT_TYPE_LUMINANCE 3
 #define OUTPUT_TYPE_VARIANCE 4
 #define OUTPUT_TYPE_LIVE_PIXELS 5
+
 
 struct Material
 {
