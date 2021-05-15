@@ -15,10 +15,10 @@ struct HitGroupShaderRecord
 {
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
 	UINT MaterialIndex; // 4
+	UINT VertexBufferIndex; // 4
+	UINT IndexBufferIndex; // 4
 	UINT GeometryIndex; // 4
-	D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer; // 8
-	D3D12_GPU_VIRTUAL_ADDRESS VertexBuffer; // 8
-	BYTE Padding2[8]; // 8
+	BYTE Padding2[16]; // 16
 };
 
 //------------------------------------------------------------------------------------------------
@@ -477,9 +477,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		VolumeDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 9);
 		Parameters[RayTracingRootSignatureParameters::VolumeSRVParam].InitAsDescriptorTable(1, &VolumeDescriptor);
 
-		CD3DX12_DESCRIPTOR_RANGE1 ImageTextureTableDescriptor;
-		ImageTextureTableDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(1, &ImageTextureTableDescriptor);
+		CD3DX12_DESCRIPTOR_RANGE1 BindlessTableDescriptor[3];
+		BindlessTableDescriptor[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
+		BindlessTableDescriptor[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
+		BindlessTableDescriptor[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
+		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(ARRAYSIZE(BindlessTableDescriptor), BindlessTableDescriptor);
 
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
 
@@ -814,6 +816,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			ComPtr<ID3D12Resource> pVertexBuffer;
 			ComPtr<ID3D12Resource> pUploadVertexBuffer;
+			UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
 			UINT vertexSize = sizeof(Vertex);
 			UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
 			AllocateUploadBuffer(vertexBufferSize, pUploadVertexBuffer);
@@ -848,10 +851,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
 				D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 				SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				SRVDesc.Format = DXGI_FORMAT_R32_UINT;
+				SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
 				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 				SRVDesc.Buffer.NumElements = desc.Width / 4;
-				pVertexBuffer = CreateSRV(L"VertexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(AllocateDescriptorHeapSlot()), D3D12_RESOURCE_STATE_COPY_DEST);
+
+				pVertexBuffer = CreateSRV(L"VertexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
 			}
 
 
@@ -861,6 +865,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
 			ComPtr<ID3D12Resource> pUploadIndexBuffer;
 			ComPtr<ID3D12Resource> pIndexBuffer;
+			UINT IndexBufferIndex = AllocateDescriptorHeapSlot();
 			{
 				AllocateUploadBuffer(indexBufferSize, pUploadIndexBuffer);
 				UINT32* pIndexBufferData;
@@ -888,7 +893,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				SRVDesc.Format = DXGI_FORMAT_R32_UINT;
 				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 				SRVDesc.Buffer.NumElements = desc.Width / 4;
-				pIndexBuffer = CreateSRV(L"IndexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(AllocateDescriptorHeapSlot()), D3D12_RESOURCE_STATE_COPY_DEST);
+				pIndexBuffer = CreateSRV(L"IndexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(IndexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
 			}
 			triangleCount += pTriangleMesh->index.size() / 3;
 
@@ -908,8 +913,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			HitGroupShaderRecord shaderRecord = {};
 			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.MaterialIndex = materialIndex;
-			shaderRecord.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
-			shaderRecord.VertexBuffer = pVertexBuffer->GetGPUVirtualAddress();
+			shaderRecord.VertexBufferIndex = VertexBufferIndex;
+			shaderRecord.IndexBufferIndex = IndexBufferIndex;
 
 			memcpy(shaderRecord.ShaderIdentifier, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
@@ -1130,9 +1135,7 @@ void TracerBoy::InitializeTexture(
 void TracerBoy::InitializeLocalRootSignature()
 {
 	CD3DX12_ROOT_PARAMETER1 Parameters[LocalRayTracingRootSignatureParameters::NumLocalRayTracingParameters];
-	Parameters[LocalRayTracingRootSignatureParameters::GeometryIndexRootConstant].InitAsConstants(2, 2);
-	Parameters[LocalRayTracingRootSignatureParameters::IndexBufferSRV].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
-	Parameters[LocalRayTracingRootSignatureParameters::VertexBufferSRV].InitAsShaderResourceView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC);
+	Parameters[LocalRayTracingRootSignatureParameters::GeometryIndexRootConstant].InitAsConstants(4, 2);
 
 	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 	rootSignatureDesc.pParameters = Parameters;

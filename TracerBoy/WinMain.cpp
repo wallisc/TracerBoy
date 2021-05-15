@@ -2,6 +2,10 @@
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 4;}
+
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
+
 std::unique_ptr<D3D12App> g_pD3D12App;
 HWND g_hwnd;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)

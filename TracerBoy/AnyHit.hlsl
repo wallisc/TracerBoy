@@ -10,28 +10,13 @@ void AnyHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes a
 	// TODO: doesn't work with mixed materials
 	Material mat = GetMaterial_NonRecursive(MaterialIndex);
 
-	uint3 indices = GetIndices(PrimitiveIndex());
-	float3 barycentrics = GetBarycentrics(attr);
-	float2 uv = GetUV(indices, barycentrics);
-	if (IsValidTexture(mat.alphaIndex))
+	float3 barycentrics = GetBarycentrics3(attr.barycentrics);
+	GeometryInfo Geometry = GetGeometryInfo(GeometryIndex);
+	HitInfo hit = GetHitInfo(Geometry, PrimitiveIndex(), barycentrics);
+	if (!IsValidHit(Geometry, hit))
 	{
-		float alpha = GetTextureData(mat.alphaIndex, uv).r;
-		if (alpha < 0.9f)
-		{
-			IgnoreHit();
-		}
+		IgnoreHit();
 	}
-	else if (IsValidTexture(mat.albedoIndex))
-	{
-		float alpha = GetTextureData(mat.albedoIndex, uv).a;
-		if (alpha < 0.9f)
-		{
-			IgnoreHit();
-		}
-	}
-
-
-	
 }
 
 

@@ -5,16 +5,15 @@
 [shader("closesthit")]
 void ClosestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr)
 {
-	uint3 indices = GetIndices(PrimitiveIndex());
-	float3 barycentrics = GetBarycentrics(attr);
+	float3 barycentrics = GetBarycentrics3(attr.barycentrics);
 
-	payload.uv = GetUV(indices, barycentrics);
+	GeometryInfo Geometry = GetGeometryInfo(GeometryIndex);
+	HitInfo hit = GetHitInfo(Geometry, PrimitiveIndex(), barycentrics);
+	payload.uv = hit.uv;
 	payload.materialIndex = MaterialIndex;
 	payload.hitT = RayTCurrent();
-	payload.normal = GetNormal(indices, barycentrics);
-
-	// TODO: Only do this if there is a normal map. Should have this specified in some geometry flag
-	payload.tangent = GetTangent(indices, barycentrics);
+	payload.normal = hit.normal;
+	payload.tangent = hit.tangent;
 }
 
 

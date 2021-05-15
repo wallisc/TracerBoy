@@ -21,7 +21,7 @@ float3 SampleEnvironmentMap(float3 v)
 	float3 viewDir = normalize(v);
 	float2 uv;
 	float p = atan2(
-#if 0
+#if 1
 		viewDir.z, 
 #else
 		viewDir.y, 
@@ -30,14 +30,14 @@ float3 SampleEnvironmentMap(float3 v)
 	p = p > 0 ? p : p + 2 * 3.14;
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(
-#if 0
+#if 1
 		viewDir.y
 #else
 		viewDir.z
 #endif
 	) / (3.14);
 
-	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return 5.0 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 float rand();
@@ -191,6 +191,11 @@ struct Ray
 	float3 direction;
 };
 
+#include "SharedHitGroup.h"
+
+
+void OutputPrimaryAlbedo(float3 albedo);
+
 float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
 {
 	RayDesc dxrRay;
@@ -199,6 +204,55 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	dxrRay.TMin = EPSILON;
 	dxrRay.TMax = maxT;
 
+#define INLINE_RAYTRACE 0
+#if INLINE_RAYTRACE
+	RayQuery<RAY_FLAG_NONE> Query;
+    Query.TraceRayInline(
+        AS,
+        RAY_FLAG_NONE,
+        ~0,
+        dxrRay);
+
+	while (Query.Proceed())
+	{
+		float3 barycentrics = GetBarycentrics3(Query.CandidateTriangleBarycentrics());
+		GeometryInfo Geometry = GetGeometryInfo(Query.CandidateGeometryIndex());
+		HitInfo hit = GetHitInfo(Geometry, Query.CandidatePrimitiveIndex(), barycentrics);
+
+		if (IsValidHit(Geometry, hit))
+		{
+			Query.CommitNonOpaqueTriangleHit();
+		}
+	}
+
+	float2 result;
+	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
+    if(Query.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+	{
+		result.x = Query.CommittedRayT();
+
+		float3 barycentrics = GetBarycentrics3(Query.CommittedTriangleBarycentrics());
+		GeometryInfo Geometry = GetGeometryInfo(Query.CommittedGeometryIndex());
+		HitInfo hit = GetHitInfo(Geometry, Query.CommittedPrimitiveIndex(), barycentrics);
+		payload.uv = hit.uv;
+		payload.materialIndex = Geometry.MaterialIndex;
+		payload.hitT = Query.CommittedRayT();
+		payload.normal = hit.normal;
+		payload.tangent = hit.tangent;
+
+		result.y = payload.materialIndex;
+	}
+	else
+	{
+		result.x = -1;
+		result.y = -1;
+	}
+	PrimitiveID = 0;
+	normal = payload.normal;
+	uv = payload.uv;
+	tangent = payload.tangent;
+
+#else
 	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
 	TraceRay(AS, RAY_FLAG_NONE, ~0, 0, 1, 0, dxrRay, payload);
 
@@ -213,6 +267,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	{
 		result.y = -1;
 	}
+#endif
+
 	PrimitiveID = 0;
 	normal = payload.normal;
 	uv = payload.uv;

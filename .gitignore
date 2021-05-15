@@ -22,6 +22,7 @@ x64
 TracerBoy/TracerBoy.vcxproj.user
 TracerBoy/Render
 Scenes
+packages
 *.user
 PBRTParser/PBRTParser.vcxproj.user
 *.ini

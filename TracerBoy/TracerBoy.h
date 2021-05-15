@@ -281,8 +281,6 @@ private:
 	enum LocalRayTracingRootSignatureParameters
 	{
 		GeometryIndexRootConstant = 0,
-		IndexBufferSRV,
-		VertexBufferSRV,
 		NumLocalRayTracingParameters
 	};
 

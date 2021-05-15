@@ -1,7 +1,6 @@
 #ifdef HLSL
 #define UINT_MAX 4294967295
 #define EPSILON 0.0001f
-ByteAddressBuffer ShaderTable: register(t11);
 #else
 #pragma once
 struct float2 { float x; float y; };
