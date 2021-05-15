@@ -89,6 +89,9 @@
     <ClInclude Include="CalculateVarianceSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="RayGenCommon.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -113,6 +116,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="CalculateVarianceCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="RaytraceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

@@ -257,6 +257,8 @@ private:
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
 
+	bool m_bSupportsInlineRaytracing;
+
 	ComPtr<ID3D12Resource> m_pBottomLevelAS;
 	ComPtr<ID3D12Resource> m_pTopLevelAS;
 	ComPtr<ID3D12Resource> m_pConfigConstants;
@@ -308,6 +310,7 @@ private:
 
 	ComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
 	ComPtr<ID3D12StateObject> m_pRayTracingStateObject;
+	ComPtr<ID3D12PipelineState> m_pRayTracingPSO;
 
 	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
 	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;

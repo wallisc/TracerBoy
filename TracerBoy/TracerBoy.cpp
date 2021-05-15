@@ -7,6 +7,7 @@
 #include "ClosestHit.h"
 #include "AnyHit.h"
 #include "Miss.h"
+#include "RaytraceCS.h"
 #include "XInput.h"
 
 #define USE_ANYHIT 1
@@ -425,6 +426,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(options)));
 
+	m_bSupportsInlineRaytracing = options.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1;
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC viewDescriptorHeapDesc = {};
 		viewDescriptorHeapDesc.NumDescriptors = ViewDescriptorHeapSlots::NumTotalViews;
@@ -558,6 +560,14 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	ComPtr<ID3D12StateObjectProperties> pStateObjectProperties;
 	m_pRayTracingStateObject.As(&pStateObjectProperties);
+
+	if(m_bSupportsInlineRaytracing)
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
+		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pRaytraceCS, ARRAYSIZE(g_pRaytraceCS));
+		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pRayTracingPSO.ReleaseAndGetAddressOf())));
+	}
 
 	{
 		const void *pRayGenShaderIdentifier = pStateObjectProperties->GetShaderIdentifier(L"RayGen");
@@ -1299,7 +1309,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	ComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
 	commandList.QueryInterface(IID_PPV_ARGS(&pRaytracingCommandList));
-	pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject.Get());
 
 	SYSTEMTIME time;
 	GetSystemTime(&time);
@@ -1368,22 +1377,36 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput->GetDesc();
 
-	D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-	dispatchDesc.Width = static_cast<UINT>(viewport.Width);
-	dispatchDesc.Height = static_cast<UINT>(viewport.Height);
-	dispatchDesc.Depth = 1;
-	dispatchDesc.RayGenerationShaderRecord.StartAddress = m_pRayGenShaderTable->GetGPUVirtualAddress();
-	dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-	dispatchDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
-	dispatchDesc.HitGroupTable.SizeInBytes = m_pHitGroupShaderTable->GetDesc().Width;
-	dispatchDesc.HitGroupTable.StrideInBytes = sizeof(HitGroupShaderRecord);
-	dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
-	dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-	dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry
+
 
 	if (bRender)
 	{
-		pRaytracingCommandList->DispatchRays(&dispatchDesc);
+		if (!m_bSupportsInlineRaytracing)
+		{
+			pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject.Get());
+
+			D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
+			dispatchDesc.Width = static_cast<UINT>(viewport.Width);
+			dispatchDesc.Height = static_cast<UINT>(viewport.Height);
+			dispatchDesc.Depth = 1;
+			dispatchDesc.RayGenerationShaderRecord.StartAddress = m_pRayGenShaderTable->GetGPUVirtualAddress();
+			dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+			dispatchDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
+			dispatchDesc.HitGroupTable.SizeInBytes = m_pHitGroupShaderTable->GetDesc().Width;
+			dispatchDesc.HitGroupTable.StrideInBytes = sizeof(HitGroupShaderRecord);
+			dispatchDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
+			dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+			dispatchDesc.MissShaderTable.StrideInBytes = 0; // Only 1 entry
+
+			pRaytracingCommandList->DispatchRays(&dispatchDesc);
+		}
+		else
+		{
+			commandList.SetPipelineState(m_pRayTracingPSO.Get());
+			UINT DispatchWidth = (viewport.Width - 1) / 8 + 1;
+			UINT DispatchHeight = (viewport.Height - 1) / 8 + 1;
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+		}
 		m_SamplesRendered++;
 	}
 
