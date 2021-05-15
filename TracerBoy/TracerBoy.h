@@ -147,6 +147,7 @@ public:
 		float m_TargetFrameRate;
 		float m_ConvergencePercentage;
 		bool m_bEnableBlueNoise;
+		bool m_bEnableInlineRaytracing;
 	};
 
 	struct DebugSettings 		
@@ -210,6 +211,7 @@ public:
 		performanceSettings.m_TargetFrameRate = 0.0f;
 		performanceSettings.m_ConvergencePercentage = 0.001;
 		performanceSettings.m_bEnableBlueNoise = false;
+		performanceSettings.m_bEnableInlineRaytracing = true;
 
 		return outputSettings;
 	}

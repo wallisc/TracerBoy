@@ -99,7 +99,6 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
 
-
 	if (ImGui::TreeNode("Camera"))
 	{
 		auto& cameraSettings = m_outputSettings.m_cameraSettings;
@@ -134,6 +133,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Exposure Multiplier", &postProcessSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::Checkbox("Enable Tonemapping", &postProcessSettings.m_bEnableToneMapping);
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
+		ImGui::TreePop();
 	}
 
 	if (ImGui::TreeNode("Performance"))
@@ -144,6 +144,8 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Target frame rate", &performanceSettings.m_TargetFrameRate, 10.0f, 1.0f, "%.1f");
 		ImGui::InputFloat("Mininum convergence needed to terminate", &performanceSettings.m_ConvergencePercentage, 0.001f, 0.1f, "%.5f");
 		ImGui::Checkbox("Use Blue Noise", &performanceSettings.m_bEnableBlueNoise);
+		ImGui::Checkbox("Use Inline Raytracing", &performanceSettings.m_bEnableInlineRaytracing);
+		ImGui::TreePop();
 	}
 
 	if (ImGui::TreeNode("Debug"))
@@ -152,6 +154,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Luminance Variance Multiplier", &debugSettings.m_VarianceMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputInt("Max Samples to render", &debugSettings.m_SampleLimit, 1, 16);
 		ImGui::InputFloat("Max time to render (seconds)", &debugSettings.m_TimeLimitInSeconds, 0.1f, 1.0f, "%.2f");
+		ImGui::TreePop();
 	}
 
 	if (ImGui::TreeNode("Capture"))

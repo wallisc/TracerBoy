@@ -480,9 +480,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		Parameters[RayTracingRootSignatureParameters::VolumeSRVParam].InitAsDescriptorTable(1, &VolumeDescriptor);
 
 		CD3DX12_DESCRIPTOR_RANGE1 BindlessTableDescriptor[3];
-		BindlessTableDescriptor[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
-		BindlessTableDescriptor[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
-		BindlessTableDescriptor[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC, 0);
+		BindlessTableDescriptor[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
+		BindlessTableDescriptor[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
+		BindlessTableDescriptor[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
 		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(ARRAYSIZE(BindlessTableDescriptor), BindlessTableDescriptor);
 
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
@@ -1381,7 +1381,14 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	if (bRender)
 	{
-		if (!m_bSupportsInlineRaytracing)
+		if (outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing)
+		{
+			commandList.SetPipelineState(m_pRayTracingPSO.Get());
+			UINT DispatchWidth = (viewport.Width - 1) / 8 + 1;
+			UINT DispatchHeight = (viewport.Height - 1) / 8 + 1;
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+		}
+		else
 		{
 			pRaytracingCommandList->SetPipelineState1(m_pRayTracingStateObject.Get());
 
@@ -1400,13 +1407,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 			pRaytracingCommandList->DispatchRays(&dispatchDesc);
 		}
-		else
-		{
-			commandList.SetPipelineState(m_pRayTracingPSO.Get());
-			UINT DispatchWidth = (viewport.Width - 1) / 8 + 1;
-			UINT DispatchHeight = (viewport.Height - 1) / 8 + 1;
-			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
-		}
+
 		m_SamplesRendered++;
 	}
 
