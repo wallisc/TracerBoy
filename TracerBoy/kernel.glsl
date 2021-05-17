@@ -1113,7 +1113,7 @@ float BeerLambert(float absorption, float dist)
     return exp(-absorption * dist);
 }
 
-#define USE_RUSSIAN_ROULETTE 0
+#define USE_RUSSIAN_ROULETTE 1
 #define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
 {
@@ -1133,6 +1133,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
         if(i >= MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE)
         {
             float p = max(max(accumulatedIndirectLightMultiplier.r, accumulatedIndirectLightMultiplier.g), accumulatedIndirectLightMultiplier.b);
+            p = max(p, EPSILON);
             if(p < rand())
             {
                 break;
