@@ -62,13 +62,17 @@ struct PerFrameConstants
 	float3 VolumeMax;
 	uint UseBlueNoise;
 
-	float4x3 EnvironmentMapTransform;
+	uint UseExecuteIndirect;
 };
 
 struct ConfigConstants
 {
 	float CameraLensHeight;
 	uint FlipTextureUVs;
+
+	float2 Padding;
+
+	float4x3 EnvironmentMapTransform;
 };
 
 struct Vertex
@@ -92,6 +96,7 @@ struct Vertex
 #define OUTPUT_TYPE_LUMINANCE 3
 #define OUTPUT_TYPE_VARIANCE 4
 #define OUTPUT_TYPE_LIVE_PIXELS 5
+#define OUTPUT_TYPE_LIVE_WAVES 6
 
 
 struct Material
@@ -144,3 +149,6 @@ struct AreaLightData
 	float3 BottomLeft;
 	float3 BottomRight;
 };
+
+#define RAYTRACE_THREAD_GROUP_HEIGHT 8
+#define RAYTRACE_THREAD_GROUP_WIDTH 8

@@ -7,7 +7,8 @@ cbuffer RootConstants
 	PostProcessConstants Constants;
 }
 
-Texture2D InputTexture;
+Texture2D InputTexture : register(t0);
+Texture2D AuxilaryTexture: register(t1);
 RWTexture2D<float4> OutputTexture;
 
 float3 GammaCorrect(float3 color)
@@ -19,7 +20,8 @@ float3 GammaCorrect(float3 color)
 #define ComputeRS \
     "RootConstants(num32BitConstants=4, b0),\
     DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
-    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
 float3 ProcessLit(float4 color)
 {
@@ -86,6 +88,17 @@ float3 ProcessLuminanceVariance(float4 color)
 	return Constants.VarianceMultiplier * float3(color.r , 0, 0);
 }
 
+float3 ProcessLiveWaves(float4 color, float4 filter)
+{
+	float3 output = ProcessLit(color);
+	if (any(filter > 0.1))
+	{
+		output = filter;
+	}
+	return output;
+}
+
+
 float3 PassThroughColor(float4 color)
 {
 	float3 outputColor = color;
@@ -112,6 +125,8 @@ void main( uint2 DTid : SV_DispatchThreadID )
 	uint2 InputIndex = bFlipImageHorizontally ? uint2(Constants.Resolution.x - DTid.x - 1, DTid.y) : DTid;
 
 	float4 colorData = InputTexture[InputIndex];
+	float4 auxData = AuxilaryTexture[InputIndex];
+
 	float3 outputColor;
 	switch (Constants.OutputType)
 	{
@@ -133,6 +148,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_LIVE_PIXELS:
 		outputColor = PassThroughColor(colorData);
+		break;
+	case OUTPUT_TYPE_LIVE_WAVES:
+		outputColor = ProcessLiveWaves(colorData, auxData);
 		break;
 	}
 

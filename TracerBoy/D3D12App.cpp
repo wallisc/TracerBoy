@@ -59,6 +59,20 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	VERIFY_HRESULT(commandListAllocatorPair.first->Close());
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 
+	for (auto &pReadbackStatBuffer : m_pReadbackStatBuffers)
+	{
+		const D3D12_HEAP_PROPERTIES readbackHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+		D3D12_RESOURCE_DESC readbackBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT32) * 256);
+
+		VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+			&readbackHeapDesc,
+			D3D12_HEAP_FLAG_NONE,
+			&readbackBufferDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(pReadbackStatBuffer.ReleaseAndGetAddressOf())));
+	}
+
 	WaitForGPUIdle();
 }
 
@@ -133,6 +147,16 @@ void D3D12App::Render()
 	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
 	cameraSettings.m_ignoreMouse = !m_MouseMovementEnabled;
 
+	UINT WavesWithLivePixels = 0;
+	UINT NumberOfWavesDispatched = 0;
+	{
+		UINT* pData;
+		m_pReadbackStatBuffers[backBufferIndex]->Map(0, nullptr, (void**)&pData);
+		NumberOfWavesDispatched = pData[0];
+		WavesWithLivePixels = pData[3];
+		m_pReadbackStatBuffers[backBufferIndex]->Unmap(0, nullptr);
+	}
+
 	if (m_bIsRecording)
 	{
 		bool bFrameStart = m_SamplesRendered == 0;
@@ -148,10 +172,31 @@ void D3D12App::Render()
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
 	ID3D12GraphicsCommandList& commandList = *commandListAllocatorPair.first.Get();
 
-	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pUIController->GetOutputSettings());
+	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), m_pUIController->GetOutputSettings());
+
+	static bool bConverged = false;
+	if (m_pTracerBoy->GetNumberOfSamplesSinceLastInvalidate() == 1)
+	{
+		m_TimeSinceLastInvalidate = std::chrono::steady_clock::now();
+		bConverged = false;
+	}
+
 	if (m_bRenderUI)
 	{
-		m_pUIController->Render(commandList);
+		UIController::PerFrameStats stats;
+
+		stats.NumberOfWavesExecuted = NumberOfWavesDispatched;
+		stats.WavesWithLivePixels = WavesWithLivePixels;
+		if (WavesWithLivePixels < 100 && !bConverged)
+		{
+			m_TimeSinceConvergence = std::chrono::steady_clock::now();
+			bConverged = true;
+		}
+		stats.ElapsedTimeSinceLastInvalidate = std::chrono::duration_cast<std::chrono::milliseconds>(
+			(bConverged ? m_TimeSinceConvergence : std::chrono::steady_clock::now()) 
+			- m_TimeSinceLastInvalidate).count() / 1000.0f;
+
+		m_pUIController->Render(commandList, stats);
 	}
 
 	commandList.Close();

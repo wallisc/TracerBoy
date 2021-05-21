@@ -118,6 +118,7 @@ public:
 		Luminance,
 		LuminanceVariance,
 		LivePixels,
+		LiveWaves,
 	};
 
 	struct CameraOutputSettings
@@ -148,6 +149,8 @@ public:
 		float m_ConvergencePercentage;
 		bool m_bEnableBlueNoise;
 		bool m_bEnableInlineRaytracing;
+		bool m_bEnableExecuteIndirect;
+		bool m_bEnableWaveAmplification;
 	};
 
 	struct DebugSettings 		
@@ -212,11 +215,18 @@ public:
 		performanceSettings.m_ConvergencePercentage = 0.001;
 		performanceSettings.m_bEnableBlueNoise = false;
 		performanceSettings.m_bEnableInlineRaytracing = true;
+		performanceSettings.m_bEnableExecuteIndirect = true;
+		performanceSettings.m_bEnableWaveAmplification = true;
 
 		return outputSettings;
 	}
 
-	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, const OutputSettings &outputSettings);
+	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
+
+	UINT GetNumberOfSamplesSinceLastInvalidate() 
+	{
+		return m_SamplesRendered;
+	}
 
 	struct CameraSettings
 	{
@@ -268,6 +278,26 @@ private:
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	pbrt::math::mat3f m_EnvironmentMapTransform;
 
+	enum WaveCompactionRootSignatureParameters
+	{
+		WaveCompactionConstantsParam = 0,
+		WaveCompactionOutputUAV,
+		WaveCompactionJitteredOutputUAV,
+		WaveCompactionRayIndexBuffer,
+		IndirectArgs,
+		NumCompactionParameters
+	};
+
+	UINT m_MinWaveAmount;
+
+	ComPtr<ID3D12RootSignature> m_pWaveCompactionRootSignature;
+	ComPtr<ID3D12PipelineState> m_pWaveCompactionPSO;
+	ComPtr<ID3D12PipelineState> m_pWaveAmplifyPSO;
+	ComPtr<ID3D12PipelineState> m_pIndirectArgIntializePSO;
+
+	ComPtr<ID3D12Resource> m_pRayIndexBuffer;
+	ComPtr<ID3D12Resource> m_pExecuteIndirectArgs;
+	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
 
 	ComPtr<ID3D12Resource> m_pMaterialList;
 	ComPtr<ID3D12Resource> m_pTextureDataList;
@@ -305,6 +335,8 @@ private:
 		LuminanceVarianceParam,
 		VolumeSRVParam,
 		ShaderTable,
+		RayIndexBuffer,
+		IndirectArgsBuffer,
 		NumRayTracingParameters
 	};
 	
@@ -322,6 +354,7 @@ private:
 	enum PostProcessRootSignatureParameters
 	{
 		InputTexture = 0,
+		AuxTexture,
 		OutputTexture,
 		Constants,
 		NumParameters
@@ -348,7 +381,7 @@ private:
 	ComPtr<ID3D12Resource> m_pBlueNoise1Texture;
 
 	
-	ComPtr<ID3D12Resource> CreateUAV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
+	ComPtr<ID3D12Resource> CreateUAV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE *, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -383,6 +416,8 @@ private:
 		PathTracerOutputUAV,
 		JitteredPathTracerOutputSRV,
 		JitteredPathTracerOutputUAV,
+		RayIndexBufferUAV,
+		IndirectArgsUAV,
 		NumReservedViewSlots,
 		NumTotalViews = 1024 * 512
 	};

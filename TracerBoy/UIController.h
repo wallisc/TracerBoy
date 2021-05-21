@@ -4,7 +4,15 @@ class UIController
 {
 public:
 	UIController(HWND hwnd, ID3D12Device &device, ComPtr<IDXGISwapChain3> pSwapchain);
-	void Render(ID3D12GraphicsCommandList& commandList);
+
+	struct PerFrameStats
+	{
+		float ElapsedTimeSinceLastInvalidate;
+		UINT32 WavesWithLivePixels;
+		UINT32 NumberOfWavesExecuted;
+	};
+
+	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats);
 
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }
 	float GetCameraSpeed() { return m_cameraSpeed; }

@@ -55,6 +55,7 @@ private:
 	}
 
 	UINT m_FrameFence[cNumBackBuffers];
+	ComPtr<ID3D12Resource> m_pReadbackStatBuffers[cNumBackBuffers];
 	ComPtr<ID3D12Fence> m_pFence;
 	UINT64 m_SignalValue;
 	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
@@ -70,6 +71,8 @@ private:
 	int m_mouseX, m_mouseY;
 	bool m_inputArray[CHAR_MAX];
 	std::chrono::steady_clock::time_point m_LastUpdateTime;
+	std::chrono::steady_clock::time_point m_TimeSinceLastInvalidate;
+	std::chrono::steady_clock::time_point m_TimeSinceConvergence;
 
 	ComPtr<IDXGISwapChain3> m_pSwapChain;
 	ComPtr<ID3D12Device> m_pDevice;

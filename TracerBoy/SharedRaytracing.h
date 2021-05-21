@@ -27,6 +27,8 @@ StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
 Texture2D LuminanceVariance : register(t8);
 Texture3D Volume : register(t9);
 Texture2D<float4> ImageTextures[] : register(t0, space1);
+StructuredBuffer<uint2> RayIndexBuffer : register(t12);
+ByteAddressBuffer IndirectArgsBuffer: register(t13);
 
 SamplerState PointSampler : register(s0);
 SamplerState BilinearSampler : register(s1);

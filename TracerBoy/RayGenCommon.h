@@ -17,7 +17,7 @@ float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
 float3 SampleEnvironmentMap(float3 v)
 {
-	v = mul(v, (perFrameConstants.EnvironmentMapTransform)).xyz;
+	v = mul(v, (configConstants.EnvironmentMapTransform)).xyz;
 	float3 viewDir = normalize(v);
 	float2 uv;
 	float p = atan2(
@@ -37,7 +37,7 @@ float3 SampleEnvironmentMap(float3 v)
 #endif
 	) / (3.14);
 
-	return 5.0 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return 0.0 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 float rand();
@@ -121,11 +121,11 @@ BlueNoiseData GetBlueNoise()
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = float3(-0.05, 1.0, -0.03);
+	LightPosition = normalize(float3(0.3, 1, -0.2)) * 1000.0;
 	BlueNoiseData BlueNoise = GetBlueNoise();
-	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * float2(0.235 , 0.19);
+	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * 15.0;
 
-	LightColor = float3(17.0, 12.0, 4.0);
+	LightColor = float3(1, 1, 1) * 0.4;
 	PDFValue = 0.0;
 }
 
@@ -342,6 +342,28 @@ void OutputLivePixels(bool bAlive)
 	}
 }
 
+void OutputLiveWaves(uint GroupID)
+{
+	if (perFrameConstants.OutputMode == OUTPUT_TYPE_LIVE_WAVES)
+	{
+		float groupRand = frac(sin(GroupID) * 43758.5453123);
+		float3 filter = lerp(float3(1, 0, 1), float3(1, 0, 0), groupRand);
+		if (groupRand < 0.33)
+		{
+			filter = lerp(float3(1, 0, 0), float3(0, 0, 1), (groupRand) / 0.33);
+		}
+		else if(groupRand < 0.66)
+		{
+			filter = lerp(float3(1, 0, 1), float3(1, 1, 1), (groupRand - 0.33) / 0.33);
+		}
+		else
+		{
+			filter = lerp(float3(1, 1, 0), float3(0, 1, 0), (groupRand - 0.66) / 0.33);
+		}
+		AOVCustomOutput[GetDispatchIndex().xy] = float4(filter, perFrameConstants.GlobalFrameCount);
+	}
+}
+
 void OutputPrimaryNormal(float3 normal)
 {
 	AOVNormals[GetDispatchIndex().xy] = AOVNormals[GetDispatchIndex().xy] + float4(normal, 1.0);
@@ -371,6 +393,7 @@ void ClearAOVs()
 
 #include "GLSLCompat.h"
 #include "kernel.glsl"
+#include "VarianceUtil.h"
 
 #define USE_ADAPTIVE_RAY_DISPATCHING 1
 
@@ -381,20 +404,14 @@ float hash13(vec3 p3)
     return fract((p3.x + p3.y) * p3.z);
 }
 
-bool ShouldRayBeSkipped()
+bool ShouldSkipRay()
 {
-	bool bSkipRay = false;
-	if(perFrameConstants.GlobalFrameCount > 16)
-	{
-		float4 jitteredOutput = JitteredOutputTexture[GetDispatchIndex().xy];
-		float4 output = OutputTexture[GetDispatchIndex().xy];
-		float3 jitteredColor = jitteredOutput.rgb / jitteredOutput.a;
-		float3 color = output.rgb / output.a;
-		
-		float error = (abs(jitteredColor.r - color.r) + abs(jitteredColor.g - color.g) + abs(jitteredColor.b - color.b)) / sqrt(color.r + color.g + color.b);
-		bSkipRay = error < perFrameConstants.MinConvergence;
-	}
-	return bSkipRay;
+	return ShouldSkipRay(
+		OutputTexture,
+		JitteredOutputTexture,
+		GetDispatchIndex().xy,
+		perFrameConstants.MinConvergence,
+		perFrameConstants.GlobalFrameCount);
 }
 
 void RayTraceCommon()

@@ -10,7 +10,7 @@ void RayGen()
 	DispatchIndex = DispatchRaysIndex().xy;
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
-	bool bSkipRay = ShouldRayBeSkipped();
+	bool bSkipRay = ShouldSkipRay();
 	OutputLivePixels(bSkipRay);
 	if (bSkipRay) return;
 #endif

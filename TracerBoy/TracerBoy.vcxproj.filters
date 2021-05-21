@@ -92,6 +92,15 @@
     <ClInclude Include="RayGenCommon.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="SharedWaveCompactionStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="VarianceUtil.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="ComputeShaderUtil.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -119,6 +128,15 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="RaytraceCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="WaveCompactionCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="IntializeIndirectArgsCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="WaveAmplifyCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

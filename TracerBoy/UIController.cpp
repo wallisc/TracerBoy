@@ -84,7 +84,7 @@ void UIController::SetDefaultSettings()
 	m_outputSettings = TracerBoy::GetDefaultOutputSettings();
 }
 
-void UIController::Render(ID3D12GraphicsCommandList& commandList)
+void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats)
 {
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -92,8 +92,11 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 
 	ImGui::Begin("TracerBoy");
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Text("%.2f seconds since last invalidate", stats.ElapsedTimeSinceLastInvalidate);
+	ImGui::Text("%d Waves with live pixels", stats.WavesWithLivePixels);
+	ImGui::Text("%d Waves executed last frame", stats.NumberOfWavesExecuted);
 
-	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance", "Luminance Variance", "Live Pixels" };
+	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance", "Luminance Variance", "Live Pixels", "Live Waves" };
 
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
@@ -145,6 +148,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList)
 		ImGui::InputFloat("Mininum convergence needed to terminate", &performanceSettings.m_ConvergencePercentage, 0.001f, 0.1f, "%.5f");
 		ImGui::Checkbox("Use Blue Noise", &performanceSettings.m_bEnableBlueNoise);
 		ImGui::Checkbox("Use Inline Raytracing", &performanceSettings.m_bEnableInlineRaytracing);
+		ImGui::Checkbox("Use ExecuteIndirect", &performanceSettings.m_bEnableExecuteIndirect);
+		ImGui::Checkbox("Use Wave Amplification", &performanceSettings.m_bEnableWaveAmplification);
+		
 		ImGui::TreePop();
 	}
 
