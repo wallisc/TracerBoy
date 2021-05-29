@@ -133,9 +133,6 @@
     <FxCompile Include="WaveCompactionCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="IntializeIndirectArgsCS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="kernel.glsl">

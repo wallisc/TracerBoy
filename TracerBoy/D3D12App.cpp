@@ -184,8 +184,7 @@ void D3D12App::Render()
 		UIController::PerFrameStats stats;
 
 		stats.NumberOfWavesExecuted = TracerStats.ActiveWaves;
-		stats.WavesWithLivePixels = TracerStats.WavesWithActivePixels;
-		if (stats.WavesWithLivePixels < 20 && !bConverged)
+		if (stats.NumberOfWavesExecuted < 20 && !bConverged)
 		{
 			m_TimeSinceConvergence = std::chrono::steady_clock::now();
 			bConverged = true;

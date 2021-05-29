@@ -614,12 +614,21 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		VERIFY_HRESULT(m_pDevice->CreateCommandSignature(&commandSignatureDesc, nullptr, IID_PPV_ARGS(m_pCommandSignature.ReleaseAndGetAddressOf())));
 
 		{
-			D3D12_RESOURCE_DESC indirectArgsBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * 4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+			UINT IndirectArgBufferSize = sizeof(UINT) * 3;
+			D3D12_RESOURCE_DESC indirectArgsBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(IndirectArgBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 			m_pExecuteIndirectArgs = CreateUAV(
 				L"IndirectArgs",
 				indirectArgsBufferDesc,
 				nullptr,
 				D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC IndirectArgsUavDesc = {};
+			IndirectArgsUavDesc.Format = DXGI_FORMAT_R32_UINT;
+			IndirectArgsUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+			IndirectArgsUavDesc.Buffer.NumElements = IndirectArgBufferSize / sizeof(UINT32);
+			D3D12_CPU_DESCRIPTOR_HANDLE NonShaderVisibleIndirectArgsUavHandle = GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV);
+			m_pDevice->CreateUnorderedAccessView(m_pExecuteIndirectArgs.Get(), nullptr, &IndirectArgsUavDesc,  NonShaderVisibleIndirectArgsUavHandle);
+			m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV), NonShaderVisibleIndirectArgsUavHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 
 		CD3DX12_ROOT_PARAMETER1 Parameters[WaveCompactionRootSignatureParameters::NumCompactionParameters];
@@ -651,13 +660,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 			psoDesc.pRootSignature = m_pWaveCompactionRootSignature.Get();
 			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pWaveCompactionCS, ARRAYSIZE(g_pWaveCompactionCS));
 			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pWaveCompactionPSO.ReleaseAndGetAddressOf())));
-		}
-
-		{
-			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-			psoDesc.pRootSignature = m_pWaveCompactionRootSignature.Get();
-			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pIntializeIndirectArgsCS, ARRAYSIZE(g_pIntializeIndirectArgsCS));
-			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pIndirectArgIntializePSO.ReleaseAndGetAddressOf())));
 		}
 	}
 
@@ -1430,8 +1432,19 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		0,
 		nullptr);
 
-	//if (outputSettings.m_performanceSettings.m_bEnableExecuteIndirect)
+	if (outputSettings.m_performanceSettings.m_bEnableExecuteIndirect)
 	{
+		commandList.ClearUnorderedAccessViewUint(
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV),
+			GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV),
+			m_pExecuteIndirectArgs.Get(),
+			ZeroValue,
+			0,
+			nullptr);
+
+		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_pExecuteIndirectArgs.Get());
+		commandList.ResourceBarrier(1, &uavBarrier);
+
 		commandList.SetComputeRootSignature(m_pWaveCompactionRootSignature.Get());
 		WaveCompactionConstants constants = {};
 		constants.GlobalFrameCount = m_SamplesRendered;
@@ -1444,12 +1457,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		commandList.SetComputeRootDescriptorTable(WaveCompactionRootSignatureParameters::WaveCompactionJitteredOutputUAV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV));
 		commandList.SetComputeRootUnorderedAccessView(WaveCompactionRootSignatureParameters::IndirectArgs, m_pExecuteIndirectArgs->GetGPUVirtualAddress());
 		commandList.SetComputeRootUnorderedAccessView(WaveCompactionRootSignatureParameters::WaveCompactionRayIndexBuffer, m_pRayIndexBuffer->GetGPUVirtualAddress());
-
-		commandList.SetPipelineState(m_pIndirectArgIntializePSO.Get());
-		commandList.Dispatch(1, 1, 1);
-
-		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_pBottomLevelAS.Get());
-		commandList.ResourceBarrier(1, &uavBarrier);
 
 		UINT DispatchWidth = (viewport.Width - 1) / TILE_WIDTH + 1;
 		UINT DispatchHeight = (viewport.Height - 1) / TILE_HEIGHT + 1;

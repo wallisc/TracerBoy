@@ -8,7 +8,6 @@ public:
 	struct PerFrameStats
 	{
 		float ElapsedTimeSinceLastInvalidate;
-		UINT32 WavesWithLivePixels;
 		UINT32 NumberOfWavesExecuted;
 	};
 

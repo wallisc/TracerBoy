@@ -224,7 +224,6 @@ public:
 	struct ReadbackStats
 	{
 		UINT ActiveWaves;
-		UINT WavesWithActivePixels;
 	};
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
@@ -302,7 +301,6 @@ private:
 
 	ComPtr<ID3D12RootSignature> m_pWaveCompactionRootSignature;
 	ComPtr<ID3D12PipelineState> m_pWaveCompactionPSO;
-	ComPtr<ID3D12PipelineState> m_pIndirectArgIntializePSO;
 
 	ComPtr<ID3D12Resource> m_pRayIndexBuffer;
 	ComPtr<ID3D12Resource> m_pExecuteIndirectArgs;

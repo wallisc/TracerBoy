@@ -22,6 +22,13 @@ groupshared uint2 GroupActiveRays[TILE_WIDTH * TILE_HEIGHT];
 [numthreads(RAYTRACE_THREAD_GROUP_WIDTH, RAYTRACE_THREAD_GROUP_HEIGHT, 1)]
 void main(uint3 GTid : SV_GroupThreadID, uint3 Gid : SV_GroupID )
 {
+	bool bIsFirstThread = all(Gid == 0 && GTid == 0);
+	if (bIsFirstThread)
+	{
+		// Initialize the dispatch height and depth to 1
+		IndirectArg.Store2(4, uint2(1, 1));
+	}
+
 	uint2 Resolution;
 	OutputTexture.GetDimensions(Resolution.x, Resolution.y);
 
@@ -75,7 +82,6 @@ void main(uint3 GTid : SV_GroupThreadID, uint3 Gid : SV_GroupID )
 	if (all(GTid == 0))
 	{
 		IndirectArg.InterlockedAdd(0, NumWaves, IndirectArgOutputIndex);
-		IndirectArg.InterlockedAdd(12, NumWaves, IndirectArgOutputIndex);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
