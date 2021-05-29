@@ -80,6 +80,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 
 		D3D12_GPU_DESCRIPTOR_HANDLE iterationInputSRV = i == 0 ? inputSRV : DenoiserBuffers[InputDenoiserBufferIndex].m_srvHandle;
 
+		UINT DispatchWidth = (width - 1) / DENOISER_THREAD_GROUP_WIDTH + 1;
+		UINT DispatchHeight= (height - 1) / DENOISER_THREAD_GROUP_HEIGHT + 1;
+
 		commandList.SetComputeRoot32BitConstants(DenoiserRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::InputSRV, iterationInputSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::OutputUAV, DenoiserBuffers[OutputDenoiserBufferIndex].m_uavHandle);
@@ -87,7 +90,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVIntersectPosition, intersectPositionSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::LuminanceVarianceSRV, luminanceVarianceSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::UndenoisedInputSRV, inputSRV);
-		commandList.Dispatch(width / DENOISER_THREAD_GROUP_WIDTH, height / DENOISER_THREAD_GROUP_HEIGHT, 1);
+		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 
 		InputDenoiserBufferIndex = OutputDenoiserBufferIndex;
 		OutputDenoiserBufferIndex = (OutputDenoiserBufferIndex + 1) % 2;
