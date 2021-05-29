@@ -8,6 +8,23 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 {
 	OutputTexture.GetDimensions(Resolution.x, Resolution.y);
 
+	uint2 GroupDimensions = uint2(
+		(Resolution.x - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1,
+		(Resolution.y - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1);
+	uint TotalDispatchCount = GroupDimensions.x * GroupDimensions.y;
+	uint TotalUnqiueWaveCount = TotalDispatchCount;
+	if (perFrameConstants.UseExecuteIndirect)
+	{
+		TotalDispatchCount = IndirectArgsBuffer.Load(0 * 4);
+		TotalUnqiueWaveCount = IndirectArgsBuffer.Load(3 * 4);
+	}
+
+	bool bIsFirstThread = all(Gid == 0 && GTid == 0);
+	if (bIsFirstThread)
+	{
+		OutputGlobalStats(TotalDispatchCount, TotalUnqiueWaveCount);
+	}
+
 	if (perFrameConstants.UseExecuteIndirect)
 	{
 		uint TotalRayCount = IndirectArgsBuffer.Load(3 * 4) * RAYTRACE_THREAD_GROUP_HEIGHT * RAYTRACE_THREAD_GROUP_WIDTH;

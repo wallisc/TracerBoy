@@ -151,6 +151,7 @@ public:
 		bool m_bEnableInlineRaytracing;
 		bool m_bEnableExecuteIndirect;
 		bool m_bEnableWaveAmplification;
+		int m_OccupancyMultiplier;
 	};
 
 	struct DebugSettings 		
@@ -217,9 +218,16 @@ public:
 		performanceSettings.m_bEnableInlineRaytracing = true;
 		performanceSettings.m_bEnableExecuteIndirect = true;
 		performanceSettings.m_bEnableWaveAmplification = true;
+		performanceSettings.m_OccupancyMultiplier = 10;
 
 		return outputSettings;
 	}
+
+	struct ReadbackStats
+	{
+		UINT ActiveWaves;
+		UINT WavesWithActivePixels;
+	};
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
 
@@ -255,6 +263,9 @@ private:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(UINT slot);
 
+	D3D12_CPU_DESCRIPTOR_HANDLE GetNonShaderVisibleCPUDescriptorHandle(UINT slot);
+
+
 	void AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer);
 	void AllocateBufferWithData(const void *pData, UINT dataSize, ComPtr<ID3D12Resource> &pBuffer);
 
@@ -268,6 +279,7 @@ private:
 	ComPtr<ID3D12Device5> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
+	ComPtr<ID3D12DescriptorHeap> m_pNonShaderVisibleDescriptorHeap;
 
 	bool m_bSupportsInlineRaytracing;
 
@@ -298,6 +310,8 @@ private:
 	ComPtr<ID3D12Resource> m_pRayIndexBuffer;
 	ComPtr<ID3D12Resource> m_pExecuteIndirectArgs;
 	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
+
+	ComPtr<ID3D12Resource> m_pStatsBuffer;
 
 	ComPtr<ID3D12Resource> m_pMaterialList;
 	ComPtr<ID3D12Resource> m_pTextureDataList;
@@ -337,6 +351,7 @@ private:
 		ShaderTable,
 		RayIndexBuffer,
 		IndirectArgsBuffer,
+		StatsBuffer,
 		NumRayTracingParameters
 	};
 	
@@ -385,8 +400,6 @@ private:
 	ComPtr<ID3D12Resource> CreateSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RESOURCE_STATES defaultState);
 	ComPtr<ID3D12Resource> CreateUAVandSRV(const std::wstring& resourceName, const D3D12_RESOURCE_DESC& uavDesc, D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, D3D12_RESOURCE_STATES defaultState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-
-
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
@@ -418,6 +431,7 @@ private:
 		JitteredPathTracerOutputUAV,
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
+		StatsBufferUAV,
 		NumReservedViewSlots,
 		NumTotalViews = 1024 * 512
 	};

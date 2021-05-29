@@ -147,13 +147,11 @@ void D3D12App::Render()
 	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
 	cameraSettings.m_ignoreMouse = !m_MouseMovementEnabled;
 
-	UINT WavesWithLivePixels = 0;
-	UINT NumberOfWavesDispatched = 0;
+	TracerBoy::ReadbackStats TracerStats;
 	{
-		UINT* pData;
-		m_pReadbackStatBuffers[backBufferIndex]->Map(0, nullptr, (void**)&pData);
-		NumberOfWavesDispatched = pData[0];
-		WavesWithLivePixels = pData[3];
+		TracerBoy::ReadbackStats *pTracerStats;
+		m_pReadbackStatBuffers[backBufferIndex]->Map(0, nullptr, (void**)&pTracerStats);
+		memcpy(&TracerStats, pTracerStats, sizeof(TracerStats));
 		m_pReadbackStatBuffers[backBufferIndex]->Unmap(0, nullptr);
 	}
 
@@ -185,9 +183,9 @@ void D3D12App::Render()
 	{
 		UIController::PerFrameStats stats;
 
-		stats.NumberOfWavesExecuted = NumberOfWavesDispatched;
-		stats.WavesWithLivePixels = WavesWithLivePixels;
-		if (WavesWithLivePixels < 100 && !bConverged)
+		stats.NumberOfWavesExecuted = TracerStats.ActiveWaves;
+		stats.WavesWithLivePixels = TracerStats.WavesWithActivePixels;
+		if (stats.WavesWithLivePixels < 20 && !bConverged)
 		{
 			m_TimeSinceConvergence = std::chrono::steady_clock::now();
 			bConverged = true;

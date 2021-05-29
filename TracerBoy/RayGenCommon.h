@@ -37,7 +37,7 @@ float3 SampleEnvironmentMap(float3 v)
 #endif
 	) / (3.14);
 
-	return 0.0 * EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
 }
 
 float rand();
@@ -296,6 +296,7 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 {
 #if IS_COMPUTE_SHADER
 	//TODO!!
+	return float2(0, 0);
 #else
 	return float2(0, 0);
 	RayDesc dxrRay;

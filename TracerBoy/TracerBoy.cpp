@@ -447,6 +447,10 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		viewDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		viewDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&viewDescriptorHeapDesc, IID_PPV_ARGS(m_pViewDescriptorHeap.ReleaseAndGetAddressOf())));
+
+		D3D12_DESCRIPTOR_HEAP_DESC nonShaderVisibleDescriptorHeapDesc = viewDescriptorHeapDesc;
+		nonShaderVisibleDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&nonShaderVisibleDescriptorHeapDesc, IID_PPV_ARGS(m_pNonShaderVisibleDescriptorHeap.ReleaseAndGetAddressOf())));
 	}
 
 	InitializeLocalRootSignature();
@@ -502,6 +506,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
 		Parameters[RayTracingRootSignatureParameters::RayIndexBuffer].InitAsShaderResourceView(12);
 		Parameters[RayTracingRootSignatureParameters::IndirectArgsBuffer].InitAsShaderResourceView(13);
+		Parameters[RayTracingRootSignatureParameters::StatsBuffer].InitAsUnorderedAccessView(6);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -576,6 +581,22 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	ComPtr<ID3D12StateObjectProperties> pStateObjectProperties;
 	m_pRayTracingStateObject.As(&pStateObjectProperties);
+
+
+	D3D12_RESOURCE_DESC statsBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(ReadbackStats), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	m_pStatsBuffer = CreateUAV(
+		L"Stats",
+		statsBufferDesc,
+		nullptr,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC StatsUavDesc = {};
+	StatsUavDesc.Format = DXGI_FORMAT_R32_UINT;
+	StatsUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	StatsUavDesc.Buffer.NumElements = sizeof(ReadbackStats) / sizeof(UINT32);
+	D3D12_CPU_DESCRIPTOR_HANDLE NonShaderVisibleStatsUavHandle = GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV);
+	m_pDevice->CreateUnorderedAccessView(m_pStatsBuffer.Get(), nullptr, &StatsUavDesc,  NonShaderVisibleStatsUavHandle);
+	m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV), NonShaderVisibleStatsUavHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	if(m_bSupportsInlineRaytracing)
 	{
@@ -1247,6 +1268,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE TracerBoy::GetCPUDescriptorHandle(UINT slot)
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapBase, slot, descriptorSize);
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE TracerBoy::GetNonShaderVisibleCPUDescriptorHandle(UINT slot)
+{
+	auto descriptorHeapBase = m_pNonShaderVisibleDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	auto descriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(m_pNonShaderVisibleDescriptorHeap->GetDesc().Type);
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapBase, slot, descriptorSize);
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetGPUDescriptorHandle(UINT slot)
 {
 	auto descriptorHeapBase = m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
@@ -1330,6 +1358,13 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		((float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_RenderStartTime).count() / 1000.0f) < outputSettings.m_debugSettings.m_TimeLimitInSeconds;
 	bool bRender = bUnderSampleLimit && bUnderTimeLimit;
 
+	{
+		D3D12_FEATURE_DATA_D3D12_OPTIONS1 option1;
+		VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &option1, sizeof(option1)));
+
+		m_MinWaveAmount = outputSettings.m_performanceSettings.m_OccupancyMultiplier * option1.TotalLaneCount / option1.WaveLaneCountMax;
+	}
+
 	const float DefaultConvergenceIncrement = 0.0001;
 	if (m_SamplesRendered == 0)
 	{
@@ -1376,7 +1411,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
-	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pAccumulatedPathTracerOutput.Get());
+	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pPostProcessOutput.Get());
 
 	bool bNeedAOVClear = m_bInvalidateHistory || outputSettings.m_OutputType == OutputType::LiveWaves;
 	if (bNeedAOVClear)
@@ -1393,6 +1428,15 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		m_SamplesRendered = 0;
 		m_RenderStartTime = std::chrono::steady_clock::now();
 	}
+
+	const UINT ZeroValue[4] = {};
+	commandList.ClearUnorderedAccessViewUint(
+		GetGPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV),
+		GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV),
+		m_pStatsBuffer.Get(),
+		ZeroValue,
+		0,
+		nullptr);
 
 	//if (outputSettings.m_performanceSettings.m_bEnableExecuteIndirect)
 	{
@@ -1505,9 +1549,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::ShaderTable, m_pHitGroupShaderTable->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RayIndexBuffer, m_pRayIndexBuffer->GetGPUVirtualAddress());
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::IndirectArgsBuffer, m_pExecuteIndirectArgs->GetGPUVirtualAddress());
-
-
-	D3D12_RESOURCE_DESC desc = m_pAccumulatedPathTracerOutput->GetDesc();
+	commandList.SetComputeRootUnorderedAccessView(RayTracingRootSignatureParameters::StatsBuffer, m_pStatsBuffer->GetGPUVirtualAddress());
 
 	if (bRender)
 	{
@@ -1538,7 +1580,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 				CD3DX12_RESOURCE_BARRIER::Transition(m_pRayIndexBuffer.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			};
 			commandList.ResourceBarrier(ARRAYSIZE(postExecuteIndirectBarrier), postExecuteIndirectBarrier);
-			commandList.CopyBufferRegion(pReadbackStats, 0, m_pExecuteIndirectArgs.Get(), 0, sizeof(UINT) * 4);
 		}
 		else
 		{
@@ -1571,8 +1612,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVLumaSquared.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
+	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
 
 	if(outputSettings.m_denoiserSettings.m_bEnabled)
 	{
@@ -1646,6 +1689,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVLumaSquared.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(),	D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
 	}
@@ -1795,7 +1839,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 ComPtr<ID3D12Resource> TracerBoy::CreateUAV(
 	const std::wstring &resourceName,
 	const D3D12_RESOURCE_DESC &uavDesc, 
-	D3D12_CPU_DESCRIPTOR_HANDLE *pUavHandle, 
+	D3D12_CPU_DESCRIPTOR_HANDLE *pUavHandle,
 	D3D12_RESOURCE_STATES defaultState)
 {
 	ComPtr<ID3D12Resource> pResource;
@@ -1807,6 +1851,7 @@ ComPtr<ID3D12Resource> TracerBoy::CreateUAV(
 		defaultState,
 		nullptr,
 		IID_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
+
 
 	if (pUavHandle)
 	{
@@ -1877,16 +1922,13 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 		{
-
 			m_pAccumulatedPathTracerOutput = CreateUAVandSRV(
 				L"PathTracerOutput",
 				pathTracerOutput,
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV),
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRV),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		}
 
-		{
 			m_pJitteredAccumulatedPathTracerOutput = CreateUAVandSRV(
 				L"JitteredPathTracerOutput",
 				pathTracerOutput,
@@ -1894,9 +1936,6 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputSRV),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		}
-
-		
-
 
 		{
 			D3D12_RESOURCE_DESC RayIndexBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * 2 * backBufferDesc.Width * backBufferDesc.Height, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);

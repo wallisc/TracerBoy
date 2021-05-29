@@ -17,6 +17,16 @@ RWTexture2D<float4> AOVWorldPosition : register(u3);
 RWTexture2D<float4> AOVSummedLumaSquared : register(u4);
 RWTexture2D<float4> AOVCustomOutput : register(u5);
 
+RWByteAddressBuffer StatsBuffer : register(u6);
+
+void OutputGlobalStats(uint NumActiveWaves, uint NumWavesWithActivePixels)
+{
+	uint2 Data;
+	Data.x = NumActiveWaves;
+	Data.y = NumWavesWithActivePixels;
+	StatsBuffer.Store2(0, Data);
+}
+
 Texture2D LastFrameTexture : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
