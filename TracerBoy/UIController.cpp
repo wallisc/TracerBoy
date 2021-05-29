@@ -149,7 +149,6 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::Checkbox("Use Blue Noise", &performanceSettings.m_bEnableBlueNoise);
 		ImGui::Checkbox("Use Inline Raytracing", &performanceSettings.m_bEnableInlineRaytracing);
 		ImGui::Checkbox("Use ExecuteIndirect", &performanceSettings.m_bEnableExecuteIndirect);
-		ImGui::Checkbox("Use Wave Amplification", &performanceSettings.m_bEnableWaveAmplification);
 		
 		ImGui::TreePop();
 	}

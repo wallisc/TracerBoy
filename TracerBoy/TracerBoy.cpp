@@ -10,7 +10,6 @@
 #include "Miss.h"
 #include "RaytraceCS.h"
 #include "WaveCompactionCS.h"
-#include "WaveAmplifyCS.h"
 #include "IntializeIndirectArgsCS.h"
 #include "XInput.h"
 
@@ -659,13 +658,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 			psoDesc.pRootSignature = m_pWaveCompactionRootSignature.Get();
 			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pIntializeIndirectArgsCS, ARRAYSIZE(g_pIntializeIndirectArgsCS));
 			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pIndirectArgIntializePSO.ReleaseAndGetAddressOf())));
-		}
-
-		{
-			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-			psoDesc.pRootSignature = m_pWaveCompactionRootSignature.Get();
-			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pWaveAmplifyCS, ARRAYSIZE(g_pWaveAmplifyCS));
-			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pWaveAmplifyPSO.ReleaseAndGetAddressOf())));
 		}
 	}
 
@@ -1464,13 +1456,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 		commandList.SetPipelineState(m_pWaveCompactionPSO.Get());
 		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
-
-		if (outputSettings.m_performanceSettings.m_bEnableWaveAmplification)
-		{
-			commandList.ResourceBarrier(1, &uavBarrier);
-			commandList.SetPipelineState(m_pWaveAmplifyPSO.Get());
-			commandList.Dispatch(1, 1, 1);
-		}
 		
 		D3D12_RESOURCE_BARRIER postWaveCompactionBarrier[] =
 		{

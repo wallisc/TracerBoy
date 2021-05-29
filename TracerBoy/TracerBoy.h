@@ -150,7 +150,6 @@ public:
 		bool m_bEnableBlueNoise;
 		bool m_bEnableInlineRaytracing;
 		bool m_bEnableExecuteIndirect;
-		bool m_bEnableWaveAmplification;
 		int m_OccupancyMultiplier;
 	};
 
@@ -217,7 +216,6 @@ public:
 		performanceSettings.m_bEnableBlueNoise = false;
 		performanceSettings.m_bEnableInlineRaytracing = true;
 		performanceSettings.m_bEnableExecuteIndirect = true;
-		performanceSettings.m_bEnableWaveAmplification = true;
 		performanceSettings.m_OccupancyMultiplier = 10;
 
 		return outputSettings;
@@ -304,7 +302,6 @@ private:
 
 	ComPtr<ID3D12RootSignature> m_pWaveCompactionRootSignature;
 	ComPtr<ID3D12PipelineState> m_pWaveCompactionPSO;
-	ComPtr<ID3D12PipelineState> m_pWaveAmplifyPSO;
 	ComPtr<ID3D12PipelineState> m_pIndirectArgIntializePSO;
 
 	ComPtr<ID3D12Resource> m_pRayIndexBuffer;
