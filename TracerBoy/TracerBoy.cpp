@@ -1661,7 +1661,11 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::OutputTexture,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV));
-		commandList.Dispatch(postProcessConstants.Resolution.x / 8, postProcessConstants.Resolution.y, 1);
+
+		UINT DispatchWidth = (postProcessConstants.Resolution.x - 1) / 8 + 1;
+		UINT DispatchHeight = (postProcessConstants.Resolution.y - 1) / 8 + 1;
+
+		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 	}
 
 	{
