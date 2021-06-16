@@ -135,7 +135,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);
 
-	if(ValidNormal(normal) && medianCoord.x < Constants.Resolution.x / 2 )
+	if(ValidNormal(normal))
 	{
 		for (int xOffset = -KERNEL_WIDTH / 2; xOffset <= KERNEL_WIDTH / 2; xOffset++)
 		{

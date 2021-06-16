@@ -1113,6 +1113,24 @@ float BeerLambert(float absorption, float dist)
     return exp(-absorption * dist);
 }
 
+float AbsPow(float x, float y)
+{
+    return pow(abs(x), y);
+}
+
+float3 GetHalfVectorSafe(float3 a, float3 b, float3 normal)
+{
+    float aDotB = dot(a, b);
+    if(aDotB > (-1.0 + EPSILON))
+    {
+        return normalize(a + b);
+    }
+    else // if vectors are pointing to directly opposite directions
+    {
+        return normal;
+    }
+}
+
 #define USE_RUSSIAN_ROULETTE 1
 #define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
@@ -1374,28 +1392,30 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 } 
                 else 
                 {
-#if 0
+#if 1
 					float PDFValue; 
                     ray.direction = GenerateRandomCosineWeightedDirection(normal, PDFValue);
-#endif
+#else
                     ray.direction = GenerateRandomDirection(normal);
+#endif
                 }
             }
             
             if(AllowsSpecular(material))
             {
-                float3 halfVector = normalize(-previousDirection + ray.direction);
+                float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
 
                 float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                 float DistributionPDF = ImportanceSampleGGXPDF(normal, ray.direction, halfVector, material.roughness);
                 float SpecularPDF = DistributionPDF;
-                float DiffusePDF = 1.0f / (2.0f * PI);
-                float PDFValue = lerp(SpecularPDF, DiffusePDF, 0.5);
+                float DiffusePDF = dot(-previousDirection, normal) / PI;
+                float PDFValue = IsMetallic(material) ? SpecularPDF : lerp(SpecularPDF, DiffusePDF, 0.5);
                 accumulatedIndirectLightMultiplier /= PDFValue;
             }
             else
             {
-                float PDFValue = 1.0f /(2.0 * PI);
+                float PDFValue = dot(-previousDirection, normal) / PI;
+                //float PDFValue = 1.0f /(2.0 * PI);
                 accumulatedIndirectLightMultiplier /= PDFValue;
             }
             
@@ -1601,28 +1621,21 @@ vec4 Trace(Ray ray, Ray neighborRay)
 				
                 if(IsMetallic(material))
                 {
-                    accumulatedIndirectLightMultiplier *= material.albedo;
-                        
-                    // TODO: Move to the new GGX code
-                    // Perfectly specular surfaces don't need to do the BRDF
-                    // because they only trace the reflected ray
-                    // and would result in a BRDF value of 1
-                    if(!UsePerfectSpecularOptimization(material.roughness))
-                    {
-                        accumulatedIndirectLightMultiplier *= SpecularBRDF(
-                            -previousDirection,
-                            ray.direction,
-                            detailNormal,
-                            material.roughness);
-                    }
+                    float3 halfVector = normalize(-previousDirection + ray.direction);
+                    float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
+                    float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
+                        (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
+                    accumulatedIndirectLightMultiplier *= specular * material.albedo * saturate(dot(ray.direction, normal));
                 }
                 else
                 {
                     if(AllowsSpecular(material))
                     {
-                        float3 halfVector = normalize(-previousDirection + ray.direction);
+                        float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
+                        
                         float ReflectionCoefficient = material.SpecularCoef;
-                        float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * pow(1.0 - dot(halfVector, -previousDirection), 5.0); 
+                        float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * 
+                            AbsPow(1.0 - dot(-previousDirection, halfVector), 5.0); 
                         float3 diffuse = (material.albedo * 28.0 / (23.0 * PI))
                             * (1.0 - ReflectionCoefficient)
                             * (1.0 - pow(1.0 - 0.5 * dot(-previousDirection, normal), 5.0))
@@ -1631,7 +1644,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                         float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
                             (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
-                        accumulatedIndirectLightMultiplier *= (diffuse + specular * fresnel) * saturate(dot(ray.direction, normal));
+                        
+                        accumulatedIndirectLightMultiplier *= (diffuse + fresnel * specular)* saturate(dot(ray.direction, normal));
                     }
                     else
                     {
