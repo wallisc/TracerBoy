@@ -1392,15 +1392,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 } 
                 else 
                 {
-#if 1
 					float PDFValue; 
                     ray.direction = GenerateRandomCosineWeightedDirection(normal, PDFValue);
-#else
-                    ray.direction = GenerateRandomDirection(normal);
-#endif
                 }
             }
             
+            float DiffusePDF = dot(ray.direction, normal) / PI;
             if(AllowsSpecular(material))
             {
                 float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
@@ -1408,15 +1405,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                 float DistributionPDF = ImportanceSampleGGXPDF(normal, ray.direction, halfVector, material.roughness);
                 float SpecularPDF = DistributionPDF;
-                float DiffusePDF = dot(-previousDirection, normal) / PI;
                 float PDFValue = IsMetallic(material) ? SpecularPDF : lerp(SpecularPDF, DiffusePDF, 0.5);
                 accumulatedIndirectLightMultiplier /= PDFValue;
             }
             else
             {
-                float PDFValue = dot(-previousDirection, normal) / PI;
-                //float PDFValue = 1.0f /(2.0 * PI);
-                accumulatedIndirectLightMultiplier /= PDFValue;
+                accumulatedIndirectLightMultiplier /= DiffusePDF;
             }
             
             
