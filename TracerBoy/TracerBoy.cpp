@@ -353,6 +353,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		//material.Flags = DEFAULT_MATERIAL_FLAG;
 		material.albedo = { };
 		material.absorption = ChannelAverage(pGlassMaterial->kt * 0.01);
+		material.IOR = pGlassMaterial->index;
 		material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		//material.scattering = pGlassMaterial->kt.x;
 	}
