@@ -121,6 +121,13 @@ public:
 		LiveWaves,
 	};
 
+	enum class RenderMode
+	{
+		Unbiased,
+		RealTime,
+		NumModes
+	};
+
 	struct CameraOutputSettings
 	{
 		float m_FocalDistance;
@@ -166,6 +173,7 @@ public:
 		OutputType m_OutputType;
 
 		bool m_EnableNormalMaps;
+		RenderMode m_renderMode;
 
 		DebugSettings m_debugSettings;
 		PostProcessSettings m_postProcessSettings;
@@ -180,6 +188,7 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
+		outputSettings.m_renderMode = RenderMode::Unbiased;
 
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;

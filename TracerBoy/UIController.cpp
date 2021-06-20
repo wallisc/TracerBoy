@@ -94,10 +94,13 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::Text("%.2f seconds since last invalidate", stats.ElapsedTimeSinceLastInvalidate);
 	ImGui::Text("%d Waves executed last frame", stats.NumberOfWavesExecuted);
+	
+	const char* RenderModes[] = { "Unbiased", "Real-time"};
+	ImGui::Combo("Render Mode", (int*)&m_outputSettings.m_renderMode, RenderModes, IM_ARRAYSIZE(RenderModes));
 
 	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance", "Luminance Variance", "Live Pixels", "Live Waves" };
-
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
+	
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
 
