@@ -52,7 +52,7 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 	seed = hash13(float3(GetDispatchIndex().x, GetDispatchIndex().y, perFrameConstants.GlobalFrameCount));
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
-	if (!perFrameConstants.UseExecuteIndirect)
+	if (!perFrameConstants.UseExecuteIndirect && !perFrameConstants.IsRealTime)
 	{
 		bool bSkipRay = ShouldSkipRay();
 		OutputLivePixels(bSkipRay);

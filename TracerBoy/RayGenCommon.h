@@ -420,9 +420,22 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 	float4 outputColor = PathTrace(uv * GetResolution().xy);
-	float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? OutputTexture[GetDispatchIndex().xy] : float4(0, 0, 0, 0);
-	OutputTexture[GetDispatchIndex().xy] = outputColor + accumulatedColor;
-	if (perFrameConstants.GlobalFrameCount == 0 || rand() < 0.5)
+
+	if (perFrameConstants.GlobalFrameCount > 0)
+	{
+		if (perFrameConstants.IsRealTime)
+		{
+			outputColor = lerp(outputColor, PreviousFrameOutput[GetDispatchIndex().xy], 0.95);
+			outputColor.w = 1;
+		}
+		else if (perFrameConstants.GlobalFrameCount > 0)
+		{
+			outputColor += OutputTexture[GetDispatchIndex().xy];
+		}
+	}
+
+	OutputTexture[GetDispatchIndex().xy] = outputColor;
+	if (!perFrameConstants.IsRealTime && (perFrameConstants.GlobalFrameCount == 0 || rand() < 0.5))
 	{
 		float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? JitteredOutputTexture[GetDispatchIndex().xy] : float4(0, 0, 0, 0);
 		JitteredOutputTexture[GetDispatchIndex().xy] = outputColor + accumulatedColor;

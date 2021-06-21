@@ -24,7 +24,7 @@ void OutputGlobalStats(uint NumActiveWaves)
 	StatsBuffer.Store(0, NumActiveWaves);
 }
 
-Texture2D LastFrameTexture : register(t0);
+Texture2D PreviousFrameOutput : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
 Texture2D EnvironmentMap : register(t4);
 Texture2D BlueNoise0Texture : register(t5);

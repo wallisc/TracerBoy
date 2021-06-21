@@ -188,7 +188,7 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
-		outputSettings.m_renderMode = RenderMode::Unbiased;
+		outputSettings.m_renderMode = RenderMode::RealTime;
 
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
@@ -256,6 +256,15 @@ private:
 
 	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
+
+	void InvalidateHistory(bool bForceRealTimeInvalidate = false);
+
+	UINT GetPathTracerOutputIndex();
+	ID3D12Resource *GetPathTracerOutput();
+	UINT GetPathTracerOutputUAV();
+	UINT GetPathTracerOutputSRV();
+	UINT GetPreviousFramePathTracerOutputIndex();
+	UINT GetPreviousFramePathTracerOutputSRV();
 
 	void InitializeLocalRootSignature();
 	void InitializeTexture(
@@ -326,7 +335,7 @@ private:
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	static const UINT MaxActiveFrames = 2;
 
-	ComPtr<ID3D12Resource> m_pAccumulatedPathTracerOutput;
+	ComPtr<ID3D12Resource> m_pPathTracerOutput[2];
 	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
 	UINT8 m_ActiveFrameIndex;
 
@@ -356,6 +365,7 @@ private:
 		RayIndexBuffer,
 		IndirectArgsBuffer,
 		StatsBuffer,
+		PreviousFrameOutput,
 		NumRayTracingParameters
 	};
 	
@@ -429,8 +439,10 @@ private:
 		LuminanceVarianceSRV,
 		LuminanceVarianceUAV,
 		VolumeSRVSlot,
-		PathTracerOutputSRV,
-		PathTracerOutputUAV,
+		PathTracerOutputSRV0,
+		PathTracerOutputSRV1,
+		PathTracerOutputUAV0,
+		PathTracerOutputUAV1,
 		JitteredPathTracerOutputSRV,
 		JitteredPathTracerOutputUAV,
 		RayIndexBufferUAV,

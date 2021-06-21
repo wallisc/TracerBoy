@@ -63,6 +63,7 @@ struct PerFrameConstants
 	uint UseBlueNoise;
 
 	uint UseExecuteIndirect;
+	uint IsRealTime;
 };
 
 struct ConfigConstants
