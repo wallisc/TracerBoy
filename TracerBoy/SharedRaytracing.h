@@ -26,12 +26,16 @@ void OutputGlobalStats(uint NumActiveWaves)
 
 Texture2D PreviousFrameOutput : register(t0);
 RaytracingAccelerationStructure AS : register(t1);
-Texture2D EnvironmentMap : register(t4);
-Texture2D BlueNoise0Texture : register(t5);
-Texture2D BlueNoise1Texture : register(t10);
-StructuredBuffer<Material> MaterialBuffer : register(t6);
-StructuredBuffer<TextureData> TextureDataBuffer : register(t7);
-Texture2D LuminanceVariance : register(t8);
+
+// System Textures
+Texture2D BlueNoise0Texture : register(t14);
+Texture2D BlueNoise1Texture : register(t15);
+
+// Scene Resources
+Texture2D EnvironmentMap : register(t20);
+StructuredBuffer<Material> MaterialBuffer : register(t21);
+StructuredBuffer<TextureData> TextureDataBuffer : register(t22);
+
 Texture3D Volume : register(t9);
 Texture2D<float4> ImageTextures[] : register(t0, space1);
 StructuredBuffer<uint2> RayIndexBuffer : register(t12);

@@ -37,6 +37,10 @@ using namespace DirectX;
 #undef max
 #endif
 
+// There's CPU overhead to using pix on release but I don't care about CPU :)
+#define USE_PIX
+#include "pix3.h"
+
 #include "PBRTParser\Scene.h"
 #if USE_ASSIMP
 #include <assimp/Importer.hpp>      // C++ importer interface

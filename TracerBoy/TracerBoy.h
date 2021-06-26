@@ -222,9 +222,9 @@ public:
 		performanceSettings.m_VarianceMultiplier = 1.0f;
 		performanceSettings.m_TargetFrameRate = 0.0f;
 		performanceSettings.m_ConvergencePercentage = 0.001;
-		performanceSettings.m_bEnableBlueNoise = false;
+		performanceSettings.m_bEnableBlueNoise = true;
 		performanceSettings.m_bEnableInlineRaytracing = true;
-		performanceSettings.m_bEnableExecuteIndirect = true;
+		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
 
 		return outputSettings;
@@ -283,6 +283,11 @@ private:
 
 	void AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer);
 	void AllocateBufferWithData(const void *pData, UINT dataSize, ComPtr<ID3D12Resource> &pBuffer);
+	void AllocateBufferWithData(
+		ID3D12GraphicsCommandList& CommandList, 
+		const void *pData, UINT dataSize, 
+		ComPtr<ID3D12Resource> &pBuffer, 
+		ComPtr<ID3D12Resource> &pUploadBuffer);
 
 	UINT CurrentDescriptorSlot;
 	UINT AllocateDescriptorHeapSlot()
@@ -349,18 +354,16 @@ private:
 	{
 		PerFrameConstantsParam = 0,
 		ConfigConstantsParam,
-		EnvironmentMapSRV,
 		AOVDescriptorTable,
 		OutputUAV,
 		JitteredOutputUAV,
 		AccelerationStructureRootSRV,
-		MaterialBufferSRV,
-		BlueNoise0SRV,
-		BlueNoise1SRV,
-		TextureDataSRV,
+		SceneDescriptorTable,
+		SystemTexturesDescriptorTable,
 		ImageTextureTable,
-		LuminanceVarianceParam,
+#if SUPPORT_VOLUMES
 		VolumeSRVParam,
+#endif
 		ShaderTable,
 		RayIndexBuffer,
 		IndirectArgsBuffer,
@@ -368,7 +371,7 @@ private:
 		PreviousFrameOutput,
 		NumRayTracingParameters
 	};
-	
+
 	ComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 
 	ComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
@@ -421,9 +424,15 @@ private:
 		DenoiserOuputLastSRV,
 		DenoiserOutputBaseUAV,
 		DenoiserOutputLastUAV,
-		BlueNoise0SRVSlot,
+		SystemTexturesBaseSlot,
+		BlueNoise0SRVSlot = SystemTexturesBaseSlot,
 		BlueNoise1SRVSlot,
-		EnvironmentMapSRVSlot,
+		SystemTexturesLastSlot = BlueNoise1SRVSlot,
+		SceneDescriptorsBaseSlot,
+		EnvironmentMapSRVSlot = SceneDescriptorsBaseSlot,
+		MaterialListSRV,
+		TextureDataSRV,
+		SceneDescriptorsLastSlot = TextureDataSRV,
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
@@ -449,14 +458,19 @@ private:
 		IndirectArgsUAV,
 		StatsBufferUAV,
 		NumReservedViewSlots,
-		NumTotalViews = 1024 * 512
+		NumTotalViews = 1024 * 512,
+		NumAOVTextures = AOVLastUAVSlot - AOVBaseUAVSlot + 1,
+		NumSystemTextures = SystemTexturesLastSlot - SystemTexturesBaseSlot + 1,
+		NumSceneDescriptors = SceneDescriptorsLastSlot - SceneDescriptorsBaseSlot + 1
 	};
+
 
 	Vector3 m_volumeMax;
 	Vector3 m_volumeMin;
 
 	OutputSettings m_CachedOutputSettings;
 	Camera m_camera;
+	Camera m_prevFrameCamera;
 	bool m_flipTextureUVs;
 
 	std::chrono::steady_clock::time_point m_RenderStartTime;

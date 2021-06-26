@@ -181,6 +181,7 @@ void D3D12App::Render()
 
 	if (m_bRenderUI)
 	{
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"UI");
 		UIController::PerFrameStats stats;
 
 		stats.NumberOfWavesExecuted = TracerStats.ActiveWaves;

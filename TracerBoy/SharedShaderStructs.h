@@ -18,6 +18,7 @@ struct uint2 { uint x; uint y; };
 #endif
 
 #define IS_Y_AXIS_UP 1
+#define SUPPORT_VOLUMES 0
 
 struct RayPayload
 {
@@ -56,14 +57,23 @@ struct PerFrameConstants
 	uint GlobalFrameCount;
 	float MinConvergence;
 
-	float VarianceMultplier;
-	float3 VolumeMin;
-	
-	float3 VolumeMax;
 	uint UseBlueNoise;
-
 	uint UseExecuteIndirect;
 	uint IsRealTime;
+	uint padding;
+
+#if SUPPORT_VOLUMES
+	float3 VolumeMin;
+	float3 VolumeMax;
+#endif
+	float3 PrevFrameCameraPosition;
+	uint padding1;
+	
+	float3 PrevFrameCameraUp;
+	uint padding2;
+	float3 PrevFrameCameraRight;
+	uint padding3;
+	float3 PrevFrameCameraLookAt;
 };
 
 struct ConfigConstants

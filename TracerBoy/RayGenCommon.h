@@ -4,7 +4,6 @@
 #include "Tonemap.h"
 
 #define IS_SHADER_TOY 0
-#define SUPPORT_VOLUMES 0
 #define USE_INLINE_RAYTRACING IS_COMPUTE_SHADER
 
 bool ShouldInvalidateHistory() { return perFrameConstants.InvalidateHistory; }
@@ -115,7 +114,6 @@ BlueNoiseData GetBlueNoise()
 		data.AreaLightJitter = ApplyLDSToNoise( BlueNoise1Texture[(GetDispatchIndex().xy % 256)].xy);
 		data.DOFJitter = ApplyLDSToNoise( BlueNoise1Texture[(GetDispatchIndex().xy % 256)].zw);
 	}
-
 	return data;
 }
 
@@ -370,9 +368,36 @@ void OutputPrimaryNormal(float3 normal)
 	AOVNormals[GetDispatchIndex().xy] = AOVNormals[GetDispatchIndex().xy] + float4(normal, 1.0);
 }
 
+bool OutputWorldPositionToCustomOutput()
+{
+	return perFrameConstants.GlobalFrameCount % 2 == 0;
+}
+
+static float3 WorldPosition;
+static float3 MinWorldPosition;
+static float3 MaxWorldPosition;
 void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 {
-	AOVWorldPosition[GetDispatchIndex().xy] = float4(worldPosition, distanceToNeighbor);
+	WorldPosition += worldPosition;
+	MinWorldPosition = min(MinWorldPosition, WorldPosition);
+	MaxWorldPosition = max(MaxWorldPosition, WorldPosition);
+}
+
+float3 GetPreviousFrameWorldPosition(float2 UV, out float distanceToNeighbor)
+{
+	uint2 Index = uint2(UV * GetResolution().xy + 0.5);
+	Index = clamp(Index, uint2(0,0), GetResolution() - 1);
+	float4 data;
+	if (OutputWorldPositionToCustomOutput())
+	{
+		data = AOVWorldPosition[Index];
+	}
+	else
+	{
+		data = AOVCustomOutput[Index];
+	}
+	distanceToNeighbor = data.w;
+	return data.rgb;
 }
 
 void OutputSampleColor(float3 color)
@@ -407,6 +432,7 @@ float hash13(vec3 p3)
 
 bool ShouldSkipRay()
 {
+	return false;
 	return ShouldSkipRay(
 		OutputTexture,
 		JitteredOutputTexture,
@@ -415,18 +441,112 @@ bool ShouldSkipRay()
 		perFrameConstants.GlobalFrameCount);
 }
 
+float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigin, float3 PlaneNormal)
+{
+      float denom = dot(PlaneNormal, RayDirection);
+      if(abs(denom) > 0.0)
+      {
+          float t =  dot(PlaneOrigin - RayOrigin, PlaneNormal) / denom;
+		return t;
+      }
+      return -1.0;
+}
+
 void RayTraceCommon()
 {
+	const float BigNumber = 99999999.0f;
+	WorldPosition = float3(0, 0, 0);
+	MinWorldPosition = float3(BigNumber, BigNumber, BigNumber);
+	MaxWorldPosition = float3(-BigNumber, -BigNumber, -BigNumber);
+	 
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
-	float4 outputColor = PathTrace(uv * GetResolution().xy);
+
+	const uint NumSamples = 1;
+	float4 outputColor = float4(0, 0, 0, 0); 
+	for (uint i = 0; i < NumSamples; i++)
+	{
+		outputColor += PathTrace(uv * GetResolution().xy);
+	}
+	outputColor /= NumSamples;
+	WorldPosition /= NumSamples;
+	if (OutputWorldPositionToCustomOutput())
+	{
+		AOVCustomOutput[GetDispatchIndex().xy] = float4(WorldPosition, 0.0);
+	}
+	else
+	{
+		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, 0.0);
+	}
+
 
 	if (perFrameConstants.GlobalFrameCount > 0)
 	{
 		if (perFrameConstants.IsRealTime)
 		{
-			outputColor = lerp(outputColor, PreviousFrameOutput[GetDispatchIndex().xy], 0.95);
-			outputColor.w = 1;
+#if 1
+			float3 previousFrameColor = float3(0, 0, 0);
+			bool bValidHistory = false;
+			if (any(WorldPosition != 0.0))
+			{
+				float aspectRatio = GetResolution().x / GetResolution().y;
+				float lensWidth = GetCameraLensHeight() * aspectRatio;
+				float lensHeight = GetCameraLensHeight();
+
+				float3 PrevFrameCameraDir = normalize(perFrameConstants.PrevFrameCameraLookAt - perFrameConstants.PrevFrameCameraPosition);
+				float3 PrevFrameFocalPoint = perFrameConstants.PrevFrameCameraPosition - GetCameraFocalDistance() * PrevFrameCameraDir;
+				float3 PrevFrameRayDirection = normalize(WorldPosition - PrevFrameFocalPoint);
+
+				float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, perFrameConstants.PrevFrameCameraPosition, PrevFrameCameraDir);
+				if (t < 0.0)
+				{
+					OutputTexture[GetDispatchIndex().xy] = float4(1, 0, 0, 0);
+					return;
+				}
+
+				float3 LensPosition = PrevFrameFocalPoint + PrevFrameRayDirection * t;
+
+				float3 OffsetFromCenter = LensPosition  - perFrameConstants.PrevFrameCameraPosition;
+				float2 UV = float2(
+					dot(OffsetFromCenter, perFrameConstants.PrevFrameCameraRight) / (lensWidth / 2.0),
+					dot(OffsetFromCenter, perFrameConstants.PrevFrameCameraUp)    / (lensHeight / 2.0));
+
+				// Convert from (-1, 1) -> (0,1)
+				UV = (UV + 1.0) / 2.0;
+				UV.y = 1.0 - UV.y;
+				uv.y = 1.0 - uv.y;
+				
+				if (all(UV >= 0.0 && UV <= 1.0))
+				{
+					float distanceToNeighbor;
+					float3 PreviousFrameWorldPosition = GetPreviousFrameWorldPosition(UV, distanceToNeighbor);
+					distanceToNeighbor = length(MaxWorldPosition - MinWorldPosition) * 0.035;
+					if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
+					{
+						previousFrameColor = PreviousFrameOutput.SampleLevel(BilinearSampler, UV, 0);
+						bValidHistory = true;
+					}
+				}
+
+				if(false)
+				{
+					float2 dir = UV - uv;
+					OutputTexture[GetDispatchIndex().xy] = float4(dir.x, dir.y, 0, 1);
+					return;
+				}
+			}
+			else
+			{
+				previousFrameColor = PreviousFrameOutput[GetDispatchIndex().xy];
+			}
+#else
+			float3 previousFrameColor = PreviousFrameOutput[GetDispatchIndex().xy];
+#endif
+			if (bValidHistory)
+			{
+				outputColor.rgb = lerp(outputColor.rgb, previousFrameColor, 0.9);
+			}
+			outputColor.a = 1;
 		}
 		else if (perFrameConstants.GlobalFrameCount > 0)
 		{
