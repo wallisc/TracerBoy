@@ -58,9 +58,9 @@ struct PerFrameConstants
 	float MinConvergence;
 
 	uint UseBlueNoise;
-	uint UseExecuteIndirect;
 	uint IsRealTime;
 	uint padding;
+	uint morePadding;
 
 #if SUPPORT_VOLUMES
 	float3 VolumeMin;

@@ -310,24 +310,7 @@ private:
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	pbrt::math::mat3f m_EnvironmentMapTransform;
 
-	enum WaveCompactionRootSignatureParameters
-	{
-		WaveCompactionConstantsParam = 0,
-		WaveCompactionOutputUAV,
-		WaveCompactionJitteredOutputUAV,
-		WaveCompactionRayIndexBuffer,
-		IndirectArgs,
-		NumCompactionParameters
-	};
-
 	UINT m_MinWaveAmount;
-
-	ComPtr<ID3D12RootSignature> m_pWaveCompactionRootSignature;
-	ComPtr<ID3D12PipelineState> m_pWaveCompactionPSO;
-
-	ComPtr<ID3D12Resource> m_pRayIndexBuffer;
-	ComPtr<ID3D12Resource> m_pExecuteIndirectArgs;
-	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
 
 	ComPtr<ID3D12Resource> m_pStatsBuffer;
 
@@ -365,8 +348,6 @@ private:
 		VolumeSRVParam,
 #endif
 		ShaderTable,
-		RayIndexBuffer,
-		IndirectArgsBuffer,
 		StatsBuffer,
 		PreviousFrameOutput,
 		NumRayTracingParameters

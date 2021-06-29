@@ -12,10 +12,6 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 		(Resolution.x - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1,
 		(Resolution.y - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1);
 	uint TotalDispatchCount = GroupDimensions.x * GroupDimensions.y;
-	if (perFrameConstants.UseExecuteIndirect)
-	{
-		TotalDispatchCount = IndirectArgsBuffer.Load(0 * 4);
-	}
 
 	bool bIsFirstThread = all(Gid == 0 && GTid == 0);
 	if (bIsFirstThread)
@@ -23,36 +19,23 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 		OutputGlobalStats(TotalDispatchCount);
 	}
 
-	if (perFrameConstants.UseExecuteIndirect)
-	{
-		uint FlatIndex = Gid.x * RAYTRACE_THREAD_GROUP_HEIGHT * RAYTRACE_THREAD_GROUP_WIDTH + GTid.y * RAYTRACE_THREAD_GROUP_WIDTH + GTid.x;
-		
-		DispatchIndex = RayIndexBuffer[FlatIndex].xy;
-		if (DispatchIndex.x == uint(-1)) return;
+	uint2 ThreadGroupDimensions = uint2 (RAYTRACE_THREAD_GROUP_WIDTH, RAYTRACE_THREAD_GROUP_HEIGHT);
+	DTid.xy = ThreadGroupTilingX(
+		Resolution / ThreadGroupDimensions,
+		ThreadGroupDimensions,
+		16,
+		GTid.xy,
+		Gid.xy);
 
-		// Hack for visualization
-		OutputLiveWaves(Gid.x);
-	}
-	else
-	{
-		uint2 ThreadGroupDimensions = uint2 (RAYTRACE_THREAD_GROUP_WIDTH, RAYTRACE_THREAD_GROUP_HEIGHT);
-		DTid.xy = ThreadGroupTilingX(
-			Resolution / ThreadGroupDimensions,
-			ThreadGroupDimensions,
-			16,
-			GTid.xy,
-			Gid.xy);
+	DispatchIndex = DTid;
 
-		DispatchIndex = DTid;
-
-		if (any(DTid.xy >= Resolution)) return;
-	}
+	if (any(DTid.xy >= Resolution)) return;
 
 	ClearAOVs();
 	seed = hash13(float3(GetDispatchIndex().x, GetDispatchIndex().y, perFrameConstants.GlobalFrameCount));
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
-	if (!perFrameConstants.UseExecuteIndirect && !perFrameConstants.IsRealTime)
+	if (!perFrameConstants.IsRealTime)
 	{
 		bool bSkipRay = ShouldSkipRay();
 		OutputLivePixels(bSkipRay);

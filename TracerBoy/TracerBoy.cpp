@@ -494,8 +494,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(ARRAYSIZE(BindlessTableDescriptor), BindlessTableDescriptor);
 
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
-		Parameters[RayTracingRootSignatureParameters::RayIndexBuffer].InitAsShaderResourceView(12);
-		Parameters[RayTracingRootSignatureParameters::IndirectArgsBuffer].InitAsShaderResourceView(13);
 		Parameters[RayTracingRootSignatureParameters::StatsBuffer].InitAsUnorderedAccessView(6);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
@@ -594,64 +592,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
 		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pRaytraceCS, ARRAYSIZE(g_pRaytraceCS));
 		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pRayTracingPSO.ReleaseAndGetAddressOf())));
-
-		D3D12_INDIRECT_ARGUMENT_DESC IndirectArgDesc = {};
-		IndirectArgDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-
-		D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
-		commandSignatureDesc.ByteStride = sizeof(UINT) * 3;
-		commandSignatureDesc.NumArgumentDescs = 1;
-		commandSignatureDesc.pArgumentDescs = &IndirectArgDesc;
-		VERIFY_HRESULT(m_pDevice->CreateCommandSignature(&commandSignatureDesc, nullptr, IID_PPV_ARGS(m_pCommandSignature.ReleaseAndGetAddressOf())));
-
-		{
-			UINT IndirectArgBufferSize = sizeof(UINT) * 3;
-			D3D12_RESOURCE_DESC indirectArgsBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(IndirectArgBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			m_pExecuteIndirectArgs = CreateUAV(
-				L"IndirectArgs",
-				indirectArgsBufferDesc,
-				nullptr,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			D3D12_UNORDERED_ACCESS_VIEW_DESC IndirectArgsUavDesc = {};
-			IndirectArgsUavDesc.Format = DXGI_FORMAT_R32_UINT;
-			IndirectArgsUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-			IndirectArgsUavDesc.Buffer.NumElements = IndirectArgBufferSize / sizeof(UINT32);
-			D3D12_CPU_DESCRIPTOR_HANDLE NonShaderVisibleIndirectArgsUavHandle = GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV);
-			m_pDevice->CreateUnorderedAccessView(m_pExecuteIndirectArgs.Get(), nullptr, &IndirectArgsUavDesc,  NonShaderVisibleIndirectArgsUavHandle);
-			m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV), NonShaderVisibleIndirectArgsUavHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		}
-
-		CD3DX12_ROOT_PARAMETER1 Parameters[WaveCompactionRootSignatureParameters::NumCompactionParameters];
-		Parameters[WaveCompactionRootSignatureParameters::WaveCompactionConstantsParam].InitAsConstants(sizeof(WaveCompactionConstants) / sizeof(UINT32), 0);
-
-		CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
-		OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-		Parameters[WaveCompactionRootSignatureParameters::WaveCompactionOutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
-
-		CD3DX12_DESCRIPTOR_RANGE1 JitteredOutputUAVDescriptor;
-		JitteredOutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1);
-		Parameters[WaveCompactionRootSignatureParameters::WaveCompactionJitteredOutputUAV].InitAsDescriptorTable(1, &JitteredOutputUAVDescriptor);
-
-		Parameters[WaveCompactionRootSignatureParameters::WaveCompactionRayIndexBuffer].InitAsUnorderedAccessView(2);
-		Parameters[WaveCompactionRootSignatureParameters::IndirectArgs].InitAsUnorderedAccessView(3);
-
-		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-		rootSignatureDesc.pParameters = Parameters;
-		rootSignatureDesc.NumParameters = ARRAYSIZE(Parameters);
-		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
-
-		ComPtr<ID3DBlob> pRootSignatureBlob;
-		VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
-		VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(m_pWaveCompactionRootSignature.ReleaseAndGetAddressOf())));
-	
-		{
-			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-			psoDesc.pRootSignature = m_pWaveCompactionRootSignature.Get();
-			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pWaveCompactionCS, ARRAYSIZE(g_pWaveCompactionCS));
-			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pWaveCompactionPSO.ReleaseAndGetAddressOf())));
-		}
 	}
 
 	{
@@ -1477,46 +1417,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		0,
 		nullptr);
 
-	if (outputSettings.m_performanceSettings.m_bEnableExecuteIndirect)
-	{
-		commandList.ClearUnorderedAccessViewUint(
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV),
-			GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectArgsUAV),
-			m_pExecuteIndirectArgs.Get(),
-			ZeroValue,
-			0,
-			nullptr);
-
-		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_pExecuteIndirectArgs.Get());
-		commandList.ResourceBarrier(1, &uavBarrier);
-
-		commandList.SetComputeRootSignature(m_pWaveCompactionRootSignature.Get());
-		WaveCompactionConstants constants = {};
-		constants.GlobalFrameCount = m_SamplesRendered;
-		constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
-		constants.MinWaveCount = m_MinWaveAmount;
-
-		commandList.SetComputeRoot32BitConstants(WaveCompactionRootSignatureParameters::WaveCompactionConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
-		
-		commandList.SetComputeRootDescriptorTable(WaveCompactionRootSignatureParameters::WaveCompactionOutputUAV, GetGPUDescriptorHandle(GetPathTracerOutputUAV()));
-		commandList.SetComputeRootDescriptorTable(WaveCompactionRootSignatureParameters::WaveCompactionJitteredOutputUAV, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV));
-		commandList.SetComputeRootUnorderedAccessView(WaveCompactionRootSignatureParameters::IndirectArgs, m_pExecuteIndirectArgs->GetGPUVirtualAddress());
-		commandList.SetComputeRootUnorderedAccessView(WaveCompactionRootSignatureParameters::WaveCompactionRayIndexBuffer, m_pRayIndexBuffer->GetGPUVirtualAddress());
-
-		UINT DispatchWidth = (viewport.Width - 1) / TILE_WIDTH + 1;
-		UINT DispatchHeight = (viewport.Height - 1) / TILE_HEIGHT + 1;
-
-		commandList.SetPipelineState(m_pWaveCompactionPSO.Get());
-		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
-		
-		D3D12_RESOURCE_BARRIER postWaveCompactionBarrier[] =
-		{
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pExecuteIndirectArgs.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ),
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pRayIndexBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-		};
-		commandList.ResourceBarrier(ARRAYSIZE(postWaveCompactionBarrier), postWaveCompactionBarrier);
-	}
-
 	commandList.SetComputeRootSignature(m_pRayTracingRootSignature.Get());
 
 	ComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
@@ -1547,7 +1447,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
-	constants.UseExecuteIndirect = outputSettings.m_performanceSettings.m_bEnableExecuteIndirect;
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 
@@ -1587,8 +1486,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::ImageTextureTable, m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 	commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVBaseUAVSlot));
 	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::ShaderTable, m_pHitGroupShaderTable->GetGPUVirtualAddress());
-	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::RayIndexBuffer, m_pRayIndexBuffer->GetGPUVirtualAddress());
-	commandList.SetComputeRootShaderResourceView(RayTracingRootSignatureParameters::IndirectArgsBuffer, m_pExecuteIndirectArgs->GetGPUVirtualAddress());
 	commandList.SetComputeRootUnorderedAccessView(RayTracingRootSignatureParameters::StatsBuffer, m_pStatsBuffer->GetGPUVirtualAddress());
 
 	if (bRender)
@@ -1599,29 +1496,9 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		{
 			commandList.SetPipelineState(m_pRayTracingPSO.Get());
 			
-			if (outputSettings.m_performanceSettings.m_bEnableExecuteIndirect)
-			{
-				commandList.ExecuteIndirect(
-					m_pCommandSignature.Get(),
-					1,
-					m_pExecuteIndirectArgs.Get(),
-					0,
-					nullptr,
-					0);
-			}
-			else
-			{
-				UINT DispatchWidth = (viewport.Width - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1;
-				UINT DispatchHeight = (viewport.Height - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1;
-				commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
-			}
-
-			D3D12_RESOURCE_BARRIER postExecuteIndirectBarrier[] =
-			{
-				CD3DX12_RESOURCE_BARRIER::Transition(m_pExecuteIndirectArgs.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-				CD3DX12_RESOURCE_BARRIER::Transition(m_pRayIndexBuffer.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-			};
-			commandList.ResourceBarrier(ARRAYSIZE(postExecuteIndirectBarrier), postExecuteIndirectBarrier);
+			UINT DispatchWidth = (viewport.Width - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1;
+			UINT DispatchHeight = (viewport.Height - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1;
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 		}
 		else
 		{
@@ -2034,15 +1911,6 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV),
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputSRV),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		}
-
-		{
-			D3D12_RESOURCE_DESC RayIndexBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * 2 * backBufferDesc.Width * backBufferDesc.Height, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			m_pRayIndexBuffer = CreateUAV(
-				L"RayIndexBuffer",
-				RayIndexBufferDesc,
-				nullptr,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
 
 		for(UINT i = 0; i < ARRAYSIZE(m_pDenoiserBuffers); i++)

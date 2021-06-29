@@ -130,9 +130,6 @@
     <FxCompile Include="RaytraceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="WaveCompactionCS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="kernel.glsl">
