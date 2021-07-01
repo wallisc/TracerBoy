@@ -39,6 +39,9 @@
     <ClCompile Include="CalculateVariancePass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TemporalAccumulationPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -92,13 +95,19 @@
     <ClInclude Include="RayGenCommon.h">
       <Filter>Shaders</Filter>
     </ClInclude>
-    <ClInclude Include="SharedWaveCompactionStructs.h">
-      <Filter>Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="VarianceUtil.h">
       <Filter>Shaders</Filter>
     </ClInclude>
     <ClInclude Include="ComputeShaderUtil.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="CompositeAlbedoSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="TemporalAccumulationPass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TemporalAccumulationSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
   </ItemGroup>
@@ -128,6 +137,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="RaytraceCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="CompositeAlbedoCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="TemporalAccumulationCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

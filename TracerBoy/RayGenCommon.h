@@ -209,7 +209,7 @@ struct Ray
 #include "SharedHitGroup.h"
 
 
-void OutputPrimaryAlbedo(float3 albedo);
+void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution);
 
 float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
 {
@@ -325,9 +325,9 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 #endif
 }
 
-void OutputPrimaryAlbedo(float3 albedo)
+void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution)
 {
-	if (perFrameConstants.OutputMode == OUTPUT_TYPE_ALBEDO)
+	//if (perFrameConstants.OutputMode == OUTPUT_TYPE_ALBEDO)
 	{
 		AOVCustomOutput[GetDispatchIndex().xy] = float4(albedo, 1.0);
 	}
@@ -365,22 +365,18 @@ void OutputLiveWaves(uint GroupID)
 
 void OutputPrimaryNormal(float3 normal)
 {
-	AOVNormals[GetDispatchIndex().xy] = AOVNormals[GetDispatchIndex().xy] + float4(normal, 1.0);
+	AOVNormals[GetDispatchIndex().xy] = float4(normal, 1.0);
 }
 
 bool OutputWorldPositionToCustomOutput()
 {
-	return perFrameConstants.GlobalFrameCount % 2 == 0;
+	return false;
 }
 
 static float3 WorldPosition;
-static float3 MinWorldPosition;
-static float3 MaxWorldPosition;
 void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 {
 	WorldPosition += worldPosition;
-	MinWorldPosition = min(MinWorldPosition, WorldPosition);
-	MaxWorldPosition = max(MaxWorldPosition, WorldPosition);
 }
 
 float3 GetPreviousFrameWorldPosition(float2 UV, out float distanceToNeighbor)
@@ -414,7 +410,7 @@ bool IsFogEnabled()
 
 void ClearAOVs()
 {
-	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0));
+	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 0.0);
 }
 
 #include "GLSLCompat.h"
@@ -456,8 +452,6 @@ void RayTraceCommon()
 {
 	const float BigNumber = 99999999.0f;
 	WorldPosition = float3(0, 0, 0);
-	MinWorldPosition = float3(BigNumber, BigNumber, BigNumber);
-	MaxWorldPosition = float3(-BigNumber, -BigNumber, -BigNumber);
 	 
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
@@ -477,81 +471,6 @@ void RayTraceCommon()
 	else
 	{
 		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, 0.0);
-	}
-
-
-	if (perFrameConstants.GlobalFrameCount > 0)
-	{
-		if (perFrameConstants.IsRealTime)
-		{
-#if 1
-			float3 previousFrameColor = float3(0, 0, 0);
-			bool bValidHistory = false;
-			if (any(WorldPosition != 0.0))
-			{
-				float aspectRatio = GetResolution().x / GetResolution().y;
-				float lensWidth = GetCameraLensHeight() * aspectRatio;
-				float lensHeight = GetCameraLensHeight();
-
-				float3 PrevFrameCameraDir = normalize(perFrameConstants.PrevFrameCameraLookAt - perFrameConstants.PrevFrameCameraPosition);
-				float3 PrevFrameFocalPoint = perFrameConstants.PrevFrameCameraPosition - GetCameraFocalDistance() * PrevFrameCameraDir;
-				float3 PrevFrameRayDirection = normalize(WorldPosition - PrevFrameFocalPoint);
-
-				float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, perFrameConstants.PrevFrameCameraPosition, PrevFrameCameraDir);
-				if (t < 0.0)
-				{
-					OutputTexture[GetDispatchIndex().xy] = float4(1, 0, 0, 0);
-					return;
-				}
-
-				float3 LensPosition = PrevFrameFocalPoint + PrevFrameRayDirection * t;
-
-				float3 OffsetFromCenter = LensPosition  - perFrameConstants.PrevFrameCameraPosition;
-				float2 UV = float2(
-					dot(OffsetFromCenter, perFrameConstants.PrevFrameCameraRight) / (lensWidth / 2.0),
-					dot(OffsetFromCenter, perFrameConstants.PrevFrameCameraUp)    / (lensHeight / 2.0));
-
-				// Convert from (-1, 1) -> (0,1)
-				UV = (UV + 1.0) / 2.0;
-				UV.y = 1.0 - UV.y;
-				uv.y = 1.0 - uv.y;
-				
-				if (all(UV >= 0.0 && UV <= 1.0))
-				{
-					float distanceToNeighbor;
-					float3 PreviousFrameWorldPosition = GetPreviousFrameWorldPosition(UV, distanceToNeighbor);
-					distanceToNeighbor = length(MaxWorldPosition - MinWorldPosition) * 0.035;
-					if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
-					{
-						previousFrameColor = PreviousFrameOutput.SampleLevel(BilinearSampler, UV, 0);
-						bValidHistory = true;
-					}
-				}
-
-				if(false)
-				{
-					float2 dir = UV - uv;
-					OutputTexture[GetDispatchIndex().xy] = float4(dir.x, dir.y, 0, 1);
-					return;
-				}
-			}
-			else
-			{
-				previousFrameColor = PreviousFrameOutput[GetDispatchIndex().xy];
-			}
-#else
-			float3 previousFrameColor = PreviousFrameOutput[GetDispatchIndex().xy];
-#endif
-			if (bValidHistory)
-			{
-				outputColor.rgb = lerp(outputColor.rgb, previousFrameColor, 0.9);
-			}
-			outputColor.a = 1;
-		}
-		else if (perFrameConstants.GlobalFrameCount > 0)
-		{
-			outputColor += OutputTexture[GetDispatchIndex().xy];
-		}
 	}
 
 	OutputTexture[GetDispatchIndex().xy] = outputColor;

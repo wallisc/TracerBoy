@@ -98,6 +98,7 @@ private:
 
 class TextureAllocator;
 class DenoiserPass;
+class TemporalAccumulationPass;
 
 class TracerBoy
 {
@@ -325,6 +326,7 @@ private:
 
 	ComPtr<ID3D12Resource> m_pPathTracerOutput[2];
 	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
+	ComPtr<ID3D12Resource> m_pComposittedOutput;
 	UINT8 m_ActiveFrameIndex;
 
 	enum LocalRayTracingRootSignatureParameters
@@ -375,6 +377,16 @@ private:
 	ComPtr<ID3D12RootSignature> m_pPostProcessRootSignature;
 	ComPtr<ID3D12PipelineState> m_pPostProcessPSO;
 
+	enum CompositeAlbedoRootSignatureParameters
+	{
+		CompositeAlbedoInputAlbedo= 0,
+		CompositeAlbedoIndirectLighting,
+		CompositeAlbedoOutputTexture,
+		CompositeAlbedoNumParameters
+	};
+	ComPtr<ID3D12RootSignature> m_pCompositeAlbedoRootSignature;
+	ComPtr<ID3D12PipelineState> m_pCompositeAlbedoPSO;
+
 	ComPtr<ID3D12PipelineState> m_pClearAOVs;
 
 	UINT32 m_mouseX, m_mouseY;
@@ -401,6 +413,14 @@ private:
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
+		TemporalOutputBaseSRV,
+		TemporalOutputLastSRV,
+		TemporalOutputBaseUAV,
+		TemporalOutputLastUAV,
+		IndirectLightingTemporalOutputBaseSRV,
+		IndirectLightingTemporalOutputLastSRV,
+		IndirectLightingTemporalOutputBaseUAV,
+		IndirectLightingTemporalOutputLastUAV,
 		DenoiserOuputBaseSRV,
 		DenoiserOuputLastSRV,
 		DenoiserOutputBaseUAV,
@@ -435,6 +455,8 @@ private:
 		PathTracerOutputUAV1,
 		JitteredPathTracerOutputSRV,
 		JitteredPathTracerOutputUAV,
+		ComposittedOutputUAV,
+		ComposittedOutputSRV,
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
 		StatsBufferUAV,
@@ -461,8 +483,13 @@ private:
 	float m_ConvergenceIncrement;
 	float m_ConvergencePercentPad;
 
+	PassResource m_pFinalTemporalOutput[MaxActiveFrames];
+	PassResource m_pIndirectLightingTemporalOutput[MaxActiveFrames];
+
+
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
+	std::unique_ptr<TemporalAccumulationPass> m_pTemporalAccumulationPass;
 	std::unique_ptr<CalculateVariancePass> m_pCalculateVariancePass;
 };
 

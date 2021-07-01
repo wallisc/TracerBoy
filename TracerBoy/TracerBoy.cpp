@@ -1,7 +1,7 @@
 #include "pch.h"
 
 #include "SharedPostProcessStructs.h"
-#include "SharedWaveCompactionStructs.h"
+#include "CompositeAlbedoSharedShaderStructs.h"
 #include "PostProcessCS.h"
 #include "ClearAOVCS.h"
 #include "RayGen.h"
@@ -9,7 +9,7 @@
 #include "AnyHit.h"
 #include "Miss.h"
 #include "RaytraceCS.h"
-#include "WaveCompactionCS.h"
+#include "CompositeAlbedoCS.h"
 #include "XInput.h"
 
 #define USE_ANYHIT 0
@@ -605,6 +605,33 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	}
 
 	{
+		CD3DX12_ROOT_PARAMETER1 Parameters[CompositeAlbedoNumParameters];
+		CD3DX12_DESCRIPTOR_RANGE1 AlbedoDescriptor;
+		AlbedoDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 IndirectLightDescriptor;
+		IndirectLightDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+		CD3DX12_DESCRIPTOR_RANGE1 outputTextureDescriptor;
+		outputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+		Parameters[CompositeAlbedoInputAlbedo].InitAsDescriptorTable(1, &AlbedoDescriptor);
+		Parameters[CompositeAlbedoIndirectLighting].InitAsDescriptorTable(1, &IndirectLightDescriptor);
+		Parameters[CompositeAlbedoOutputTexture].InitAsDescriptorTable(1, &outputTextureDescriptor);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.NumParameters = ARRAYSIZE(Parameters);
+		rootSignatureDesc.pParameters = Parameters;
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
+
+		ComPtr<ID3DBlob> pRootSignatureBlob;
+		VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
+		VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(m_pCompositeAlbedoRootSignature.ReleaseAndGetAddressOf())));
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_pCompositeAlbedoRootSignature.Get();
+		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_CompositeAlbedoCS, ARRAYSIZE(g_CompositeAlbedoCS));
+		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pCompositeAlbedoPSO.ReleaseAndGetAddressOf())));
+	}
+
+	{
 		CD3DX12_ROOT_PARAMETER1 Parameters[PostProcessRootSignatureParameters::NumParameters];
 		CD3DX12_DESCRIPTOR_RANGE1 InputTextureDescriptor;
 		InputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -640,6 +667,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	}
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
+	m_pTemporalAccumulationPass = std::unique_ptr<TemporalAccumulationPass>(new TemporalAccumulationPass(*m_pDevice.Get()));
 	m_pCalculateVariancePass = std::unique_ptr<CalculateVariancePass>(new CalculateVariancePass(*m_pDevice.Get()));
 }
 
@@ -1550,8 +1578,26 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);
+	if(outputSettings.m_renderMode == RenderMode::RealTime)
+	{
+		UINT32 previousFrameIndex = m_ActiveFrameIndex == 0 ? MaxActiveFrames - 1 : (m_ActiveFrameIndex - 1);
+
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"TAA - Indirect Lighting");
+		PostProcessInput = m_pTemporalAccumulationPass->Run(commandList,
+			m_pIndirectLightingTemporalOutput[m_ActiveFrameIndex],
+			m_pIndirectLightingTemporalOutput[previousFrameIndex].m_srvHandle,
+			PostProcessInput,
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+			m_camera,
+			m_prevFrameCamera,
+			m_SamplesRendered == 0,
+			viewport.Width,
+			viewport.Height);
+	}
+
 	if(outputSettings.m_denoiserSettings.m_bEnabled && outputSettings.m_OutputType == OutputType::Lit)
 	{
+        PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Denoise");
 		PostProcessInput = m_pDenoiserPass->Run(commandList,
 			m_pDenoiserBuffers,
 			outputSettings.m_denoiserSettings,
@@ -1562,6 +1608,59 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
+	}
+
+	if(outputSettings.m_renderMode == RenderMode::RealTime)
+	{
+		{
+			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Composite Albedo");
+			D3D12_RESOURCE_BARRIER preCompositeBarriers[] =
+			{
+				CD3DX12_RESOURCE_BARRIER::Transition(m_pComposittedOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			};
+			commandList.ResourceBarrier(ARRAYSIZE(preCompositeBarriers), preCompositeBarriers);
+
+			commandList.SetComputeRootSignature(m_pCompositeAlbedoRootSignature.Get());
+			commandList.SetPipelineState(m_pCompositeAlbedoPSO.Get());
+
+			UINT DispatchWidth = (viewport.Width - 1) / COMPOSITE_ALBEDO_THREAD_GROUP_WIDTH + 1;
+			UINT DispatchHeight = (viewport.Height - 1) / COMPOSITE_ALBEDO_THREAD_GROUP_HEIGHT + 1;
+
+			commandList.SetComputeRootDescriptorTable(
+				CompositeAlbedoInputAlbedo,
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputSRV));
+			commandList.SetComputeRootDescriptorTable(
+				CompositeAlbedoIndirectLighting,
+				PostProcessInput);
+			commandList.SetComputeRootDescriptorTable(
+				CompositeAlbedoOutputTexture,
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::ComposittedOutputUAV));
+
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+
+			D3D12_RESOURCE_BARRIER postCompositeBarriers[] =
+			{
+				CD3DX12_RESOURCE_BARRIER::Transition(m_pComposittedOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+			};
+			commandList.ResourceBarrier(ARRAYSIZE(postCompositeBarriers), postCompositeBarriers);
+			PostProcessInput = GetGPUDescriptorHandle(ComposittedOutputSRV);
+		}
+        
+		{
+			UINT32 previousFrameIndex = m_ActiveFrameIndex == 0 ? MaxActiveFrames - 1 : (m_ActiveFrameIndex - 1);
+
+			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"TAA");
+			PostProcessInput = m_pTemporalAccumulationPass->Run(commandList,
+				m_pFinalTemporalOutput[m_ActiveFrameIndex],
+				m_pFinalTemporalOutput[previousFrameIndex].m_srvHandle,
+				PostProcessInput,
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+				m_camera,
+				m_prevFrameCamera,
+				m_SamplesRendered == 0,
+				viewport.Width,
+				viewport.Height);
+		}
 	}
 
 	{
@@ -1836,9 +1935,8 @@ UINT TracerBoy::GetPathTracerOutputIndex()
 	switch (m_CachedOutputSettings.m_renderMode)
 	{
 	case RenderMode::Unbiased:
-		return 0;
 	case RenderMode::RealTime:
-		return m_SamplesRendered % ARRAYSIZE(m_pPathTracerOutput);
+		return 0;
 	}
 }
 
@@ -1911,6 +2009,49 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputUAV),
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::JitteredPathTracerOutputSRV),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			
+			m_pComposittedOutput = CreateUAVandSRV(
+				L"ComposittedOutput",
+				pathTracerOutput,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::ComposittedOutputUAV),
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::ComposittedOutputSRV),
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		}
+
+		for(UINT i = 0; i < ARRAYSIZE(m_pFinalTemporalOutput); i++)
+		{
+			PassResource& passResource = m_pFinalTemporalOutput[i];
+			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+				&defaultHeapDesc,
+				D3D12_HEAP_FLAG_NONE,
+				&pathTracerOutput,
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+				nullptr,
+				IID_PPV_ARGS(passResource.m_pResource.ReleaseAndGetAddressOf())));
+
+			m_pDevice->CreateShaderResourceView(passResource.m_pResource.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::TemporalOutputBaseSRV + i));
+			m_pDevice->CreateUnorderedAccessView(passResource.m_pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::TemporalOutputBaseUAV + i));
+
+			passResource.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::TemporalOutputBaseSRV + i);
+			passResource.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::TemporalOutputBaseUAV + i);
+		}
+
+		for(UINT i = 0; i < ARRAYSIZE(m_pIndirectLightingTemporalOutput); i++)
+		{
+			PassResource& passResource = m_pIndirectLightingTemporalOutput[i];
+			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+				&defaultHeapDesc,
+				D3D12_HEAP_FLAG_NONE,
+				&pathTracerOutput,
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+				nullptr,
+				IID_PPV_ARGS(passResource.m_pResource.ReleaseAndGetAddressOf())));
+
+			m_pDevice->CreateShaderResourceView(passResource.m_pResource.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseSRV + i));
+			m_pDevice->CreateUnorderedAccessView(passResource.m_pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseUAV + i));
+
+			passResource.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseSRV + i);
+			passResource.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseUAV + i);
 		}
 
 		for(UINT i = 0; i < ARRAYSIZE(m_pDenoiserBuffers); i++)

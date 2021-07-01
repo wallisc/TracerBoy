@@ -1305,8 +1305,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
             float3 detailNormal = GetDetailNormal(material, normal, tangent, uv);
 			if(i == 0)
 			{	
-				OutputPrimaryAlbedo(material.albedo);
-
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(detailNormal);
@@ -1613,13 +1611,17 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					break;
 				}
 				
+                bool bDecoupleFirstAlbedoFromOutput = perFrameConstants.IsRealTime;
+                bool bRemoveAlbedo = bDecoupleFirstAlbedoFromOutput && bFirstRay;
+                float3 albedo = bRemoveAlbedo ? float3(1,1,1) : material.albedo;
+                float diffuseContribution = 1.0;
                 if(IsMetallic(material))
                 {
                     float3 halfVector = normalize(-previousDirection + ray.direction);
                     float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                     float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
                         (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
-                    accumulatedIndirectLightMultiplier *= specular * material.albedo * saturate(dot(ray.direction, normal));
+                    accumulatedIndirectLightMultiplier *= specular * albedo * saturate(dot(ray.direction, normal));
                 }
                 else
                 {
@@ -1630,22 +1632,28 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         float ReflectionCoefficient = material.SpecularCoef;
                         float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * 
                             AbsPow(1.0 - dot(-previousDirection, halfVector), 5.0); 
-                        float3 diffuse = (material.albedo * 28.0 / (23.0 * PI))
+
+                        float diffuseMultiplier = (28.0 / (23.0 * PI))
                             * (1.0 - ReflectionCoefficient)
                             * (1.0 - pow(1.0 - 0.5 * dot(-previousDirection, normal), 5.0))
                             * (1.0 - pow(1.0 - 0.5 * dot(ray.direction, normal), 5.0));
+                        float3 diffuse = albedo * diffuseMultiplier;
 
                         float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
-                        float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
+                        float specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
                             (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
                         
-                        accumulatedIndirectLightMultiplier *= (diffuse + fresnel * specular)* saturate(dot(ray.direction, normal));
+                        float3 IndirectLightMultiplier = (diffuse + fresnel * specular)* saturate(dot(ray.direction, normal));
+                        diffuseContribution = diffuse / ((diffuseMultiplier + fresnel * specular)* saturate(dot(ray.direction, normal)));
+
+                        accumulatedIndirectLightMultiplier *= IndirectLightMultiplier;
                     }
                     else
                     {
-                        accumulatedIndirectLightMultiplier *= material.albedo * DiffuseBRDF(ray.direction, detailNormal); 
+                        accumulatedIndirectLightMultiplier *= albedo * DiffuseBRDF(ray.direction, detailNormal); 
                     }
                 }
+                if(bFirstRay) OutputPrimaryAlbedo(material.albedo, diffuseContribution);
             }
         }
     }
