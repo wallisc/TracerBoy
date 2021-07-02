@@ -459,7 +459,7 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 8;
+	const uint NumSamples = 2;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{
