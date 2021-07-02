@@ -1938,8 +1938,9 @@ UINT TracerBoy::GetPathTracerOutputIndex()
 	switch (m_CachedOutputSettings.m_renderMode)
 	{
 	case RenderMode::Unbiased:
-	case RenderMode::RealTime:
 		return 0;
+	case RenderMode::RealTime:
+		return m_SamplesRendered % ARRAYSIZE(m_pPathTracerOutput);
 	}
 }
 

@@ -6,6 +6,13 @@ struct Camera;
 class TemporalAccumulationPass
 {
 public:
+	struct MomentResources
+	{
+		ID3D12Resource &MomentBuffer;
+		D3D12_GPU_DESCRIPTOR_HANDLE MomentBufferUAV;
+		D3D12_GPU_DESCRIPTOR_HANDLE MomentHistory;
+	};
+
 	TemporalAccumulationPass(ID3D12Device& device);
 	D3D12_GPU_DESCRIPTOR_HANDLE Run(ID3D12GraphicsCommandList& commandList,
 		PassResource OutputBuffer,
@@ -17,7 +24,8 @@ public:
 		float HistoryWeight,
 		bool bIgnoreHistory,
 		UINT width,
-		UINT height);
+		UINT height,
+		MomentResources *pMomentResources = nullptr);
 
 private:
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
@@ -29,7 +37,9 @@ private:
 		TemporalHistory,
 		CurrentFrameTexture,
 		WorldPositionTexture,
+		MomentHistory,
 		OutputUAV,
+		OutputMomentUAV,
 		NumRootSignatureParameters
 	};
 };

@@ -20,9 +20,17 @@ TemporalAccumulationPass::TemporalAccumulationPass(ID3D12Device& device)
 	AOVPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[TemporalAccumulationRootSignatureParameters::WorldPositionTexture].InitAsDescriptorTable(1, &AOVPositionDescriptor);
 
+	CD3DX12_DESCRIPTOR_RANGE1 MomentHistoryDescriptor;
+	MomentHistoryDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	Parameters[TemporalAccumulationRootSignatureParameters::MomentHistory].InitAsDescriptorTable(1, &MomentHistoryDescriptor);
+
 	CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
 	OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[TemporalAccumulationRootSignatureParameters::OutputUAV].InitAsDescriptorTable(1, &OutputUAVDescriptor);
+
+	CD3DX12_DESCRIPTOR_RANGE1 OutputMomentUAVDescriptor;
+	OutputMomentUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	Parameters[TemporalAccumulationRootSignatureParameters::OutputMomentUAV].InitAsDescriptorTable(1, &OutputMomentUAVDescriptor);
 
 	D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 	{
@@ -63,14 +71,19 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	float HistoryWeight,
 	bool bIgnoreHistory,
 	UINT width,
-	UINT height)
+	UINT height,
+	MomentResources *pMomentResources)
 {
+	const bool bMomentInfoRequested = pMomentResources != nullptr;
+
 	commandList.SetPipelineState(m_pPSO.Get());
 	commandList.SetComputeRootSignature(m_pRootSignature.Get());
 
 	ScopedResourceBarrier outputBarrier(commandList, OutputBuffer.m_pResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	ScopedResourceBarrier momentBarrier(commandList, pMomentResources ? &pMomentResources->MomentBuffer : nullptr, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 	TemporalAccumulationConstants constants = {};
+	constants.OutputMomentInformation = bMomentInfoRequested;
 	constants.Resolution.x = width;
 	constants.Resolution.y = height;
 	constants.IgnoreHistory = bIgnoreHistory;
@@ -94,6 +107,11 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::CurrentFrameTexture, CurrentFrame);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::WorldPositionTexture, AOVWorldPosition);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::OutputUAV, OutputBuffer.m_uavHandle);
+	if (bMomentInfoRequested)
+	{
+		commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::OutputMomentUAV, pMomentResources->MomentBufferUAV);
+		commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::MomentHistory, pMomentResources->MomentHistory);
+	}
 	commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 
 	return OutputBuffer.m_srvHandle;

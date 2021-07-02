@@ -1,12 +1,15 @@
 #define HLSL
 #include "TemporalAccumulationSharedShaderStructs.h"
+#include "Tonemap.h"
 
 Texture2D TemporalHistory : register(t0);
 Texture2D CurrentFrame : register(t1);
 Texture2D WorldPositionTexture : register(t2);
+Texture2D MomentHistory : register(t3);
 SamplerState BilinearSampler : register(s0);
 
-RWTexture2D<float4> OutputTexture;
+RWTexture2D<float4> OutputTexture : register(u0);
+RWTexture2D<float3> OutputMoment : register(u1);
 
 cbuffer TemporalAccumulationCB
 {
@@ -38,8 +41,9 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float3 PrevFrameFocalPoint = Constants.PrevFrameCameraPosition - Constants.CameraFocalDistance * PrevFrameCameraDir;
 	float3 PrevFrameRayDirection = normalize(WorldPosition - PrevFrameFocalPoint);
 
-	float3 OutputColor = CurrentFrame[DTid.xy].rgb;
-	float3 PrevFrameColor = OutputColor;
+	float3 RawOutputColor = CurrentFrame[DTid.xy].rgb;
+	float3 PrevFrameColor = RawOutputColor;
+	float3 PrevMomentData = float3(0, 0, 0);
 	float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, Constants.PrevFrameCameraPosition, PrevFrameCameraDir);
 	if (!Constants.IgnoreHistory && t >= 0)
 	{
@@ -69,11 +73,28 @@ void main( uint3 DTid : SV_DispatchThreadID )
 			}
 	#endif
 			PrevFrameColor = TemporalHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
-		
+			if (Constants.OutputMomentInformation)
+			{
+				PrevMomentData = MomentHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
+			}
 		}
 #endif
 	}
 
-	OutputColor = lerp(OutputColor, PrevFrameColor, Constants.HistoryWeight);
-	OutputTexture[DTid.xy] = float4(OutputColor, 1);
+	float outputAlpha = 1.0;
+	if (Constants.OutputMomentInformation)
+	{
+		float luminance = ColorToLuma(RawOutputColor);
+		float luminanceSquared = luminance * luminance;
+
+		float historyLength = clamp(PrevMomentData.b + 1.0, 32.0, 64.0);
+		float2 luminanceDataPair = lerp(PrevMomentData.rg, float2(luminance, luminanceSquared), 1.0 / historyLength);
+		OutputMoment[DTid.xy] = float3(luminanceDataPair, historyLength);
+
+		float variance = luminanceDataPair.g - luminanceDataPair.r * luminanceDataPair.r;
+		outputAlpha = variance;
+	}
+	float3 OutputColor = lerp(RawOutputColor, PrevFrameColor, Constants.HistoryWeight);
+
+	OutputTexture[DTid.xy] = float4(OutputColor, outputAlpha);
 }
