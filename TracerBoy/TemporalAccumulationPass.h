@@ -14,6 +14,7 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE AOVWorldPosition,
 		Camera& CurrentFrameCamera,
 		Camera& PreviousFrameCamera,
+		float HistoryWeight,
 		bool bIgnoreHistory,
 		UINT width,
 		UINT height);

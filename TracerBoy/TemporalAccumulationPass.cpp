@@ -60,6 +60,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	D3D12_GPU_DESCRIPTOR_HANDLE AOVWorldPosition,
 	Camera &CurrentFrameCamera,
 	Camera &PreviousFrameCamera,
+	float HistoryWeight,
 	bool bIgnoreHistory,
 	UINT width,
 	UINT height)
@@ -73,6 +74,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	constants.Resolution.x = width;
 	constants.Resolution.y = height;
 	constants.IgnoreHistory = bIgnoreHistory;
+	constants.HistoryWeight = HistoryWeight;
 	constants.CameraLensHeight = CurrentFrameCamera.LensHeight;
 	constants.CameraPosition = { CurrentFrameCamera.Position.x, CurrentFrameCamera.Position.y, CurrentFrameCamera.Position.z };
 	constants.CameraLookAt = { CurrentFrameCamera.LookAt.x, CurrentFrameCamera.LookAt.y, CurrentFrameCamera.LookAt.z };

@@ -74,6 +74,6 @@ void main( uint3 DTid : SV_DispatchThreadID )
 #endif
 	}
 
-	OutputColor = lerp(OutputColor, PrevFrameColor, 0.9);
+	OutputColor = lerp(OutputColor, PrevFrameColor, Constants.HistoryWeight);
 	OutputTexture[DTid.xy] = float4(OutputColor, 1);
 }

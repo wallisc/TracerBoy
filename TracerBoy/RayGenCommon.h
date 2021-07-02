@@ -374,9 +374,11 @@ bool OutputWorldPositionToCustomOutput()
 }
 
 static float3 WorldPosition;
+static float DistanceToNeighbor;
 void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 {
 	WorldPosition += worldPosition;
+	DistanceToNeighbor += distanceToNeighbor;
 }
 
 float3 GetPreviousFrameWorldPosition(float2 UV, out float distanceToNeighbor)
@@ -452,25 +454,31 @@ void RayTraceCommon()
 {
 	const float BigNumber = 99999999.0f;
 	WorldPosition = float3(0, 0, 0);
+	DistanceToNeighbor = 0.0;
 	 
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 1;
+	const uint NumSamples = 8;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{
-		outputColor += PathTrace(uv * GetResolution().xy);
+		float4 color = PathTrace(uv * GetResolution().xy);
+		if (all(!isnan(color)))
+		{
+			outputColor += color;
+		}
 	}
 	outputColor /= NumSamples;
 	WorldPosition /= NumSamples;
+	DistanceToNeighbor /= NumSamples;
 	if (OutputWorldPositionToCustomOutput())
 	{
-		AOVCustomOutput[GetDispatchIndex().xy] = float4(WorldPosition, 0.0);
+		AOVCustomOutput[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
 	}
 	else
 	{
-		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, 0.0);
+		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
 	}
 
 	OutputTexture[GetDispatchIndex().xy] = outputColor;

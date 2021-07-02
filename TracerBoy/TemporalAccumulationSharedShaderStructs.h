@@ -13,7 +13,7 @@ struct TemporalAccumulationConstants
 	float CameraLensHeight;
 
 	float3 CameraLookAt;
-	uint padding1;
+	float HistoryWeight;
 
 	float3 CameraUp;
 	uint padding2;

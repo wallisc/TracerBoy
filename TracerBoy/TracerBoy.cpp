@@ -1590,6 +1590,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
 			m_camera,
 			m_prevFrameCamera,
+			0.8,
 			m_SamplesRendered == 0,
 			viewport.Width,
 			viewport.Height);
@@ -1657,6 +1658,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
 				m_camera,
 				m_prevFrameCamera,
+				0.8,
 				m_SamplesRendered == 0,
 				viewport.Width,
 				viewport.Height);
