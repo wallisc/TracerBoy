@@ -1583,6 +1583,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	{
 		UINT32 previousFrameIndex = m_ActiveFrameIndex == 0 ? MaxActiveFrames - 1 : (m_ActiveFrameIndex - 1);
 
+		TemporalAccumulationPass::MomentResources momentResources = {
+			*(m_pMomentBuffer[m_ActiveFrameIndex].m_pResource.Get()),
+			m_pMomentBuffer[m_ActiveFrameIndex].m_uavHandle,
+			m_pMomentBuffer[previousFrameIndex].m_srvHandle
+		};
+
 		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"TAA - Indirect Lighting");
 		PostProcessInput = m_pTemporalAccumulationPass->Run(commandList,
 			m_pIndirectLightingTemporalOutput[m_ActiveFrameIndex],
@@ -1594,7 +1600,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			0.8,
 			m_SamplesRendered == 0,
 			viewport.Width,
-			viewport.Height);
+			viewport.Height,
+			&momentResources);
 	}
 
 	if(outputSettings.m_denoiserSettings.m_bEnabled && outputSettings.m_OutputType == OutputType::Lit)
@@ -1606,7 +1613,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			PostProcessInput,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV),
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseSRV + m_ActiveFrameIndex),
 			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
@@ -2057,6 +2064,28 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 			passResource.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseSRV + i);
 			passResource.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::IndirectLightingTemporalOutputBaseUAV + i);
 		}
+
+		for(UINT i = 0; i < ARRAYSIZE(m_pMomentBuffer); i++)
+		{
+			D3D12_RESOURCE_DESC momentBufferDesc = pathTracerOutput;
+			momentBufferDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+			PassResource& passResource = m_pMomentBuffer[i];
+			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
+				&defaultHeapDesc,
+				D3D12_HEAP_FLAG_NONE,
+				&momentBufferDesc,
+				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+				nullptr,
+				IID_PPV_ARGS(passResource.m_pResource.ReleaseAndGetAddressOf())));
+
+			m_pDevice->CreateShaderResourceView(passResource.m_pResource.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseSRV + i));
+			m_pDevice->CreateUnorderedAccessView(passResource.m_pResource.Get(), nullptr, nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseUAV + i));
+
+			passResource.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseSRV + i);
+			passResource.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseUAV + i);
+		}
+
 
 		for(UINT i = 0; i < ARRAYSIZE(m_pDenoiserBuffers); i++)
 		{

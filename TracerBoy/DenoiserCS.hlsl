@@ -5,7 +5,7 @@
 Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
 Texture2D AOVIntersectPosition : register(t2);
-Texture2D LuminanceVariance : register(t3);
+Texture2D MomentHistory : register(t3);
 Texture2D UndenoisedTexture : register(t4);
 
 RWTexture2D<float4> OutputTexture;
@@ -17,11 +17,6 @@ cbuffer DenoiserCB
 
 #define KERNEL_WIDTH 5
 
-float GetVariance(uint2 coord, float luma)
-{
-	return LuminanceVariance[coord];
-}
-
 float3 GetNormal(int2 coord)
 {
 	float4 normalData = AOVNormals[coord];
@@ -32,7 +27,6 @@ float3 GetNormal(int2 coord)
 
 float CalculateWeight(
 	float centerLuma,
-	float centerVarianceSqrt,
 	float3 centerNormal, 
 	float3 centerIntersectPosition, 
 	float distanceToNeighborPixel, 
@@ -40,8 +34,8 @@ float CalculateWeight(
 	int2 offset)
 {
 	float luma = ColorToLuma(UndenoisedTexture[coord] / UndenoisedTexture[coord].w);
-	float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
-	if (Constants.LumaWeightingMultiplier > 100.0f) lumaWeight = 1.0f;
+	//float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
+	//if (Constants.LumaWeightingMultiplier > 100.0f) lumaWeight = 1.0f;
 
 	float3 normal = GetNormal(coord);
 	float normalWeightExponential = 128.0f;
@@ -53,7 +47,7 @@ float CalculateWeight(
 	float positionWeight = exp(-distance / (Constants.IntersectionPositionWeightingMultiplier * abs(dot(offset, float2(distanceToNeighborPixel, distanceToNeighborPixel))) + EPSILON));
 
 	float weights[(KERNEL_WIDTH / 2) + 1] = { 3.0f / 8.0f, 1.0f / 4.0f, 1.0f / 16.0f };
-	return lumaWeight * positionWeight * normalWeight* weights[abs(offset.x / int(Constants.OffsetMultiplier))] * weights[abs(offset.y / int(Constants.OffsetMultiplier))];
+	return positionWeight * normalWeight* weights[abs(offset.x / int(Constants.OffsetMultiplier))] * weights[abs(offset.y / int(Constants.OffsetMultiplier))];
 }
 
 bool ValidNormal(float3 normal)
@@ -130,7 +124,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
 	float luma = ColorToLuma(UndenoisedTexture[medianCoord] / UndenoisedTexture[medianCoord].w);
-	float varianceSqrt = sqrt(GetVariance(medianCoord, luma));
+	//float varianceSqrt = sqrt(GetVariance(medianCoord, luma));
 
 	float weightedSum = 0.0f;
 	float3 accumulatedColor = float3(0, 0, 0);
@@ -149,7 +143,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 					continue;
 				}
 
-				float weight = CalculateWeight(luma, varianceSqrt, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
+				float weight = CalculateWeight(luma, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
 
 				accumulatedColor += weight * InputTexture[coord].xyz / InputTexture[coord].w;
 				weightedSum += weight;

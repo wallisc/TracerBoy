@@ -421,6 +421,10 @@ private:
 		IndirectLightingTemporalOutputLastSRV,
 		IndirectLightingTemporalOutputBaseUAV,
 		IndirectLightingTemporalOutputLastUAV,
+		MomentTextureBaseSRV,
+		MomentTextureLastSRV,
+		MomentTextureBaseUAV,
+		MomentTextureLastUAV,
 		DenoiserOuputBaseSRV,
 		DenoiserOuputLastSRV,
 		DenoiserOutputBaseUAV,
@@ -485,6 +489,7 @@ private:
 
 	PassResource m_pFinalTemporalOutput[MaxActiveFrames];
 	PassResource m_pIndirectLightingTemporalOutput[MaxActiveFrames];
+	PassResource m_pMomentBuffer[MaxActiveFrames];
 
 
 	std::string m_sceneFileDirectory;

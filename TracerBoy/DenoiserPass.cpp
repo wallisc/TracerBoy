@@ -24,9 +24,9 @@ DenoiserPass::DenoiserPass(ID3D12Device& device)
 	AOVIntersectPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[DenoiserRootSignatureParameters::AOVIntersectPosition].InitAsDescriptorTable(1, &AOVIntersectPositionDescriptor);
 
-	CD3DX12_DESCRIPTOR_RANGE1 LuminanceVarianceDescriptor;
-	LuminanceVarianceDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-	Parameters[DenoiserRootSignatureParameters::LuminanceVarianceSRV].InitAsDescriptorTable(1, &LuminanceVarianceDescriptor);
+	CD3DX12_DESCRIPTOR_RANGE1 MomentHistoryDescriptor;
+	MomentHistoryDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	Parameters[DenoiserRootSignatureParameters::MomentHistory].InitAsDescriptorTable(1, &MomentHistoryDescriptor);
 
 	CD3DX12_DESCRIPTOR_RANGE1 UndenoisedInputDescriptor;
 	UndenoisedInputDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
@@ -55,7 +55,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 	D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 	D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
-	D3D12_GPU_DESCRIPTOR_HANDLE luminanceVarianceSRV,
+	D3D12_GPU_DESCRIPTOR_HANDLE momentHistorySRV,
 	UINT globalFrameCount,
 	UINT width,
 	UINT height) 
@@ -88,7 +88,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DenoiserPass::Run(ID3D12GraphicsCommandList& command
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::OutputUAV, DenoiserBuffers[OutputDenoiserBufferIndex].m_uavHandle);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVNormal, normalsSRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::AOVIntersectPosition, intersectPositionSRV);
-		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::LuminanceVarianceSRV, luminanceVarianceSRV);
+		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::MomentHistory, momentHistorySRV);
 		commandList.SetComputeRootDescriptorTable(DenoiserRootSignatureParameters::UndenoisedInputSRV, inputSRV);
 		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 
