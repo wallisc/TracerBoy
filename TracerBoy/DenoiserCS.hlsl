@@ -5,7 +5,6 @@
 Texture2D InputTexture : register(t0);
 Texture2D AOVNormals : register(t1);
 Texture2D AOVIntersectPosition : register(t2);
-Texture2D MomentHistory : register(t3);
 Texture2D UndenoisedTexture : register(t4);
 
 RWTexture2D<float4> OutputTexture;
@@ -27,15 +26,16 @@ float3 GetNormal(int2 coord)
 
 float CalculateWeight(
 	float centerLuma,
+	float centerLuminanceVariance,
 	float3 centerNormal, 
 	float3 centerIntersectPosition, 
 	float distanceToNeighborPixel, 
 	int2 coord, 
 	int2 offset)
 {
-	float luma = ColorToLuma(UndenoisedTexture[coord] / UndenoisedTexture[coord].w);
-	//float lumaWeight = exp(-abs(luma - centerLuma) / (Constants.LumaWeightingMultiplier * centerVarianceSqrt + EPSILON));
-	//if (Constants.LumaWeightingMultiplier > 100.0f) lumaWeight = 1.0f;
+	float luma = ColorToLuma(UndenoisedTexture[coord]);
+	float centerVarianceSqrt = sqrt(centerLuminanceVariance);
+	float lumaWeight = exp(-abs(luma - centerLuma) / (max(Constants.LumaWeightingMultiplier * centerVarianceSqrt, EPSILON)));
 
 	float3 normal = GetNormal(coord);
 	float normalWeightExponential = 128.0f;
@@ -47,7 +47,7 @@ float CalculateWeight(
 	float positionWeight = exp(-distance / (Constants.IntersectionPositionWeightingMultiplier * abs(dot(offset, float2(distanceToNeighborPixel, distanceToNeighborPixel))) + EPSILON));
 
 	float weights[(KERNEL_WIDTH / 2) + 1] = { 3.0f / 8.0f, 1.0f / 4.0f, 1.0f / 16.0f };
-	return positionWeight * normalWeight* weights[abs(offset.x / int(Constants.OffsetMultiplier))] * weights[abs(offset.y / int(Constants.OffsetMultiplier))];
+	return lumaWeight * positionWeight * normalWeight* weights[abs(offset.x / int(Constants.OffsetMultiplier))] * weights[abs(offset.y / int(Constants.OffsetMultiplier))];
 }
 
 bool ValidNormal(float3 normal)
@@ -72,7 +72,7 @@ uint2 GetMedianCoord(uint2 DTid)
 		for (int y = -MEDIAN_KERNEL_SIZE / 2; y <= MEDIAN_KERNEL_SIZE / 2; y++)
 		{
 			int2 Coord = int2(DTid) + int2(x, y);
-			lumaAndCoordArray[index].Luma = ColorToLuma(UndenoisedTexture[DTid.xy] / UndenoisedTexture[DTid.xy].w);
+			lumaAndCoordArray[index].Luma = ColorToLuma(UndenoisedTexture[DTid.xy]);
 			lumaAndCoordArray[index].Coord = Coord;
 			index++;
 		}
@@ -105,6 +105,8 @@ uint2 GetMedianCoord(uint2 DTid)
     DescriptorTable(SRV(t3, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t4, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
+
+
 [RootSignature(ComputeRS)]
 [numthreads(DENOISER_THREAD_GROUP_WIDTH, DENOISER_THREAD_GROUP_HEIGHT, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -123,10 +125,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float4 intersectedPositionData = AOVIntersectPosition[medianCoord];
 	float3 intersectedPosition = intersectedPositionData.xyz;
 	float distanceToNeighborPixel = intersectedPositionData.w;
-	float luma = ColorToLuma(UndenoisedTexture[medianCoord] / UndenoisedTexture[medianCoord].w);
-	//float varianceSqrt = sqrt(GetVariance(medianCoord, luma));
+	float luma = ColorToLuma(UndenoisedTexture[medianCoord]);
+
+	float luminanceVariance = InputTexture[medianCoord].w;
 
 	float weightedSum = 0.0f;
+	float accumulatedVariance = 0.0;
 	float3 accumulatedColor = float3(0, 0, 0);
 
 	if(ValidNormal(normal))
@@ -143,19 +147,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
 					continue;
 				}
 
-				float weight = CalculateWeight(luma, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
+				float weight = CalculateWeight(luma, luminanceVariance, normal, intersectedPosition, distanceToNeighborPixel, coord, offsetCoord);
+				float4 NeighborData = InputTexture[coord];
+				float NeighborVariance = NeighborData.a;
+				float3 NeighborColor = NeighborData.rgb;
 
-				accumulatedColor += weight * InputTexture[coord].xyz / InputTexture[coord].w;
+				accumulatedColor += weight * NeighborColor;
+				accumulatedVariance += weight * weight * NeighborVariance;
 				weightedSum += weight;
 			}
 		}
 	}
 	else
 	{
-		accumulatedColor = InputTexture[medianCoord].xyz / InputTexture[medianCoord].w;
+		accumulatedVariance = InputTexture[medianCoord].w;
+		accumulatedColor = InputTexture[medianCoord].xyz;
 		weightedSum = 1.0f;
 	}
 	
-
-	OutputTexture[DTid.xy] = float4(accumulatedColor / weightedSum, 1);
+	
+	OutputTexture[DTid.xy] = float4(accumulatedColor / weightedSum, accumulatedVariance / (weightedSum * weightedSum));
 }

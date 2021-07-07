@@ -22,7 +22,6 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE inputSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE normalsSRV,
 		D3D12_GPU_DESCRIPTOR_HANDLE intersectPositionSRV,
-		D3D12_GPU_DESCRIPTOR_HANDLE momentHistorySRV,
 		UINT globalFrameCount,
 		UINT width,
 		UINT height);
@@ -37,7 +36,6 @@ private:
 		InputSRV,
 		AOVNormal,
 		AOVIntersectPosition,
-		MomentHistory,
 		UndenoisedInputSRV,
 		OutputUAV,
 		NumRootSignatureParameters

@@ -125,7 +125,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 				bValidHistory = true;
 			}
 	#endif
-			const bool bUseCatmullRomSampling = false;
+			const bool bUseCatmullRomSampling = true;
 			if (bUseCatmullRomSampling)
 			{
 				PrevFrameColor = SampleTextureCatmullRom(TemporalHistory, BilinearSampler, UV, Constants.Resolution);
@@ -148,12 +148,13 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	{
 		float luminance = ColorToLuma(RawOutputColor);
 		float luminanceSquared = luminance * luminance;
+		float sampleCount = PrevMomentData.b + 1.0;
 
-		float historyLength = clamp(PrevMomentData.b + 1.0, 32.0, 64.0);
-		float2 luminanceDataPair = lerp(PrevMomentData.rg, float2(luminance, luminanceSquared), 1.0 / historyLength);
-		OutputMoment[DTid.xy] = float3(luminanceDataPair, historyLength);
+		float lerpFactor = 1.0 / min(sampleCount, 32.0);
+		float2 luminanceDataPair = lerp(PrevMomentData.rg, float2(luminance, luminanceSquared), lerpFactor);
+		OutputMoment[DTid.xy] = float3(luminanceDataPair, sampleCount);
 
-		float variance = luminanceDataPair.g - luminanceDataPair.r * luminanceDataPair.r;
+		float variance = max(luminanceDataPair.g - luminanceDataPair.r * luminanceDataPair.r, 0.0);
 		outputAlpha = variance;
 	}
 	float3 OutputColor = lerp(RawOutputColor, PrevFrameColor, Constants.HistoryWeight);
