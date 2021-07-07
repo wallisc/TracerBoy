@@ -1613,7 +1613,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			PostProcessInput,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::MomentTextureBaseSRV + m_ActiveFrameIndex),
 			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
