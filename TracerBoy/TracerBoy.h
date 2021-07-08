@@ -207,7 +207,7 @@ public:
 		cameraSettings.m_ApertureWidth = 0.075f;
 
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
-		denoiserSettings.m_bEnabled = false;
+		denoiserSettings.m_bEnabled = true;
 		denoiserSettings.m_intersectPositionWeightingMultiplier = 1.0f;
 		denoiserSettings.m_normalWeightingExponential = 128.0f;
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
@@ -381,6 +381,7 @@ private:
 	{
 		CompositeAlbedoInputAlbedo= 0,
 		CompositeAlbedoIndirectLighting,
+		CompositeAlbedoEmissive,
 		CompositeAlbedoOutputTexture,
 		CompositeAlbedoNumParameters
 	};
@@ -399,7 +400,7 @@ private:
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVCustomOutput;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
-	ComPtr<ID3D12Resource> m_pAOVLumaSquared;
+	ComPtr<ID3D12Resource> m_pAOVEmissive;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 	ComPtr<ID3D12Resource> m_pVolume;
 	ComPtr<ID3D12Resource> m_pBlueNoise0Texture;
@@ -441,15 +442,15 @@ private:
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
 		AOVWorldPositionUAV,
-		AOVSummedLumaSquaredUAV,
 		AOVCustomOutputUAV,
-		AOVLastUAVSlot = AOVCustomOutputUAV,
+		AOVEmissiveUAV,
+		AOVLastUAVSlot = AOVEmissiveUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
 		AOVWorldPositionSRV,
-		AOVSummedLumaSquaredSRV,
 		AOVCustomOutputSRV,
-		AOVLastSRVSlot = AOVCustomOutputSRV,
+		AOVEmissiveSRV,
+		AOVLastSRVSlot = AOVEmissiveSRV,
 		LuminanceVarianceSRV,
 		LuminanceVarianceUAV,
 		VolumeSRVSlot,

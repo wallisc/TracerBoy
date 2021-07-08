@@ -333,6 +333,11 @@ void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution)
 	}
 }
 
+void OutputPrimaryEmissive(float3 emissive)
+{
+	AOVEmissive[GetDispatchIndex().xy] = float4(emissive, 1.0);
+}
+
 void OutputLivePixels(bool bAlive)
 {
 	if (perFrameConstants.OutputMode == OUTPUT_TYPE_LIVE_PIXELS)
@@ -398,12 +403,6 @@ float3 GetPreviousFrameWorldPosition(float2 UV, out float distanceToNeighbor)
 	return data.rgb;
 }
 
-void OutputSampleColor(float3 color)
-{
-	float luma = ColorToLuma(color);
-	AOVSummedLumaSquared[GetDispatchIndex().xy] = AOVSummedLumaSquared[GetDispatchIndex().xy] + float4(luma * luma, 0.0, 0, 0);
-}
-
 bool IsFogEnabled()
 {
 	return false;
@@ -459,7 +458,7 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 2;
+	const uint NumSamples = 8;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{

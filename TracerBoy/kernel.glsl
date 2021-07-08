@@ -1606,6 +1606,11 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
 				accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
+                if(bFirstRay)
+                {
+                    OutputPrimaryEmissive(material.emissive);
+                }
+
 				if(IsLight(material))
 				{
 					break;
@@ -1792,8 +1797,6 @@ vec4 PathTrace(in vec2 pixelCoord)
         outputColor = min(outputColor, perFrameConstants.FireflyClampValue);
     }
     
-    OutputSampleColor(outputColor);
-
     return vec4(outputColor, 1.0);
 }
 
