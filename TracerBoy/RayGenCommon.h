@@ -411,7 +411,8 @@ bool IsFogEnabled()
 
 void ClearAOVs()
 {
-	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 0.0);
+	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 1.0);
+	OutputPrimaryNormal(float3(0.0, 0.0, 0.0));
 }
 
 #include "GLSLCompat.h"

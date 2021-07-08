@@ -6,6 +6,7 @@ Texture2D TemporalHistory : register(t0);
 Texture2D CurrentFrame : register(t1);
 Texture2D WorldPositionTexture : register(t2);
 Texture2D MomentHistory : register(t3);
+Texture2D WorldNormalTexture : register(t4);
 SamplerState BilinearSampler : register(s0);
 
 RWTexture2D<float4> OutputTexture : register(u0);
@@ -86,6 +87,8 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
 
 	float3 WorldPosition = WorldPositionTexture[DTid.xy];
+	float3 WorldNormal = WorldNormalTexture[DTid.xy];
+	bool bHitValid = any(WorldNormal != 0.0);
 	float aspectRatio = float(Constants.Resolution.x) / float(Constants.Resolution.y);
 	float lensHeight = Constants.CameraLensHeight;
 	float lensWidth = lensHeight * aspectRatio;
@@ -98,7 +101,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float3 PrevFrameColor = RawOutputColor;
 	float3 PrevMomentData = float3(0, 0, 0);
 	float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, Constants.PrevFrameCameraPosition, PrevFrameCameraDir);
-	if (!Constants.IgnoreHistory && t >= 0)
+	if (!Constants.IgnoreHistory && t >= 0 && bHitValid)
 	{
 		PrevFrameColor = TemporalHistory[DTid.xy].rgb;
 #if 1

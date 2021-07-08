@@ -18,10 +18,7 @@ cbuffer DenoiserCB
 
 float3 GetNormal(int2 coord)
 {
-	float4 normalData = AOVNormals[coord];
-	if (normalData.w == 0.0f) return float3(0.0f, 0.0f, 0.0f);
-
-	return normalize(normalData.xyz / normalData.w);
+	return AOVNormals[coord].xyz;
 }
 
 float CalculateWeight(
@@ -52,7 +49,7 @@ float CalculateWeight(
 
 bool ValidNormal(float3 normal)
 {
-	return normal.x != 0.0f || normal.y != 0.0f || normal.z != 0.0f;
+	return any(normal != 0.0);
 }
 
 #define MEDIAN_KERNEL_SIZE 3

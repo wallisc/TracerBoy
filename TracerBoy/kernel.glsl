@@ -1279,6 +1279,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
             if(!IsFogEnabled() || bLastRay)
             {
                 accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
+                if(bFirstRay)
+                {
+                    OutputPrimaryEmissive(accumulatedColor);
+                }
                 break;
             }
             else
