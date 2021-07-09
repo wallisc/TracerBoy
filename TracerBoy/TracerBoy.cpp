@@ -1603,14 +1603,14 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			m_camera,
 			m_prevFrameCamera,
-			0.8,
+			0.9,
 			m_SamplesRendered == 0,
 			viewport.Width,
 			viewport.Height,
 			&momentResources);
 	}
 
-	if(outputSettings.m_denoiserSettings.m_bEnabled && outputSettings.m_OutputType == OutputType::Lit)
+	if(outputSettings.m_renderMode == RenderMode::RealTime && outputSettings.m_denoiserSettings.m_bEnabled && outputSettings.m_OutputType == OutputType::Lit)
 	{
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Denoise");
 		PostProcessInput = m_pDenoiserPass->Run(commandList,
@@ -1675,7 +1675,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 				m_camera,
 				m_prevFrameCamera,
-				0.8,
+				0.9,
 				m_SamplesRendered == 0,
 				viewport.Width,
 				viewport.Height);

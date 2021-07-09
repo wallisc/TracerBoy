@@ -119,11 +119,11 @@ BlueNoiseData GetBlueNoise()
 
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
 {
-	LightPosition = normalize(float3(0.3, 1, -0.2)) * 1000.0;
+	LightPosition = float3(-0.05, 1.9, -0.03);
 	BlueNoiseData BlueNoise = GetBlueNoise();
-	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * 15.0;
+	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * float2(0.235 , 0.19);
 
-	LightColor = float3(1, 1, 1) * 0.4;
+	LightColor = 0.25 * float3(1, 1, 1);
 	PDFValue = 0.0;
 }
 
@@ -459,7 +459,7 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 8;
+	const uint NumSamples = 2;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{
@@ -481,7 +481,8 @@ void RayTraceCommon()
 		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
 	}
 
-	OutputTexture[GetDispatchIndex().xy] = outputColor;
+	float4 accumulatedColor = perFrameConstants.IsRealTime || perFrameConstants.GlobalFrameCount == 0 ? float4(0, 0, 0, 0) : OutputTexture[GetDispatchIndex().xy];
+	OutputTexture[GetDispatchIndex().xy] = outputColor + accumulatedColor;
 	if (!perFrameConstants.IsRealTime && (perFrameConstants.GlobalFrameCount == 0 || rand() < 0.5))
 	{
 		float4 accumulatedColor = perFrameConstants.GlobalFrameCount > 0 ? JitteredOutputTexture[GetDispatchIndex().xy] : float4(0, 0, 0, 0);
