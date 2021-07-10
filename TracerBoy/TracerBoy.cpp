@@ -3,7 +3,6 @@
 #include "SharedPostProcessStructs.h"
 #include "CompositeAlbedoSharedShaderStructs.h"
 #include "PostProcessCS.h"
-#include "ClearAOVCS.h"
 #include "RayGen.h"
 #include "ClosestHit.h"
 #include "AnyHit.h"
@@ -660,13 +659,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		psoDesc.pRootSignature = m_pPostProcessRootSignature.Get();
 		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_PostProcessCS, ARRAYSIZE(g_PostProcessCS));
 		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pPostProcessPSO.ReleaseAndGetAddressOf())));
-	}
-
-	{
-		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
-		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pClearAOVCS, ARRAYSIZE(g_pClearAOVCS));
-		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pClearAOVs.ReleaseAndGetAddressOf())));
 	}
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
@@ -1422,16 +1414,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
 	D3D12_VIEWPORT viewport = CD3DX12_VIEWPORT(m_pPostProcessOutput.Get());
-
-	bool bNeedAOVClear = m_bInvalidateHistory || outputSettings.m_OutputType == OutputType::LiveWaves;
-	if (bNeedAOVClear)
-	{
-		// TODO: make root signature for clearing
-		commandList.SetComputeRootSignature(m_pRayTracingRootSignature.Get());
-		commandList.SetPipelineState(m_pClearAOVs.Get());
-		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVBaseUAVSlot));
-		commandList.Dispatch(viewport.Width, viewport.Height, 1);
-	}
 
 	if (m_bInvalidateHistory)
 	{

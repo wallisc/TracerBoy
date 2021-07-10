@@ -388,8 +388,6 @@ private:
 	ComPtr<ID3D12RootSignature> m_pCompositeAlbedoRootSignature;
 	ComPtr<ID3D12PipelineState> m_pCompositeAlbedoPSO;
 
-	ComPtr<ID3D12PipelineState> m_pClearAOVs;
-
 	UINT32 m_mouseX, m_mouseY;
 	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
