@@ -3,7 +3,7 @@
 //  
 // Block-compression (BC) functionality for BC6H and BC7 (DirectX 11 texture compression)
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248926
@@ -761,7 +761,7 @@ namespace
     {
     public:
         void Decode(_Out_writes_(NUM_PIXELS_PER_BLOCK) HDRColorA* pOut) const noexcept;
-        void Encode(DWORD flags, _In_reads_(NUM_PIXELS_PER_BLOCK) const HDRColorA* const pIn) noexcept;
+        void Encode(uint32_t flags, _In_reads_(NUM_PIXELS_PER_BLOCK) const HDRColorA* const pIn) noexcept;
 
     private:
         struct ModeInfo
@@ -1660,12 +1660,12 @@ void D3DX_BC6H::Decode(bool bSigned, HDRColorA* pOut) const noexcept
 
     if (ms_aModeToInfo[uMode] >= 0)
     {
-        assert(static_cast<unsigned int>(ms_aModeToInfo[uMode]) < _countof(ms_aInfo));
-        _Analysis_assume_(ms_aModeToInfo[uMode] < _countof(ms_aInfo));
+        assert(static_cast<unsigned int>(ms_aModeToInfo[uMode]) < std::size(ms_aInfo));
+        _Analysis_assume_(ms_aModeToInfo[uMode] < std::size(ms_aInfo));
         const ModeDescriptor* desc = ms_aDesc[ms_aModeToInfo[uMode]];
 
-        assert(static_cast<unsigned int>(ms_aModeToInfo[uMode]) < _countof(ms_aDesc));
-        _Analysis_assume_(ms_aModeToInfo[uMode] < _countof(ms_aDesc));
+        assert(static_cast<unsigned int>(ms_aModeToInfo[uMode]) < std::size(ms_aDesc));
+        _Analysis_assume_(ms_aModeToInfo[uMode] < std::size(ms_aDesc));
         const ModeInfo& info = ms_aInfo[ms_aModeToInfo[uMode]];
 
         INTEndPntPair aEndPts[BC6H_MAX_REGIONS] = {};
@@ -1811,7 +1811,7 @@ void D3DX_BC6H::Encode(bool bSigned, const HDRColorA* const pIn) noexcept
 
     EncodeParams EP(pIn, bSigned);
 
-    for (EP.uMode = 0; EP.uMode < ARRAYSIZE(ms_aInfo) && EP.fBestErr > 0; ++EP.uMode)
+    for (EP.uMode = 0; EP.uMode < std::size(ms_aInfo) && EP.fBestErr > 0; ++EP.uMode)
     {
         const uint8_t uShapes = ms_aInfo[EP.uMode].uPartitions ? 32u : 1u;
         // Number of rough cases to look at. reasonable values of this are 1, uShapes/4, and uShapes
@@ -2726,7 +2726,7 @@ void D3DX_BC7::Decode(HDRColorA* pOut) const noexcept
 }
 
 _Use_decl_annotations_
-void D3DX_BC7::Encode(DWORD flags, const HDRColorA* const pIn) noexcept
+void D3DX_BC7::Encode(uint32_t flags, const HDRColorA* const pIn) noexcept
 {
     assert(pIn);
 
@@ -3528,7 +3528,7 @@ void DirectX::D3DXDecodeBC6HS(XMVECTOR *pColor, const uint8_t *pBC) noexcept
 }
 
 _Use_decl_annotations_
-void DirectX::D3DXEncodeBC6HU(uint8_t *pBC, const XMVECTOR *pColor, DWORD flags) noexcept
+void DirectX::D3DXEncodeBC6HU(uint8_t *pBC, const XMVECTOR *pColor, uint32_t flags) noexcept
 {
     UNREFERENCED_PARAMETER(flags);
     assert(pBC && pColor);
@@ -3537,7 +3537,7 @@ void DirectX::D3DXEncodeBC6HU(uint8_t *pBC, const XMVECTOR *pColor, DWORD flags)
 }
 
 _Use_decl_annotations_
-void DirectX::D3DXEncodeBC6HS(uint8_t *pBC, const XMVECTOR *pColor, DWORD flags) noexcept
+void DirectX::D3DXEncodeBC6HS(uint8_t *pBC, const XMVECTOR *pColor, uint32_t flags) noexcept
 {
     UNREFERENCED_PARAMETER(flags);
     assert(pBC && pColor);
@@ -3558,7 +3558,7 @@ void DirectX::D3DXDecodeBC7(XMVECTOR *pColor, const uint8_t *pBC) noexcept
 }
 
 _Use_decl_annotations_
-void DirectX::D3DXEncodeBC7(uint8_t *pBC, const XMVECTOR *pColor, DWORD flags) noexcept
+void DirectX::D3DXEncodeBC7(uint8_t *pBC, const XMVECTOR *pColor, uint32_t flags) noexcept
 {
     assert(pBC && pColor);
     static_assert(sizeof(D3DX_BC7) == 16, "D3DX_BC7 should be 16 bytes");
