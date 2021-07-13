@@ -81,6 +81,18 @@ float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigi
       return -1.0;
 }
 
+#define ComputeRS \
+    "RootConstants(num32BitConstants=36, b0),\
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t2, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t4, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t3, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
+
+[RootSignature(ComputeRS)]
 [numthreads(TEMPORAL_ACCUMULATION_THREAD_GROUP_WIDTH, TEMPORAL_ACCUMULATION_THREAD_GROUP_HEIGHT, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {

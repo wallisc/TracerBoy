@@ -102,8 +102,6 @@ uint2 GetMedianCoord(uint2 DTid)
     DescriptorTable(SRV(t3, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t4, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
 
-
-
 [RootSignature(ComputeRS)]
 [numthreads(DENOISER_THREAD_GROUP_WIDTH, DENOISER_THREAD_GROUP_HEIGHT, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)

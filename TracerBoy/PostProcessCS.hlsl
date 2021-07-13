@@ -18,10 +18,10 @@ float3 GammaCorrect(float3 color)
 }
 
 #define ComputeRS \
-    "RootConstants(num32BitConstants=4, b0),\
-    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
-    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    RootConstants(num32BitConstants=8, b0)"
 
 float3 ProcessLit(float4 color)
 {

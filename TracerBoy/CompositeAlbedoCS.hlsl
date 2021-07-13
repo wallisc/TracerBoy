@@ -6,6 +6,13 @@ Texture2D IndirectLightingTexture : register(t1);
 Texture2D EmissiveTexture: register(t2);
 RWTexture2D<float4> OutputTexture;
 
+#define ComputeRS \
+    "DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t2, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)"
+
+[RootSignature(ComputeRS)]
 [numthreads(COMPOSITE_ALBEDO_THREAD_GROUP_WIDTH, COMPOSITE_ALBEDO_THREAD_GROUP_HEIGHT, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {
