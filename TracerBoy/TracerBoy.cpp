@@ -663,7 +663,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
 	m_pTemporalAccumulationPass = std::unique_ptr<TemporalAccumulationPass>(new TemporalAccumulationPass(*m_pDevice.Get()));
-	m_pCalculateVariancePass = std::unique_ptr<CalculateVariancePass>(new CalculateVariancePass(*m_pDevice.Get()));
 }
 
 void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::string& sceneFileName, std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete)
@@ -1551,20 +1550,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
 	
-	if(outputSettings.m_denoiserSettings.m_bEnabled)
-	{
-#if 0
-		ScopedResourceBarrier luminanceVarianceBarrier(commandList, m_pLuminanceVariance.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		m_pCalculateVariancePass->Run(commandList,
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVSummedLumaSquaredSRV),
-			GetGPUDescriptorHandle(GetPathTracerOutputSRV()),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceUAV),
-			viewport.Width,
-			viewport.Height,
-			m_SamplesRendered);
-#endif
-	}
-
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);
 	if(outputSettings.m_renderMode == RenderMode::RealTime)
 	{

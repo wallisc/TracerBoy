@@ -36,9 +36,6 @@
     <ClCompile Include="DenoiserPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CalculateVariancePass.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="TemporalAccumulationPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -86,12 +83,6 @@
     <ClInclude Include="SharedPostProcessStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
-    <ClInclude Include="CalculateVariancePass.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CalculateVarianceSharedShaderStructs.h">
-      <Filter>Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="RayGenCommon.h">
       <Filter>Shaders</Filter>
     </ClInclude>
@@ -128,9 +119,6 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="AnyHit.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="CalculateVarianceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="RaytraceCS.hlsl">

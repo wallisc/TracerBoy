@@ -164,7 +164,6 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AssimpImporter.cpp" />
-    <ClCompile Include="CalculateVariancePass.cpp" />
     <ClCompile Include="D3D12App.cpp" />
     <ClCompile Include="DenoiserPass.cpp" />
     <ClCompile Include="TemporalAccumulationPass.cpp" />
@@ -174,8 +173,6 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssimpImporter.h" />
-    <ClInclude Include="CalculateVariancePass.h" />
-    <ClInclude Include="CalculateVarianceSharedShaderStructs.h" />
     <ClInclude Include="CompositeAlbedoSharedShaderStructs.h" />
     <ClInclude Include="ComputeShaderUtil.h" />
     <ClInclude Include="D3D12App.h" />
@@ -227,24 +224,6 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
       </EntryPointName>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </EntryPointName>
-    </FxCompile>
-    <FxCompile Include="CalculateVarianceCS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.0</ShaderModel>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">g_p%(Filename)</VariableName>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">g_p%(Filename)</VariableName>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_p%(Filename)</VariableName>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_p%(Filename)</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)%(Filename).h</HeaderFileOutput>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)%(Filename).h</HeaderFileOutput>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)%(Filename).h</HeaderFileOutput>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)%(Filename).h</HeaderFileOutput>
     </FxCompile>
     <FxCompile Include="ClosestHit.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>

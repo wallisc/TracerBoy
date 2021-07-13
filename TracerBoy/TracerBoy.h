@@ -494,7 +494,6 @@ private:
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
 	std::unique_ptr<TemporalAccumulationPass> m_pTemporalAccumulationPass;
-	std::unique_ptr<CalculateVariancePass> m_pCalculateVariancePass;
 };
 
 class TextureAllocator
