@@ -12,23 +12,23 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
 #if 0
 	ComPtr<ID3D12Debug> debugController;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_GRAPHICS_PPV_ARGS(&debugController))))
 	{
 		debugController->EnableDebugLayer();
 	}
 #endif
 
-	VERIFY_HRESULT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	VERIFY_HRESULT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_GRAPHICS_PPV_ARGS(&m_pDevice)));
 
 	D3D12_COMMAND_QUEUE_DESC createCommandQueueDesc = {};
 	createCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	createCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	VERIFY_HRESULT(m_pDevice->CreateCommandQueue(&createCommandQueueDesc, IID_PPV_ARGS(&m_pCommandQueue)));
+	VERIFY_HRESULT(m_pDevice->CreateCommandQueue(&createCommandQueueDesc, IID_GRAPHICS_PPV_ARGS(&m_pCommandQueue)));
 
-	VERIFY_HRESULT(m_pDevice->CreateFence(m_SignalValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.ReleaseAndGetAddressOf())));
+	VERIFY_HRESULT(m_pDevice->CreateFence(m_SignalValue, D3D12_FENCE_FLAG_NONE, IID_GRAPHICS_PPV_ARGS(m_pFence.ReleaseAndGetAddressOf())));
 
 	ComPtr<IDXGIFactory2> pDxgiFactory2;
-	VERIFY_HRESULT(CreateDXGIFactory2(0, IID_PPV_ARGS(&pDxgiFactory2)));
+	VERIFY_HRESULT(CreateDXGIFactory2(0, IID_GRAPHICS_PPV_ARGS(&pDxgiFactory2)));
 
 	RECT clientRect;
 	if (!GetClientRect(hwnd, &clientRect)) HANDLE_FAILURE();
@@ -70,7 +70,7 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 			&readbackBufferDesc,
 			D3D12_RESOURCE_STATE_COPY_DEST,
 			nullptr,
-			IID_PPV_ARGS(pReadbackStatBuffer.ReleaseAndGetAddressOf())));
+			IID_GRAPHICS_PPV_ARGS(pReadbackStatBuffer.ReleaseAndGetAddressOf())));
 	}
 
 	WaitForGPUIdle();
@@ -109,8 +109,8 @@ void D3D12App::AcquireCommandListAllocatorPair(CommandListAllocatorPair& pair)
 	}
 	else
 	{
-		VERIFY_HRESULT(m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(pair.second.ReleaseAndGetAddressOf())));
-		VERIFY_HRESULT(m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pair.second.Get(), nullptr, IID_PPV_ARGS(pair.first.ReleaseAndGetAddressOf())))
+		VERIFY_HRESULT(m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_GRAPHICS_PPV_ARGS(pair.second.ReleaseAndGetAddressOf())));
+		VERIFY_HRESULT(m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pair.second.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pair.first.ReleaseAndGetAddressOf())))
 	}
 }
 
@@ -164,7 +164,7 @@ void D3D12App::Render()
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
 	ComPtr<ID3D12Resource> pBackBuffer;
-	m_pSwapChain->GetBuffer(backBufferIndex, IID_PPV_ARGS(&pBackBuffer));
+	m_pSwapChain->GetBuffer(backBufferIndex, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
 
 	CommandListAllocatorPair commandListAllocatorPair;
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);

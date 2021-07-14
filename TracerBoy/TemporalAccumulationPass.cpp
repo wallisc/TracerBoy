@@ -57,12 +57,12 @@ TemporalAccumulationPass::TemporalAccumulationPass(ID3D12Device& device)
 
 	ComPtr<ID3DBlob> pRootSignatureBlob;
 	VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
-	VERIFY_HRESULT(device.CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.ReleaseAndGetAddressOf())));
+	VERIFY_HRESULT(device.CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_pRootSignature.ReleaseAndGetAddressOf())));
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = m_pRootSignature.Get();
 	psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pTemporalAccumulationCS, sizeof(g_pTemporalAccumulationCS));
-	VERIFY_HRESULT(device.CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(m_pPSO.ReleaseAndGetAddressOf())));
+	VERIFY_HRESULT(device.CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pPSO.ReleaseAndGetAddressOf())));
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandList& commandList,

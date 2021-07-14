@@ -29,21 +29,21 @@ UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChai
 		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		desc.NumDescriptors = 1;
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		VERIFY_HRESULT(device.CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pImguiSRVDescriptorHeap)));
+		VERIFY_HRESULT(device.CreateDescriptorHeap(&desc, IID_GRAPHICS_PPV_ARGS(&m_pImguiSRVDescriptorHeap)));
 	}
 
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		desc.NumDescriptors = bufferCount;
-		VERIFY_HRESULT(device.CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pImguiRTVDescriptorHeap)));
+		VERIFY_HRESULT(device.CreateDescriptorHeap(&desc, IID_GRAPHICS_PPV_ARGS(&m_pImguiRTVDescriptorHeap)));
 	}
 
 	m_RTVs.resize(bufferCount);
 	for (UINT i = 0; i < bufferCount; i++)
 	{
 		ComPtr<ID3D12Resource> pBackBuffer;
-		m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
+		m_pSwapchain->GetBuffer(i, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
 		m_RTVs[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE(
 			m_pImguiRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
 			i,
@@ -178,7 +178,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 
 	ComPtr<ID3D12Resource> pBackBuffer;
 	UINT backBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-	m_pSwapchain->GetBuffer(backBufferIndex, IID_PPV_ARGS(&pBackBuffer));
+	m_pSwapchain->GetBuffer(backBufferIndex, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
 	
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pImguiSRVDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);

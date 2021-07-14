@@ -29,6 +29,10 @@
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))
 
+#ifndef IID_GRAPHICS_PPV_ARGS
+#define IID_GRAPHICS_PPV_ARGS(x) IID_PPV_ARGS(x)
+#endif
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
