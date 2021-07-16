@@ -48,7 +48,9 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	VERIFY_HRESULT(pSwapChain.As(&m_pSwapChain));
 	std::string commandLine(pCommandLine);
 
+#if ENABLE_UI
 	m_pUIController = std::unique_ptr<UIController>(new UIController(hwnd, *m_pDevice.Get(), m_pSwapChain));
+#endif
 	m_pTracerBoy = std::unique_ptr<TracerBoy>(new TracerBoy(m_pCommandQueue.Get()));
 
 	std::vector<ComPtr<ID3D12Resource>> scratchResources;
@@ -143,8 +145,14 @@ void D3D12App::Render()
 		std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_LastUpdateTime).count();
 	m_LastUpdateTime = std::chrono::steady_clock::now();
 
+
+
 	TracerBoy::CameraSettings cameraSettings = {};
+#if ENABLE_UI
 	cameraSettings.m_movementSpeed = m_pUIController->GetCameraSpeed();
+#else
+	cameraSettings.m_movementSpeed = DEFAULT_CAMERA_SPEED;
+#endif
 	cameraSettings.m_ignoreMouse = !m_MouseMovementEnabled;
 
 	TracerBoy::ReadbackStats TracerStats;
@@ -155,11 +163,13 @@ void D3D12App::Render()
 		m_pReadbackStatBuffers[backBufferIndex]->Unmap(0, nullptr);
 	}
 
+#if ENABLE_UI
 	if (m_bIsRecording)
 	{
 		bool bFrameStart = m_SamplesRendered == 0;
 		timeSinceLastUpdate = bFrameStart ? 1000.0f / m_pUIController->GetCaptureFramesPerSecond() : 0.0f;
 	}
+#endif
 
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
@@ -170,7 +180,13 @@ void D3D12App::Render()
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
 	ID3D12GraphicsCommandList& commandList = *commandListAllocatorPair.first.Get();
 
-	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), m_pUIController->GetOutputSettings());
+#if ENABLE_UI
+	const auto &outputSettings = m_pUIController->GetOutputSettings();
+#else
+	auto outputSettings = TracerBoy::GetDefaultOutputSettings();
+#endif
+
+	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), outputSettings);
 
 	static bool bConverged = false;
 	if (m_pTracerBoy->GetNumberOfSamplesSinceLastInvalidate() == 1)
@@ -179,6 +195,7 @@ void D3D12App::Render()
 		bConverged = false;
 	}
 
+#if ENABLE_UI
 	if (m_bRenderUI)
 	{
 		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"UI");
@@ -196,6 +213,7 @@ void D3D12App::Render()
 
 		m_pUIController->Render(commandList, stats);
 	}
+#endif
 
 	commandList.Close();
 
@@ -208,6 +226,7 @@ void D3D12App::Render()
 
 void D3D12App::OnSampleSubmit(ID3D12Resource &backBuffer)
 {
+#if ENABLE_UI
 	if (m_bIsRecording)
 	{
 		m_SamplesRendered++;
@@ -227,4 +246,5 @@ void D3D12App::OnSampleSubmit(ID3D12Resource &backBuffer)
 			StopRecording();
 		}
 	}
+#endif
 }

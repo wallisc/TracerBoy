@@ -1,5 +1,6 @@
 #pragma once
 
+#define ENABLE_UI 1
 #define USE_ASSIMP 1
 #define USE_OPENVDB 0
 
@@ -24,6 +25,7 @@
 #include "directxmath.h"
 
 #include "wincodec.h"
+#include "xinput.h"
 
 #define HANDLE_FAILURE() throw -1;
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
@@ -60,6 +62,8 @@ using namespace DirectX;
 #include "openvdb/openvdb.h"
 #endif
 
+#define DEFAULT_CAMERA_SPEED 0.003f
+
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"
 #include "TemporalAccumulationPass.h"
@@ -67,6 +71,8 @@ using namespace DirectX;
 #include "UIController.h"
 #include "D3D12App.h"
 
+#if ENABLE_UI
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
+#endif

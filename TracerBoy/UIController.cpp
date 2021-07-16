@@ -1,8 +1,10 @@
 #include "pch.h"
 
+#if ENABLE_UI
+
 UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
 	m_pSwapchain(pSwapchain),
-	m_cameraSpeed(0.003f),
+	m_cameraSpeed(DEFAULT_CAMERA_SPEED),
 	m_captureLengthInSeconds(1.0),
 	m_captureFramesPerSecond(1),
 	m_captureSamplesPerFrame(1)
@@ -191,3 +193,4 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	commandList.ResourceBarrier(ARRAYSIZE(postImguiBarriers), postImguiBarriers);
 }
 
+#endif

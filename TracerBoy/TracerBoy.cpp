@@ -1533,8 +1533,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		}
 
 		m_SamplesRendered++;
-
-		PIXEndEvent();
 	}
 
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =

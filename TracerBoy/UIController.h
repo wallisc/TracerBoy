@@ -1,5 +1,7 @@
 #pragma once
 
+#if ENABLE_UI
+
 class UIController
 {
 public:
@@ -33,3 +35,5 @@ private:
 
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_RTVs;
 };
+
+#endif

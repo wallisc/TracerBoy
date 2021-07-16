@@ -1,6 +1,8 @@
 #include "pch.h"
 
+#if ENABLE_UI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 4;}
 
@@ -10,8 +12,10 @@ std::unique_ptr<D3D12App> g_pD3D12App;
 HWND g_hwnd;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+#if ENABLE_UI
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
 		return true;
+#endif
 
 	switch (message)
 	{
