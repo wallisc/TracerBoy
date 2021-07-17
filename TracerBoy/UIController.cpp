@@ -140,6 +140,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputFloat("Exposure Multiplier", &postProcessSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::Checkbox("Enable Tonemapping", &postProcessSettings.m_bEnableToneMapping);
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
+		ImGui::Checkbox("Enable FidelityFX Super Resolution", &postProcessSettings.m_bEnableFSR);
 		ImGui::TreePop();
 	}
 

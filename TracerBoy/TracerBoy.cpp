@@ -11,7 +11,7 @@
 #include "CompositeAlbedoCS.h"
 #include "XInput.h"
 
-#define USE_ANYHIT 0
+#define USE_ANYHIT 1
 struct HitGroupShaderRecord
 {
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
@@ -663,6 +663,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
 	m_pTemporalAccumulationPass = std::unique_ptr<TemporalAccumulationPass>(new TemporalAccumulationPass(*m_pDevice.Get()));
+	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
 }
 
 void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::string& sceneFileName, std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete)
@@ -1647,6 +1648,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		}
 	}
 
+	ComPtr<ID3D12Resource> FinalBuffer;
 	{
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Post Processing");
 
@@ -1679,6 +1681,20 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		UINT DispatchHeight = (postProcessConstants.Resolution.y - 1) / 8 + 1;
 
 		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+		FinalBuffer = m_pPostProcessOutput;
+	}
+
+	if(outputSettings.m_postProcessSettings.m_bEnableFSR)
+	{
+		auto inputDesc = m_pPostProcessOutput->GetDesc();
+		m_pFidelityFXSuperResolutionPass->Run(
+			commandList,
+			m_pUpscaleOutput,
+			m_pUpscaleItermediateOutput,
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
+			inputDesc.Width,
+			inputDesc.Height);
+		FinalBuffer = m_pUpscaleOutput.m_pResource;
 	}
 
 	{
@@ -1688,7 +1704,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST)
 		};
 		commandList.ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
-		commandList.CopyResource(pBackBuffer, m_pPostProcessOutput.Get());
+		commandList.CopyResource(pBackBuffer, FinalBuffer.Get());
 
 		D3D12_RESOURCE_BARRIER postCopyBarriers[] =
 		{
@@ -1952,7 +1968,12 @@ UINT TracerBoy::GetPreviousFramePathTracerOutputSRV()
 
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 {
-	D3D12_RESOURCE_DESC backBufferDesc = pBackBuffer->GetDesc();
+	float downscaleFactor = 0.75;
+
+	D3D12_RESOURCE_DESC upscaledBackBufferDesc = pBackBuffer->GetDesc();
+	D3D12_RESOURCE_DESC backBufferDesc = upscaledBackBufferDesc;
+	backBufferDesc.Width *= downscaleFactor;
+	backBufferDesc.Height *= downscaleFactor;
 	VERIFY(backBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
 
 	bool bResizeNeeded = true;
@@ -2088,13 +2109,34 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				1, 1, 1, 0,
 				D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-				&defaultHeapDesc,
-				D3D12_HEAP_FLAG_NONE,
-				&postProcessOutput,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-				nullptr,
-				IID_GRAPHICS_PPV_ARGS(m_pPostProcessOutput.ReleaseAndGetAddressOf())));
+
+			m_pPostProcessOutput = CreateUAVandSRV(
+				L"Post Process Output",
+				postProcessOutput,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV),
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV));
+
+			{
+				D3D12_RESOURCE_DESC upscaleDesc = postProcessOutput;
+				upscaleDesc.Width = upscaledBackBufferDesc.Width;
+				upscaleDesc.Height = upscaledBackBufferDesc.Height;
+
+				auto cpuHandle = GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledBufferUAV);
+				m_pUpscaleOutput.m_pResource = CreateUAV(
+					L"UpscaleOutput",
+					upscaleDesc,
+					&cpuHandle,
+					D3D12_RESOURCE_STATE_GENERIC_READ);
+				m_pUpscaleOutput.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledBufferUAV);
+
+				m_pUpscaleItermediateOutput.m_pResource = CreateUAVandSRV(
+					L"UpscaleIntermediateOutput",
+					upscaleDesc,
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferUAV),
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferSRV));
+				m_pUpscaleItermediateOutput.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferUAV);
+				m_pUpscaleItermediateOutput.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferSRV);
+			}
 
 			{
 				D3D12_RESOURCE_DESC aovDesc = postProcessOutput;
@@ -2145,18 +2187,6 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceVarianceSRV), 
 					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			}
-
-			auto viewDescriptorHeapBase = m_pViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-			auto viewDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-			uavDesc.Format = postProcessOutput.Format;
-			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-			m_pDevice->CreateUnorderedAccessView(
-				m_pPostProcessOutput.Get(),
-				nullptr,
-				&uavDesc,
-				CD3DX12_CPU_DESCRIPTOR_HANDLE(viewDescriptorHeapBase, ViewDescriptorHeapSlots::PostProcessOutputUAV, viewDescriptorSize));
-
 		}
 	}
 }

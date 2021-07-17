@@ -67,6 +67,7 @@ using namespace DirectX;
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"
 #include "TemporalAccumulationPass.h"
+#include "FidelityFXSuperResolution.h"
 #include "TracerBoy.h"
 #include "UIController.h"
 #include "D3D12App.h"

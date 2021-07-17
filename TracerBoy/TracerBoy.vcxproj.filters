@@ -39,6 +39,9 @@
     <ClCompile Include="TemporalAccumulationPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FidelityFXSuperResolution.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -101,6 +104,12 @@
     <ClInclude Include="TemporalAccumulationSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="FidelityFXSuperResolution.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FidelityFXSuperResolutionSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -128,6 +137,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="TemporalAccumulationCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="FidelityFXSuperResolutionCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="FidelityFXSharpenCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

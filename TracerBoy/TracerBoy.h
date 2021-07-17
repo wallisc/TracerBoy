@@ -147,6 +147,7 @@ public:
 		float m_ExposureMultiplier;
 		bool m_bEnableToneMapping;
 		bool m_bEnableGammaCorrection;
+		bool m_bEnableFSR;
 	};
 
 	struct PerformanceSettings
@@ -189,7 +190,7 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
-		outputSettings.m_renderMode = RenderMode::RealTime;
+		outputSettings.m_renderMode = RenderMode::Unbiased;
 
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
@@ -200,6 +201,7 @@ public:
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
 		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
+		postProcessSettings.m_bEnableFSR = true;
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
@@ -393,6 +395,8 @@ private:
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
+	PassResource m_pUpscaleOutput;
+	PassResource m_pUpscaleItermediateOutput;
 	PassResource m_pDenoiserBuffers[2];
 
 	ComPtr<ID3D12Resource> m_pAOVNormals;
@@ -412,6 +416,7 @@ private:
 	enum ViewDescriptorHeapSlots
 	{
 		PostProcessOutputUAV = 0,
+		PostProcessOutputSRV,
 		TemporalOutputBaseSRV,
 		TemporalOutputLastSRV,
 		TemporalOutputBaseUAV,
@@ -460,6 +465,9 @@ private:
 		JitteredPathTracerOutputUAV,
 		ComposittedOutputUAV,
 		ComposittedOutputSRV,
+		UpscaledBufferUAV,
+		UpscaledIntermediateBufferUAV,
+		UpscaledIntermediateBufferSRV,
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
 		StatsBufferUAV,
@@ -494,6 +502,7 @@ private:
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
 	std::unique_ptr<TemporalAccumulationPass> m_pTemporalAccumulationPass;
+	std::unique_ptr<FidelityFXSuperResolutionPass> m_pFidelityFXSuperResolutionPass;
 };
 
 class TextureAllocator
