@@ -1399,7 +1399,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 }
             }
             
-            float DiffusePDF = dot(ray.direction, normal) / PI;
+            float DiffusePDF = dot(-previousDirection, normal) / PI;
             if(AllowsSpecular(material))
             {
                 float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
