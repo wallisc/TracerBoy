@@ -182,6 +182,7 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     <ClInclude Include="FidelityFXSuperResolution.h" />
     <ClInclude Include="FidelityFXSuperResolutionSharedShaderStructs.h" />
     <ClInclude Include="GLSLCompat.h" />
+    <ClInclude Include="DeviceWrapper.h" />
     <ClInclude Include="RayGenCommon.h" />
     <ClInclude Include="SharedHitGroup.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>

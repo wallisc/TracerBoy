@@ -2,7 +2,8 @@
 
 const DXGI_FORMAT cBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) : 
+D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) : 
+	m_deviceWrapper(deviceWrapper),
 	m_mouseX(0), 
 	m_mouseY(0),
 	m_SignalValue(1),
@@ -10,47 +11,25 @@ D3D12App::D3D12App(HWND hwnd, LPSTR pCommandLine) :
 	m_bRenderUI(true)
 {
 	ZeroMemory(m_inputArray, sizeof(m_inputArray));
-#if 0
-	ComPtr<ID3D12Debug> debugController;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_GRAPHICS_PPV_ARGS(&debugController))))
-	{
-		debugController->EnableDebugLayer();
-	}
-#endif
 
-	VERIFY_HRESULT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_GRAPHICS_PPV_ARGS(&m_pDevice)));
-
-	D3D12_COMMAND_QUEUE_DESC createCommandQueueDesc = {};
-	createCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	createCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	VERIFY_HRESULT(m_pDevice->CreateCommandQueue(&createCommandQueueDesc, IID_GRAPHICS_PPV_ARGS(&m_pCommandQueue)));
+	m_pDevice = &deviceWrapper.GetDevice();
+	m_pCommandQueue = &deviceWrapper.GetPresentQueue();
 
 	VERIFY_HRESULT(m_pDevice->CreateFence(m_SignalValue, D3D12_FENCE_FLAG_NONE, IID_GRAPHICS_PPV_ARGS(m_pFence.ReleaseAndGetAddressOf())));
 
-	ComPtr<IDXGIFactory2> pDxgiFactory2;
-	VERIFY_HRESULT(CreateDXGIFactory2(0, IID_GRAPHICS_PPV_ARGS(&pDxgiFactory2)));
-
-	RECT clientRect;
-	if (!GetClientRect(hwnd, &clientRect)) HANDLE_FAILURE();
-
-	ComPtr<IDXGISwapChain1> pSwapChain;
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-	swapChainDesc.BufferCount = cNumBackBuffers;
-	swapChainDesc.Width = clientRect.right - clientRect.left;
-	swapChainDesc.Height = clientRect.bottom - clientRect.top;
-	swapChainDesc.Format = cBackBufferFormat;
-	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-	swapChainDesc.SampleDesc.Count = 1;
-	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-	VERIFY_HRESULT(pDxgiFactory2->CreateSwapChainForHwnd(m_pCommandQueue.Get(), hwnd, &swapChainDesc, nullptr, nullptr, &pSwapChain));
-
-	VERIFY_HRESULT(pSwapChain.As(&m_pSwapChain));
-	std::string commandLine(pCommandLine);
-
 #if ENABLE_UI
-	m_pUIController = std::unique_ptr<UIController>(new UIController(hwnd, *m_pDevice.Get(), m_pSwapChain));
+	HWND hwnd = {};
+	IDXGISwapChain3* pSwapchain = nullptr;
+	if (!deviceWrapper.GetWin32ExtensionData(&hwnd, (void **)(&pSwapchain)))
+	{
+		// Can't use UI because can't query Win32 windowing information
+		HANDLE_FAILURE();
+	}
+	
+	m_pUIController = std::unique_ptr<UIController>(new UIController(hwnd, *m_pDevice.Get(), *pSwapchain));
 #endif
+
+	std::string commandLine(pCommandLine);
 	m_pTracerBoy = std::unique_ptr<TracerBoy>(new TracerBoy(m_pCommandQueue.Get()));
 
 	std::vector<ComPtr<ID3D12Resource>> scratchResources;
@@ -136,7 +115,7 @@ void D3D12App::UpdateMousePosition(int x, int y)
 
 void D3D12App::Render()
 {
-	UINT backBufferIndex = m_pSwapChain->GetCurrentBackBufferIndex();
+	UINT backBufferIndex = m_deviceWrapper.GetBackBufferIndex();
 	WaitForFenceValue(m_FrameFence[backBufferIndex]);
 
 	const bool bFirstUpdateCall = m_LastUpdateTime == std::chrono::steady_clock::time_point();
@@ -173,8 +152,7 @@ void D3D12App::Render()
 
 	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
 
-	ComPtr<ID3D12Resource> pBackBuffer;
-	m_pSwapChain->GetBuffer(backBufferIndex, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
+	ComPtr<ID3D12Resource> pBackBuffer = &m_deviceWrapper.GetBackBuffer(backBufferIndex);
 
 	CommandListAllocatorPair commandListAllocatorPair;
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
@@ -221,7 +199,7 @@ void D3D12App::Render()
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 
 	OnSampleSubmit(*pBackBuffer.Get());
-	m_pSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+	m_deviceWrapper.Present();
 }
 
 void D3D12App::OnSampleSubmit(ID3D12Resource &backBuffer)

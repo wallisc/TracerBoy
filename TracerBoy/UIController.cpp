@@ -2,8 +2,8 @@
 
 #if ENABLE_UI
 
-UIController::UIController(HWND hwnd, ID3D12Device& device, ComPtr<IDXGISwapChain3> pSwapchain) :
-	m_pSwapchain(pSwapchain),
+UIController::UIController(HWND hwnd, ID3D12Device& device, IDXGISwapChain3 &swapchain) :
+	m_pSwapchain(&swapchain),
 	m_cameraSpeed(DEFAULT_CAMERA_SPEED),
 	m_captureLengthInSeconds(1.0),
 	m_captureFramesPerSecond(1),

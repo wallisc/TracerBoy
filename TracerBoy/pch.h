@@ -70,6 +70,7 @@ using namespace DirectX;
 #include "FidelityFXSuperResolution.h"
 #include "TracerBoy.h"
 #include "UIController.h"
+#include "DeviceWrapper.h"
 #include "D3D12App.h"
 
 #if ENABLE_UI

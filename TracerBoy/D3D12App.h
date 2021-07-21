@@ -5,7 +5,7 @@ class D3D12App
 public:
 	const static UINT cNumBackBuffers = 2;
 
-	D3D12App(HWND hwnd, LPSTR pCommandLine);
+	D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine);
 
 	~D3D12App() 
 	{
@@ -74,9 +74,9 @@ private:
 	std::chrono::steady_clock::time_point m_TimeSinceLastInvalidate;
 	std::chrono::steady_clock::time_point m_TimeSinceConvergence;
 
-	ComPtr<IDXGISwapChain3> m_pSwapChain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
+	DeviceWrapper& m_deviceWrapper;
 
 	std::unique_ptr<TracerBoy> m_pTracerBoy;
 #if ENABLE_UI

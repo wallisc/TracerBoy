@@ -5,7 +5,7 @@
 class UIController
 {
 public:
-	UIController(HWND hwnd, ID3D12Device &device, ComPtr<IDXGISwapChain3> pSwapchain);
+	UIController(HWND hwnd, ID3D12Device &device, IDXGISwapChain3 &swapchain);
 
 	struct PerFrameStats
 	{
