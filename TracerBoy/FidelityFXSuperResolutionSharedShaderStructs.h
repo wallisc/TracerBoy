@@ -4,6 +4,11 @@
 #ifdef HLSL
 #define A_GPU 1
 #define A_HLSL 1
+#define ComputeRS \
+    "RootConstants(num32BitConstants=16, b0),\
+    DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 #else
 #define A_CPU
 #endif

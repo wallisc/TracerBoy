@@ -27,6 +27,7 @@ void CurrFilter(int2 pos)
 	OutputTexture[pos] = float4(c, 1);
 }
 
+[RootSignature(ComputeRS)]
 [numthreads(64, 1, 1)]
 void main(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_GroupID, uint3 Dtid : SV_DispatchThreadID)
 {
