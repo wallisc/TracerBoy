@@ -65,6 +65,16 @@ struct Camera
 	float FocalDistance;
 };
 
+struct ControllerState
+{
+	float m_RightStickX;
+	float m_RightStickY;
+	float m_RightTrigger;
+	float m_LeftStickX;
+	float m_LeftStickY;
+	float m_LeftTrigger;
+};
+
 struct ScopedResourceBarrier
 {
 	ScopedResourceBarrier(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState) :
@@ -250,7 +260,7 @@ public:
 		float m_movementSpeed;
 		bool m_ignoreMouse;
 	};
-	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const CameraSettings &cameraSettings);
+	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const ControllerState &controllerState, const CameraSettings &cameraSettings);
 
 	friend class TextureAllocator;
 private:

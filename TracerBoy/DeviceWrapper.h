@@ -10,4 +10,6 @@ public:
 	virtual void Present() = 0;
 
 	virtual bool GetWin32ExtensionData(void* HWND, void** ppDXGISwapChain) { return false; }
+
+	virtual bool GetControllerState(ControllerState& state) { return false; }
 };

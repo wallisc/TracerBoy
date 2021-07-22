@@ -150,7 +150,9 @@ void D3D12App::Render()
 	}
 #endif
 
-	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, cameraSettings);
+	ControllerState controllerState = {};
+	m_deviceWrapper.GetControllerState(controllerState);
+	m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, controllerState, cameraSettings);
 
 	ComPtr<ID3D12Resource> pBackBuffer = &m_deviceWrapper.GetBackBuffer(backBufferIndex);
 

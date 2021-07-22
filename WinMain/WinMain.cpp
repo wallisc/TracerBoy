@@ -1,4 +1,5 @@
 #include "../TracerBoy/pch.h"
+#include "xinput.h"
 
 #if ENABLE_UI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -80,6 +81,23 @@ public:
 	{ 
 		*(HWND *)pHWND = m_hwnd;
 		*(IDXGISwapChain3**)ppDXGISwapChain = m_pSwapChain.Get();
+		return true; 
+	}
+
+	bool GetControllerState(ControllerState& controllerState) 
+	{ 
+		XINPUT_STATE xinputState;
+		ZeroMemory( &xinputState, sizeof(XINPUT_STATE) );
+		XInputGetState(0, &xinputState);
+		XINPUT_GAMEPAD &gamepad = xinputState.Gamepad;
+
+		controllerState.m_RightStickX = ((float)gamepad.sThumbRX) / SHRT_MAX;
+		controllerState.m_RightStickY = ((float)gamepad.sThumbRY) / SHRT_MAX;
+		controllerState.m_RightTrigger = ((float)gamepad.bRightTrigger) / BYTE_MAX;
+		controllerState.m_LeftStickX = ((float)gamepad.sThumbLX) / SHRT_MAX;
+		controllerState.m_LeftStickY = ((float)gamepad.sThumbLY) / SHRT_MAX;
+		controllerState.m_LeftTrigger = ((float)gamepad.bLeftTrigger) / BYTE_MAX;
+
 		return true; 
 	}
 

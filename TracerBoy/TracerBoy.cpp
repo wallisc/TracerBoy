@@ -1741,7 +1741,7 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }
 
-void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const CameraSettings& cameraSettings)
+void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const ControllerState &controllerState, const CameraSettings& cameraSettings)
 {
 	bool bCameraMoved = false;
 
@@ -1757,17 +1757,11 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	}
 
 	const float ControllerDeadzone = 0.2;
-	XINPUT_STATE state;
-    ZeroMemory( &state, sizeof(XINPUT_STATE) );
-	XInputGetState(0, &state);
-
-	float rightStickX = ((float)state.Gamepad.sThumbRX) / SHRT_MAX;
-	float rightStickY = ((float)state.Gamepad.sThumbRY) / SHRT_MAX;
-	if (abs(rightStickX) > ControllerDeadzone || abs(rightStickY) > ControllerDeadzone)
+	if (abs(controllerState.m_RightStickX) > ControllerDeadzone || abs(controllerState.m_RightStickY) > ControllerDeadzone)
 	{
 		const float rotationScaler = 0.001f;
-		yaw += rightStickX * rotationScaler * dt;
-		pitch += -rightStickY * rotationScaler * dt;
+		yaw += controllerState.m_RightStickX * rotationScaler * dt;
+		pitch += -controllerState.m_RightStickY * rotationScaler * dt;
 		bCameraMoved = true;
 	}
 
@@ -1797,7 +1791,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	LookAt = Position + ViewDir;
 
 	const float cameraMoveSpeed = cameraSettings.m_movementSpeed;
-	float leftStickY = ((float)state.Gamepad.sThumbLY) / SHRT_MAX;
+	float leftStickY = controllerState.m_LeftStickY;
 	bool leftStickYActive = abs(leftStickY) > ControllerDeadzone;
 	if (keyboardInput['w'] || keyboardInput['W'] || leftStickYActive)
 	{
@@ -1820,7 +1814,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 		bCameraMoved = true;
 	}
 
-	float leftStickX = ((float)state.Gamepad.sThumbLX) / SHRT_MAX;
+	float leftStickX = controllerState.m_LeftStickX;
 	bool leftStickXActive = abs(leftStickX) > ControllerDeadzone;
 	if (keyboardInput['D'] || keyboardInput['d'] || leftStickXActive)
 	{
@@ -1830,7 +1824,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 		bCameraMoved = true;
 	}
 
-	float rightTrigger = ((float)state.Gamepad.bRightTrigger) / BYTE_MAX;
+	float rightTrigger = controllerState.m_RightTrigger;
 	bool rightTriggerActive = rightTrigger > ControllerDeadzone;
 	if (keyboardInput['Q'] || keyboardInput['q'] || rightTriggerActive)
 	{
@@ -1842,7 +1836,7 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 
 
 
-	float leftTrigger = ((float)state.Gamepad.bLeftTrigger) / BYTE_MAX;
+	float leftTrigger = controllerState.m_LeftTrigger;
 	bool leftTriggerActive = leftTrigger > ControllerDeadzone;
 	if (keyboardInput['E'] || keyboardInput['e'] || leftTriggerActive)
 	{
