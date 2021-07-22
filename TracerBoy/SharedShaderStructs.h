@@ -66,14 +66,6 @@ struct PerFrameConstants
 	float3 VolumeMin;
 	float3 VolumeMax;
 #endif
-	float3 PrevFrameCameraPosition;
-	uint padding1;
-	
-	float3 PrevFrameCameraUp;
-	uint padding2;
-	float3 PrevFrameCameraRight;
-	uint padding3;
-	float3 PrevFrameCameraLookAt;
 };
 
 struct ConfigConstants

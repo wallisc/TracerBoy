@@ -1443,11 +1443,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	constants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
 	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
 
-	constants.PrevFrameCameraPosition = { m_prevFrameCamera.Position.x, m_prevFrameCamera.Position.y, m_prevFrameCamera.Position.z };
-	constants.PrevFrameCameraRight = { m_prevFrameCamera.Right.x, m_prevFrameCamera.Right.y, m_prevFrameCamera.Right.z };
-	constants.PrevFrameCameraUp = { m_prevFrameCamera.Up.x, m_prevFrameCamera.Up.y, m_prevFrameCamera.Up.z };
-	constants.PrevFrameCameraLookAt = { m_prevFrameCamera.LookAt.x, m_prevFrameCamera.LookAt.y, m_prevFrameCamera.LookAt.z };
-
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
 	constants.FocalDistance = m_camera.FocalDistance;
