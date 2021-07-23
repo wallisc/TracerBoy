@@ -1480,9 +1480,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 #endif
 
+	ID3D12Resource* pPathTracerOutput = GetPathTracerOutput();
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(GetPathTracerOutput(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		CD3DX12_RESOURCE_BARRIER::Transition(pPathTracerOutput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(preDispatchRaysBarrier), preDispatchRaysBarrier);
@@ -1533,7 +1534,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(GetPathTracerOutput(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(pPathTracerOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -1989,8 +1990,9 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 		{
 			for (UINT i = 0; i < ARRAYSIZE(m_pPathTracerOutput); i++)
 			{
+				std::wstring outputName = std::wstring(L"PathTracerOutput") + std::to_wstring(i);
 				m_pPathTracerOutput[i] = CreateUAVandSRV(
-					L"PathTracerOutput",
+					outputName,
 					pathTracerOutput,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputUAV0 + i),
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PathTracerOutputSRV0 + i),
@@ -2122,7 +2124,8 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 					L"UpscaleIntermediateOutput",
 					upscaleDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferUAV),
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferSRV));
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferSRV),
+					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				m_pUpscaleItermediateOutput.m_uavHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferUAV);
 				m_pUpscaleItermediateOutput.m_srvHandle = GetGPUDescriptorHandle(ViewDescriptorHeapSlots::UpscaledIntermediateBufferSRV);
 			}

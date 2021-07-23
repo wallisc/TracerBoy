@@ -200,7 +200,7 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
-		outputSettings.m_renderMode = RenderMode::Unbiased;
+		outputSettings.m_renderMode = RenderMode::RealTime;
 
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
