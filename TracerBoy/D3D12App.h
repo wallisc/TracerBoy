@@ -54,7 +54,7 @@ private:
 		m_bIsRecording = false;
 	}
 
-	UINT m_FrameFence[cNumBackBuffers];
+	UINT m_FrameFence[cNumBackBuffers] = {};
 	ComPtr<ID3D12Resource> m_pReadbackStatBuffers[cNumBackBuffers];
 	ComPtr<ID3D12Fence> m_pFence;
 	UINT64 m_SignalValue;

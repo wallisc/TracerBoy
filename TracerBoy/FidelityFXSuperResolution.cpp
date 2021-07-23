@@ -61,6 +61,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE FidelityFXSuperResolutionPass::Run(
 	commandList.SetComputeRootSignature(m_pRootSignature.Get());
 	
 	{
+        PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"FidelityFX Upscale");
+
 		ScopedResourceBarrier outputBarrier(commandList, IntermediateBuffer.m_pResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		
 		commandList.SetPipelineState(m_pUpscalePSO.Get());
@@ -87,6 +89,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE FidelityFXSuperResolutionPass::Run(
 	}
 
 	{
+        PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"FidelityFX Sharpen");
+
 		ScopedResourceBarrier outputBarrier(commandList, OutputBuffer.m_pResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		commandList.SetPipelineState(m_pSharpenPSO.Get());

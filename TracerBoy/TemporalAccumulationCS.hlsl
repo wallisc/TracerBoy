@@ -92,6 +92,8 @@ float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigi
     DescriptorTable(UAV(u1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 
+#define NEIGHBORHOOD_CLAMPING 1
+
 [RootSignature(ComputeRS)]
 [numthreads(TEMPORAL_ACCUMULATION_THREAD_GROUP_WIDTH, TEMPORAL_ACCUMULATION_THREAD_GROUP_HEIGHT, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
@@ -110,6 +112,27 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float3 PrevFrameRayDirection = normalize(WorldPosition - PrevFrameFocalPoint);
 
 	float3 RawOutputColor = CurrentFrame[DTid.xy].rgb;
+
+#if NEIGHBORHOOD_CLAMPING
+	float3 NeighborMinColor = RawOutputColor;
+	float3 NeighborMaxColor = RawOutputColor;
+	for (int x = -1; x <= 1; x++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			int2 coord = int2(DTid.xy)+int2(x, y);
+			bool bIsValidCoord = all(coord > 0) && coord.x < Constants.Resolution.x&& coord.y < Constants.Resolution.y;
+			bool bIsCenterCoord = x == 0 && y == 0; // Don't need to re-read the center pixel;
+			if (bIsValidCoord && !bIsCenterCoord)
+			{
+				float3 color = CurrentFrame[coord].rgb;
+				NeighborMinColor = min(NeighborMinColor, color);
+				NeighborMaxColor = max(NeighborMaxColor, color);
+			}
+		}
+	}
+#endif
+
 	float3 PrevFrameColor = RawOutputColor;
 	float3 PrevMomentData = float3(0, 0, 0);
 	float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, Constants.PrevFrameCameraPosition, PrevFrameCameraDir);
@@ -172,6 +195,10 @@ void main( uint3 DTid : SV_DispatchThreadID )
 		float variance = max(luminanceDataPair.g - luminanceDataPair.r * luminanceDataPair.r, 0.0);
 		outputAlpha = variance;
 	}
+#if NEIGHBORHOOD_CLAMPING
+	PrevFrameColor = clamp(NeighborMinColor, NeighborMaxColor, PrevFrameColor);
+#endif
+
 	float3 OutputColor = lerp(RawOutputColor, PrevFrameColor, Constants.HistoryWeight);
 
 	OutputTexture[DTid.xy] = float4(OutputColor, outputAlpha);
