@@ -94,8 +94,8 @@ float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigi
     DescriptorTable(UAV(u1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 
-#define NEIGHBORHOOD_CLAMPING 1
-#define WORLD_POSITION_HISTORY_REJECTION 0
+#define NEIGHBORHOOD_CLAMPING 0
+#define WORLD_POSITION_HISTORY_REJECTION 1
 
 [RootSignature(ComputeRS)]
 [numthreads(TEMPORAL_ACCUMULATION_THREAD_GROUP_WIDTH, TEMPORAL_ACCUMULATION_THREAD_GROUP_HEIGHT, 1)]
@@ -120,7 +120,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	float3 NeighborMinColor = RawOutputColor;
 	float3 NeighborMaxColor = RawOutputColor;
 #endif
-#if NEIGHBORHOOD_CLAMPING
+#if WORLD_POSITION_HISTORY_REJECTION
 	float3 NeighborMinWorldPosition = WorldPosition;
 	float3 NeighborMaxWorldPosition = WorldPosition;
 #endif
@@ -171,15 +171,15 @@ void main( uint3 DTid : SV_DispatchThreadID )
 			float distanceToNeighbor;
 			distanceToNeighbor = length(NeighborMaxWorldPosition - NeighborMinWorldPosition);
 
-			float2 FloatingPointSampleIndex = UV * float2(Constants.Resolution);
+			float2 FloatingPointSampleIndex = UV * float2(Constants.Resolution) - 0.5;
 			float SummedWeight = 0.0;
 			for (uint x = 0; x < 2; x++)
 			{
 				for (uint y = 0; y < 2; y++)
 				{
-					uint2 Index = uint2(FloatingPointSampleIndex)+uint2(x, y);
+					uint2 Index = int2(FloatingPointSampleIndex)+int2(x, y);
 					float3 PreviousFrameWorldPosition = PreviousFrameWorldPositionTexture[Index];
-					//if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
+					if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
 					{
 						float xWeight = x == 0 ? 1.0 - frac(FloatingPointSampleIndex.x) : frac(FloatingPointSampleIndex.x);
 						float yWeight = y == 0 ? 1.0 - frac(FloatingPointSampleIndex.y) : frac(FloatingPointSampleIndex.y);
@@ -202,6 +202,8 @@ void main( uint3 DTid : SV_DispatchThreadID )
 				PrevFrameColor /= SummedWeight;
 				PrevMomentData /= SummedWeight;
 			}
+
+			PrevMomentData = MomentHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
 #else
 			PrevFrameColor = TemporalHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
 			PrevMomentData = MomentHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
