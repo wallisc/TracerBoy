@@ -204,6 +204,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 			}
 #else
 			PrevFrameColor = TemporalHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
+			PrevMomentData = MomentHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
 			bValidHistory = true;
 #endif
 		}
