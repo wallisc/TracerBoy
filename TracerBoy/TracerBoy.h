@@ -336,7 +336,7 @@ private:
 	const DXGI_FORMAT RayTracingOutputFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	static const UINT MaxActiveFrames = 2;
 
-	ComPtr<ID3D12Resource> m_pPathTracerOutput[2];
+	ComPtr<ID3D12Resource> m_pPathTracerOutput[MaxActiveFrames];
 	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
 	ComPtr<ID3D12Resource> m_pComposittedOutput;
 	UINT8 m_ActiveFrameIndex;

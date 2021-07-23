@@ -14,12 +14,19 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#define IS_WINDOWS 1
+
 #include <windows.h>
 #include <windowsx.h>
+#include <wrl/client.h>
+
+#if IS_WINDOWS
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <wrl/client.h>
 #include "d3dx12.h"
+#define D3D12_ROOT_SIGNATURE_FLAG_RAYTRACING D3D12_ROOT_SIGNATURE_FLAG_NONE
+#endif
+
 
 #include "directxtex.h"
 #include "directxmath.h"

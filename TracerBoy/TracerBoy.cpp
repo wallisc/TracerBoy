@@ -524,7 +524,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		rootSignatureDesc.NumParameters = ARRAYSIZE(Parameters);
 		rootSignatureDesc.pStaticSamplers = StaticSamplers;
 		rootSignatureDesc.NumStaticSamplers = ARRAYSIZE(StaticSamplers);
-		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_RAYTRACING;
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
 
 		ComPtr<ID3DBlob> pRootSignatureBlob;
@@ -1480,10 +1480,9 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 	}
 #endif
 
-	ID3D12Resource* pPathTracerOutput = GetPathTracerOutput();
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(pPathTracerOutput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		CD3DX12_RESOURCE_BARRIER::Transition(GetPathTracerOutput(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(preDispatchRaysBarrier), preDispatchRaysBarrier);
@@ -1534,7 +1533,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 
 	D3D12_RESOURCE_BARRIER postDispatchRaysBarrier[] =
 	{
-		CD3DX12_RESOURCE_BARRIER::Transition(pPathTracerOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(GetPathTracerOutput(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -1927,7 +1926,7 @@ UINT TracerBoy::GetPathTracerOutputIndex()
 	case RenderMode::Unbiased:
 		return 0;
 	case RenderMode::RealTime:
-		return m_SamplesRendered % ARRAYSIZE(m_pPathTracerOutput);
+		return m_ActiveFrameIndex;
 	}
 }
 
