@@ -20,6 +20,10 @@ TemporalAccumulationPass::TemporalAccumulationPass(ID3D12Device& device)
 	AOVPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[TemporalAccumulationRootSignatureParameters::WorldPositionTexture].InitAsDescriptorTable(1, &AOVPositionDescriptor);
 
+	CD3DX12_DESCRIPTOR_RANGE1 PrevFrameAOVPositionDescriptor;
+	PrevFrameAOVPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+	Parameters[TemporalAccumulationRootSignatureParameters::PreviousFrameWorldPositionTexture].InitAsDescriptorTable(1, &PrevFrameAOVPositionDescriptor);
+
 	CD3DX12_DESCRIPTOR_RANGE1 MomentHistoryDescriptor;
 	MomentHistoryDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 	Parameters[TemporalAccumulationRootSignatureParameters::MomentHistory].InitAsDescriptorTable(1, &MomentHistoryDescriptor);
@@ -70,6 +74,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	D3D12_GPU_DESCRIPTOR_HANDLE TemporalHistory,
 	D3D12_GPU_DESCRIPTOR_HANDLE CurrentFrame,
 	D3D12_GPU_DESCRIPTOR_HANDLE AOVWorldPosition,
+	D3D12_GPU_DESCRIPTOR_HANDLE PreviousFrameWorldPosition,
 	D3D12_GPU_DESCRIPTOR_HANDLE AOVNormal,
 	Camera &CurrentFrameCamera,
 	Camera &PreviousFrameCamera,
@@ -111,6 +116,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TemporalAccumulationPass::Run(ID3D12GraphicsCommandL
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::TemporalHistory, TemporalHistory);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::CurrentFrameTexture, CurrentFrame);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::WorldPositionTexture, AOVWorldPosition);
+	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::PreviousFrameWorldPositionTexture, PreviousFrameWorldPosition);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::WorldNormalTexture, AOVNormal);
 	commandList.SetComputeRootDescriptorTable(TemporalAccumulationRootSignatureParameters::OutputUAV, OutputBuffer.m_uavHandle);
 	if (bMomentInfoRequested)

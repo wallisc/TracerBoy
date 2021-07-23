@@ -386,23 +386,6 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 	DistanceToNeighbor += distanceToNeighbor;
 }
 
-float3 GetPreviousFrameWorldPosition(float2 UV, out float distanceToNeighbor)
-{
-	uint2 Index = uint2(UV * GetResolution().xy + 0.5);
-	Index = clamp(Index, uint2(0,0), GetResolution() - 1);
-	float4 data;
-	if (OutputWorldPositionToCustomOutput())
-	{
-		data = AOVWorldPosition[Index];
-	}
-	else
-	{
-		data = AOVCustomOutput[Index];
-	}
-	distanceToNeighbor = data.w;
-	return data.rgb;
-}
-
 bool IsFogEnabled()
 {
 	return false;
@@ -472,13 +455,13 @@ void RayTraceCommon()
 	outputColor /= NumSamples;
 	WorldPosition /= NumSamples;
 	DistanceToNeighbor /= NumSamples;
-	if (OutputWorldPositionToCustomOutput())
+	if ((perFrameConstants.GlobalFrameCount % 2) == 0)
 	{
-		AOVCustomOutput[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
+		AOVWorldPosition0[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
 	}
 	else
 	{
-		AOVWorldPosition[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
+		AOVWorldPosition1[GetDispatchIndex().xy] = float4(WorldPosition, DistanceToNeighbor);
 	}
 
 	float4 accumulatedColor = perFrameConstants.IsRealTime || perFrameConstants.GlobalFrameCount == 0 ? float4(0, 0, 0, 0) : OutputTexture[GetDispatchIndex().xy];

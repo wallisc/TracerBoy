@@ -278,6 +278,9 @@ private:
 	UINT GetPathTracerOutputSRV();
 	UINT GetPreviousFramePathTracerOutputIndex();
 	UINT GetPreviousFramePathTracerOutputSRV();
+	UINT GetWorldPositionSRV();
+	UINT GetPreviousFrameWorldPositionSRV();
+
 
 	void InitializeLocalRootSignature();
 	void InitializeTexture(
@@ -411,7 +414,7 @@ private:
 
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVCustomOutput;
-	ComPtr<ID3D12Resource> m_pAOVWorldPosition;
+	ComPtr<ID3D12Resource> m_pAOVWorldPosition[2];
 	ComPtr<ID3D12Resource> m_pAOVEmissive;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 	ComPtr<ID3D12Resource> m_pVolume;
@@ -454,13 +457,15 @@ private:
 		SceneDescriptorsLastSlot = TextureDataSRV,
 		AOVBaseUAVSlot,
 		AOVNormalsUAV = AOVBaseUAVSlot,
-		AOVWorldPositionUAV,
+		AOVWorldPosition0UAV,
+		AOVWorldPosition1UAV,
 		AOVCustomOutputUAV,
 		AOVEmissiveUAV,
 		AOVLastUAVSlot = AOVEmissiveUAV,
 		AOVBaseSRVSlot,
 		AOVNormalsSRV = AOVBaseSRVSlot,
-		AOVWorldPositionSRV,
+		AOVWorldPosition0SRV,
+		AOVWorldPosition1SRV,
 		AOVCustomOutputSRV,
 		AOVEmissiveSRV,
 		AOVLastSRVSlot = AOVEmissiveSRV,

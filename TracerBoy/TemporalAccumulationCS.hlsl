@@ -5,6 +5,7 @@
 Texture2D TemporalHistory : register(t0);
 Texture2D CurrentFrame : register(t1);
 Texture2D WorldPositionTexture : register(t2);
+Texture2D PreviousFrameWorldPositionTexture : register(t5);
 Texture2D MomentHistory : register(t3);
 Texture2D WorldNormalTexture : register(t4);
 SamplerState BilinearSampler : register(s0);
@@ -86,6 +87,7 @@ float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigi
     DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t2, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    DescriptorTable(SRV(t5, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t4, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t3, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
@@ -93,6 +95,7 @@ float PlaneIntersection(float3 RayOrigin, float3 RayDirection, float3 PlaneOrigi
     StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 
 #define NEIGHBORHOOD_CLAMPING 1
+#define WORLD_POSITION_HISTORY_REJECTION 0
 
 [RootSignature(ComputeRS)]
 [numthreads(TEMPORAL_ACCUMULATION_THREAD_GROUP_WIDTH, TEMPORAL_ACCUMULATION_THREAD_GROUP_HEIGHT, 1)]
@@ -116,6 +119,11 @@ void main( uint3 DTid : SV_DispatchThreadID )
 #if NEIGHBORHOOD_CLAMPING
 	float3 NeighborMinColor = RawOutputColor;
 	float3 NeighborMaxColor = RawOutputColor;
+#endif
+#if NEIGHBORHOOD_CLAMPING
+	float3 NeighborMinWorldPosition = WorldPosition;
+	float3 NeighborMaxWorldPosition = WorldPosition;
+#endif
 	for (int x = -1; x <= 1; x++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -125,21 +133,27 @@ void main( uint3 DTid : SV_DispatchThreadID )
 			bool bIsCenterCoord = x == 0 && y == 0; // Don't need to re-read the center pixel;
 			if (bIsValidCoord && !bIsCenterCoord)
 			{
+
+#if NEIGHBORHOOD_CLAMPING
 				float3 color = CurrentFrame[coord].rgb;
 				NeighborMinColor = min(NeighborMinColor, color);
 				NeighborMaxColor = max(NeighborMaxColor, color);
+#endif
+#if WORLD_POSITION_HISTORY_REJECTION
+				float3 worldPosition = WorldPositionTexture[coord].rgb;
+				NeighborMinWorldPosition = min(NeighborMinWorldPosition, worldPosition);
+				NeighborMaxWorldPosition = max(NeighborMaxWorldPosition, worldPosition);
+#endif
 			}
 		}
 	}
-#endif
 
-	float3 PrevFrameColor = RawOutputColor;
+	float3 PrevFrameColor = float3(0, 0, 0);
 	float3 PrevMomentData = float3(0, 0, 0);
 	float t = PlaneIntersection(PrevFrameFocalPoint, PrevFrameRayDirection, Constants.PrevFrameCameraPosition, PrevFrameCameraDir);
+	bool bValidHistory = false;
 	if (!Constants.IgnoreHistory && t >= 0 && bHitValid)
 	{
-		PrevFrameColor = TemporalHistory[DTid.xy].rgb;
-#if 1
 		float3 LensPosition = PrevFrameFocalPoint + PrevFrameRayDirection * t;
 
 		float3 OffsetFromCenter = LensPosition  - Constants.PrevFrameCameraPosition;
@@ -153,32 +167,46 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	
 		if (all(UV >= 0.0 && UV <= 1.0))
 		{
-	#if 0
+#if WORLD_POSITION_HISTORY_REJECTION
 			float distanceToNeighbor;
-			float3 PreviousFrameWorldPosition = GetPreviousFrameWorldPosition(UV, distanceToNeighbor);
-			distanceToNeighbor = length(MaxWorldPosition - MinWorldPosition) * 0.035;
-			if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
+			distanceToNeighbor = length(NeighborMaxWorldPosition - NeighborMinWorldPosition);
+
+			float2 FloatingPointSampleIndex = UV * float2(Constants.Resolution);
+			float SummedWeight = 0.0;
+			for (uint x = 0; x < 2; x++)
 			{
-				previousFrameColor = PreviousFrameOutput.SampleLevel(BilinearSampler, UV, 0);
-				bValidHistory = true;
-			}
-	#endif
-			const bool bUseCatmullRomSampling = true;
-			if (bUseCatmullRomSampling)
-			{
-				PrevFrameColor = SampleTextureCatmullRom(TemporalHistory, BilinearSampler, UV, Constants.Resolution);
-			}
-			else
-			{
-				PrevFrameColor = TemporalHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
+				for (uint y = 0; y < 2; y++)
+				{
+					uint2 Index = uint2(FloatingPointSampleIndex)+uint2(x, y);
+					float3 PreviousFrameWorldPosition = PreviousFrameWorldPositionTexture[Index];
+					//if (length(PreviousFrameWorldPosition - WorldPosition) < distanceToNeighbor)
+					{
+						float xWeight = x == 0 ? 1.0 - frac(FloatingPointSampleIndex.x) : frac(FloatingPointSampleIndex.x);
+						float yWeight = y == 0 ? 1.0 - frac(FloatingPointSampleIndex.y) : frac(FloatingPointSampleIndex.y);
+						float weight = xWeight* yWeight;
+						PrevFrameColor += TemporalHistory[Index] * weight;
+						SummedWeight += weight;
+
+						if (Constants.OutputMomentInformation)
+						{
+							PrevMomentData += MomentHistory[Index] * weight;
+						}
+
+					}
+				}
 			}
 
-			if (Constants.OutputMomentInformation)
+			bValidHistory = SummedWeight > 0.0;
+			if (bValidHistory)
 			{
-				PrevMomentData = MomentHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
+				PrevFrameColor /= SummedWeight;
+				PrevMomentData /= SummedWeight;
 			}
-		}
+#else
+			PrevFrameColor = TemporalHistory.SampleLevel(BilinearSampler, UV, 0).rgb;
+			bValidHistory = true;
 #endif
+		}
 	}
 
 	float outputAlpha = 1.0;
@@ -199,7 +227,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
 	PrevFrameColor = clamp(NeighborMinColor, NeighborMaxColor, PrevFrameColor);
 #endif
 
-	float3 OutputColor = lerp(RawOutputColor, PrevFrameColor, Constants.HistoryWeight);
+	float3 OutputColor = lerp(RawOutputColor, PrevFrameColor, bValidHistory ? Constants.HistoryWeight : 0.0);
 
 	OutputTexture[DTid.xy] = float4(OutputColor, outputAlpha);
 }

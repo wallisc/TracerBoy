@@ -493,7 +493,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		Parameters[RayTracingRootSignatureParameters::ImageTextureTable].InitAsDescriptorTable(ARRAYSIZE(BindlessTableDescriptor), BindlessTableDescriptor);
 
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
-		Parameters[RayTracingRootSignatureParameters::StatsBuffer].InitAsUnorderedAccessView(6);
+		Parameters[RayTracingRootSignatureParameters::StatsBuffer].InitAsUnorderedAccessView(10);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -1536,7 +1536,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 		CD3DX12_RESOURCE_BARRIER::Transition(GetPathTracerOutput(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pJitteredAccumulatedPathTracerOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[1].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVEmissive.Get(),	D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
@@ -1560,7 +1561,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			m_pIndirectLightingTemporalOutput[m_ActiveFrameIndex],
 			m_pIndirectLightingTemporalOutput[previousFrameIndex].m_srvHandle,
 			PostProcessInput,
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+			GetGPUDescriptorHandle(GetWorldPositionSRV()),
+			GetGPUDescriptorHandle(GetPreviousFrameWorldPositionSRV()),
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 			m_camera,
 			m_prevFrameCamera,
@@ -1579,7 +1581,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			outputSettings.m_denoiserSettings,
 			PostProcessInput,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+			GetGPUDescriptorHandle(GetWorldPositionSRV()),
 			m_SamplesRendered,
 			viewport.Width,
 			viewport.Height);
@@ -1632,7 +1634,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 				m_pFinalTemporalOutput[m_ActiveFrameIndex],
 				m_pFinalTemporalOutput[previousFrameIndex].m_srvHandle,
 				PostProcessInput,
-				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV),
+				GetGPUDescriptorHandle(GetWorldPositionSRV()),
+				GetGPUDescriptorHandle(GetPreviousFrameWorldPositionSRV()),
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
 				m_camera,
 				m_prevFrameCamera,
@@ -1706,7 +1709,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource *p
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pPostProcessOutput.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer,D3D12_RESOURCE_STATE_COPY_DEST,  D3D12_RESOURCE_STATE_RENDER_TARGET),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVNormals.Get(),		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[0].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[1].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVEmissive.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(),	D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
@@ -1955,6 +1959,16 @@ UINT TracerBoy::GetPreviousFramePathTracerOutputSRV()
 	return ViewDescriptorHeapSlots::PathTracerOutputSRV0 + GetPreviousFramePathTracerOutputIndex();
 }
 
+UINT TracerBoy::GetWorldPositionSRV()
+{
+	return ViewDescriptorHeapSlots::AOVWorldPosition0SRV + GetPathTracerOutputIndex();
+}
+
+UINT TracerBoy::GetPreviousFrameWorldPositionSRV()
+{
+	return ViewDescriptorHeapSlots::AOVWorldPosition0SRV + GetPreviousFramePathTracerOutputIndex();
+}
+
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 {
 	float downscaleFactor = 0.75;
@@ -2139,14 +2153,15 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputSRV));
 			}
 
+			for (UINT i = 0; i < ARRAYSIZE(m_pAOVWorldPosition); i++)
 			{
 				D3D12_RESOURCE_DESC worldPositionDesc = postProcessOutput;
 				worldPositionDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-				m_pAOVWorldPosition = CreateUAVandSRV(
+				m_pAOVWorldPosition[i] = CreateUAVandSRV(
 					L"AOVWorldPosition",
 					worldPositionDesc,
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionUAV),
-					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPositionSRV));
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPosition0UAV + i),
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVWorldPosition0SRV + i));
 			}
 
 			{

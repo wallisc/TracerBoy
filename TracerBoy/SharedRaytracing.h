@@ -13,11 +13,12 @@ cbuffer ConfigCB : register(b1)
 RWTexture2D<float4> OutputTexture : register(u0);
 RWTexture2D<float4> JitteredOutputTexture : register(u1);
 RWTexture2D<float4> AOVNormals : register(u2);
-RWTexture2D<float4> AOVWorldPosition : register(u3);
-RWTexture2D<float4> AOVCustomOutput : register(u4);
-RWTexture2D<float4> AOVEmissive : register(u5);
+RWTexture2D<float4> AOVWorldPosition0 : register(u3);
+RWTexture2D<float4> AOVWorldPosition1 : register(u4);
+RWTexture2D<float4> AOVCustomOutput : register(u5);
+RWTexture2D<float4> AOVEmissive : register(u6);
 
-RWByteAddressBuffer StatsBuffer : register(u6);
+RWByteAddressBuffer StatsBuffer : register(u10);
 
 void OutputGlobalStats(uint NumActiveWaves)
 {

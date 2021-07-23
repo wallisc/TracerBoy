@@ -6,7 +6,7 @@
 #define ComputeRS \
     "RootConstants(num32BitConstants=43, b0)," \
 	"CBV(b1)," \
-    "DescriptorTable(UAV(u2, numDescriptors=4), visibility=SHADER_VISIBILITY_ALL)," \
+    "DescriptorTable(UAV(u2, numDescriptors=5), visibility=SHADER_VISIBILITY_ALL)," \
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)," \
     "DescriptorTable(UAV(u1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)," \
     "SRV(t1)," \
@@ -16,7 +16,7 @@
 		"SRV(t0, space = 2, numDescriptors=unbounded, offset=0)," \
 		"SRV(t0, space = 3, numDescriptors=unbounded, offset=0), visibility=SHADER_VISIBILITY_ALL)," \
     "SRV(t11)," \
-    "UAV(u6)," \
+    "UAV(u10)," \
     "DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)," \
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)," \
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP, addressW = TEXTURE_ADDRESS_WRAP)," \
