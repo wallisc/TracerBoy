@@ -129,7 +129,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 
 
 float4 GetLastFrameData() {
-	return OutputTexture[float2(0, DispatchRaysDimensions().y - 1)];
+	return OutputTexture[float2(0, GetResolution().y - 1)];
 }
 float4 GetAccumulatedColor(float2 uv) 
 {

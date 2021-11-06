@@ -26,3 +26,4 @@ packages
 *.user
 PBRTParser/PBRTParser.vcxproj.user
 *.ini
+!lib/
