@@ -1109,7 +1109,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildBottomLevelDesc = {};
 			buildBottomLevelDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			buildBottomLevelDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-			buildBottomLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+			buildBottomLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 			buildBottomLevelDesc.Inputs.NumDescs = static_cast<UINT>(geometryDescs.size());
 			buildBottomLevelDesc.Inputs.pGeometryDescs = geometryDescs.data();
 

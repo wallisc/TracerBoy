@@ -291,6 +291,7 @@ void main(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadId)
         return;
     }
 
+    int i = 0;
     do
     {
         FormTreelet(GTid.x);
@@ -307,5 +308,5 @@ void main(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadId)
         }
 
         DeviceMemoryBarrierWithGroupSync();
-    } while (true);
+    } while (i++ > 32);
 }
