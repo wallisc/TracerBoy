@@ -134,37 +134,6 @@ struct SoftwareRayQuery
 static
 uint    stack[TRAVERSAL_MAX_STACK_DEPTH];
 
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-RWTexture2D<float4> g_screenOutput : register(u2);
-void VisualizeAcceleratonStructure(float closestBoxT)
-{
-    g_screenOutput[DispatchRaysIndex()] = float4(closestBoxT / 3000.0f, 0, 0, 1);
-}
-
-static
-uint    depthStack[TRAVERSAL_MAX_STACK_DEPTH];
-#endif
-
-void RecordClosestBox(uint currentLevel, inout bool leftTest, float leftT, inout bool rightTest, float rightT, inout float closestBoxT)
-{
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-    if (Debug.LevelToVisualize == currentLevel)
-    {
-        if (rightTest)
-        {
-            closestBoxT = min(closestBoxT, rightT);
-            rightTest = false;
-        }
-
-        if (leftTest)
-        {
-            closestBoxT = min(closestBoxT, leftT);
-            leftTest = false;
-        }
-    }
-#endif
-}
-
 void StackPush(inout int stackTop, uint value, uint level, uint tidInWave)
 {
     uint stackIndex = stackTop;
@@ -692,9 +661,7 @@ bool Traverse(
                             uint primIdx = primitiveMetadata.PrimitiveIndex;
                             uint hitKind = HIT_KIND_TRIANGLE_FRONT_FACE;
 
-#if !ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
                             SWRayQuery.SetPendingHitData(resultBary, primIdx, primitiveMetadata.GeometryContributionToHitGroupIndex, instanceIndex, instanceId, resultT);
-#endif
                             closestBoxT = min(closestBoxT, resultT);
 
 #ifdef DISABLE_ANYHIT 
@@ -759,7 +726,6 @@ bool Traverse(
                         rightBox.center,
                         rightBox.halfDim);
 
-                    RecordClosestBox(currentLevel, leftTest, leftT, rightTest, rightT, closestBoxT);
                     bool isBottomLevel = GetBoolFlag(flagContainer, ProcessingBottomLevel);
                     if (leftTest && rightTest)
                     {
@@ -781,13 +747,7 @@ bool Traverse(
         currentGpuVA = TopLevelAccelerationStructureGpuVA;
     } 
     bool isHit = SWRayQuery.CommittedRayT() < SWRayQuery.RayDesc.TMax;
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-    if (isHit)
-    {
-        closestBoxT = SWRayQuery.CommittedRayT();
-    }
-    VisualizeAcceleratonStructure(closestBoxT);
-#endif
+
     return isHit;   
 }
 
