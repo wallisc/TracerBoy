@@ -3,6 +3,7 @@
 #define ENABLE_UI 1
 #define USE_ASSIMP 1
 #define USE_OPENVDB 0
+#define SUPPORT_SW_RAYTRACING 1
 
 #include <memory>
 #include <deque>
@@ -69,6 +70,10 @@ using namespace DirectX;
 #endif
 
 #define DEFAULT_CAMERA_SPEED 0.003f
+
+#if SUPPORT_SW_RAYTRACING
+#include "D3D12RaytracingFallback.h"
+#endif
 
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"

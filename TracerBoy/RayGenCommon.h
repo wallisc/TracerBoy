@@ -211,6 +211,14 @@ struct Ray
 
 void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution);
 
+#if USE_SW_RAYTRACING
+#define HLSL
+#define DISABLE_ANYHIT
+#define DISABLE_PROCEDURAL_GEOMETRY
+#include "C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\D3D12RaytracingFallback\src\RayTracingHlslCompat.h"
+#include "C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\D3D12RaytracingFallback\src\TraverseShader.hlsli"
+#endif
+
 float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
 {
 	RayDesc dxrRay;
@@ -220,6 +228,45 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	dxrRay.TMax = maxT;
 
 #if USE_INLINE_RAYTRACING
+
+#if USE_SW_RAYTRACING
+	SoftwareRayQuery Query;
+	Query.TraceRayInline(
+		RAY_FLAG_NONE,
+		~0,
+		dxrRay,
+		GI);
+
+	Query.Proceed();
+
+	float2 result;
+	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
+	if (Query.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+	{
+		result.x = Query.CommittedRayT();
+
+		float3 barycentrics = GetBarycentrics3(Query.CommittedTriangleBarycentrics());
+		GeometryInfo Geometry = GetGeometryInfo(Query.CommittedGeometryIndex());
+		HitInfo hit = GetHitInfo(Geometry, Query.CommittedPrimitiveIndex(), barycentrics);
+		payload.uv = hit.uv;
+		payload.materialIndex = Geometry.MaterialIndex;
+
+		payload.hitT = Query.CommittedRayT();
+		payload.normal = hit.normal;
+		payload.tangent = hit.tangent;
+
+		result.y = payload.materialIndex;
+	}
+	else
+	{
+		result.x = -1;
+		result.y = -1;
+	}
+	PrimitiveID = 0;
+	normal = payload.normal;
+	uv = payload.uv;
+	tangent = payload.tangent;
+#else
 	RayQuery<RAY_FLAG_NONE> Query;
     Query.TraceRayInline(
         AS,
@@ -265,6 +312,7 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	normal = payload.normal;
 	uv = payload.uv;
 	tangent = payload.tangent;
+#endif
 
 #else
 	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
@@ -442,7 +490,7 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 2;
+	const uint NumSamples = 1;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{

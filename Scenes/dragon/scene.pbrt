@@ -42,5 +42,6 @@ WorldBegin
 	NamedMaterial "Deco2" 
 	Shape "plymesh" "string filename" [ "models/Mesh001.ply" ] 
 	Shape "plymesh" "string filename" [ "models/Mesh000.ply" ] 
-	LightSource "distant" "point from" [ -0.188620 0.692312 0.696510 ] "point to" [ 0.000000 0.000000 0.000000 ] "rgb L" [ 8.000000 8.000000 8.000000 ] 
+
+	LightSource "infinite" "string mapname" [ "textures/envmap.hdr" ] 
 WorldEnd

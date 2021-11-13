@@ -145,6 +145,9 @@
     <FxCompile Include="FidelityFXSharpenCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="SoftwareRayTraceCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="kernel.glsl">

@@ -26,7 +26,9 @@ void OutputGlobalStats(uint NumActiveWaves)
 }
 
 Texture2D PreviousFrameOutput : register(t0);
+#if !USE_SW_RAYTRACING
 RaytracingAccelerationStructure AS : register(t1);
+#endif
 
 // System Textures
 Texture2D BlueNoise0Texture : register(t14);

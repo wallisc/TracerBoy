@@ -19,8 +19,8 @@ struct HitGroupShaderRecord
 };
 
 StructuredBuffer<HitGroupShaderRecord> ShaderTable: register(t11);
-StructuredBuffer<uint> IndexBuffers[] : register(t0, space2);
-StructuredBuffer<float> VertexBuffers[] : register(t0, space3);
+Buffer<uint> IndexBuffers[] : register(t0, space2);
+Buffer<float> VertexBuffers[] : register(t0, space3);
 
 struct GeometryInfo
 {
@@ -29,12 +29,12 @@ struct GeometryInfo
 	uint VertexBufferIndex;
 };
 
-StructuredBuffer<float> GetVertexBuffer(uint Index)
+Buffer<float> GetVertexBuffer(uint Index)
 {
 	return VertexBuffers[NonUniformResourceIndex(Index)];
 }
 
-StructuredBuffer<uint> GetIndexBuffer(uint Index)
+Buffer<uint> GetIndexBuffer(uint Index)
 {
 	return IndexBuffers[NonUniformResourceIndex(Index)];
 }
@@ -58,7 +58,7 @@ struct HitInfo
 
 float3 GetFloat3FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint dataOffset)
 {
-	StructuredBuffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
+	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
 	return float3(
 		VertexBuffer[VertexStride * vertexIndex + dataOffset],
 		VertexBuffer[VertexStride * vertexIndex + dataOffset + 1],
@@ -67,7 +67,7 @@ float3 GetFloat3FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint d
 
 float2 GetFloat2FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint dataOffset)
 {
-	StructuredBuffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
+	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
 	return float2(
 		VertexBuffer[VertexStride * vertexIndex + dataOffset],
 		VertexBuffer[VertexStride * vertexIndex + dataOffset + 1]);
@@ -75,7 +75,7 @@ float2 GetFloat2FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint d
 
 uint3 GetIndices(GeometryInfo Geometry, uint PrimitiveIndex)
 {
-	StructuredBuffer<uint> IndexBuffer = GetIndexBuffer(Geometry.IndexBufferIndex);
+	Buffer<uint> IndexBuffer = GetIndexBuffer(Geometry.IndexBufferIndex);
 	return uint3(IndexBuffer[PrimitiveIndex * 3], IndexBuffer[PrimitiveIndex * 3 + 1], IndexBuffer[PrimitiveIndex * 3 + 2]);
 }
 

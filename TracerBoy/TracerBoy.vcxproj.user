@@ -9,11 +9,11 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>C:\Users\chwallis\Documents\GitHub\TracerBoy\Scenes\bistro\Bistro_Exterior.fbx</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\Scenes\cornell-box\scene.pbrt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>C:\Users\chwallis\Documents\GitHub\TracerBoy\Scenes\bistro\Bistro_Exterior.fbx</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\Scenes\cornell-box\scene.pbrt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

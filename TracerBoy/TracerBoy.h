@@ -200,7 +200,7 @@ public:
 		OutputSettings outputSettings;
 		outputSettings.m_OutputType = OutputType::Lit;
 		outputSettings.m_EnableNormalMaps = false;
-		outputSettings.m_renderMode = RenderMode::RealTime;
+		outputSettings.m_renderMode = RenderMode::Unbiased;
 
 		DebugSettings &debugSettings = outputSettings.m_debugSettings;
 		debugSettings.m_VarianceMultiplier = 1.0f;
@@ -316,7 +316,16 @@ private:
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pNonShaderVisibleDescriptorHeap;
+#if SUPPORT_SW_RAYTRACING
+	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
+#endif
 
+	bool EmulateRaytracing() 
+	{
+		return !m_bSupportsHardwareRaytracing; 
+	}
+
+	bool m_bSupportsHardwareRaytracing;
 	bool m_bSupportsInlineRaytracing;
 
 	ComPtr<ID3D12Resource> m_pBottomLevelAS;
@@ -375,6 +384,7 @@ private:
 	ComPtr<ID3D12RootSignature> m_pRayTracingRootSignature;
 	ComPtr<ID3D12StateObject> m_pRayTracingStateObject;
 	ComPtr<ID3D12PipelineState> m_pRayTracingPSO;
+	ComPtr<ID3D12PipelineState> m_pSoftwareRayTracingPSO;
 
 	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
 	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;
@@ -486,6 +496,10 @@ private:
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
 		StatsBufferUAV,
+#if SUPPORT_SW_RAYTRACING
+		BottomLevelAccelerationStructureUAV,
+		TopLevelAccelerationStructureUAV,
+#endif
 		NumReservedViewSlots,
 		NumTotalViews = 1024 * 512,
 		NumAOVTextures = AOVLastUAVSlot - AOVBaseUAVSlot + 1,

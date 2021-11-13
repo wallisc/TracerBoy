@@ -80,11 +80,11 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64;d3d12.lib;$(OutDir);lib;..\lib</LibraryPath>
-    <IncludePath>..;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(OutDir);..\PBRTParser\include;..\DirectXTex;..\imgui;..\include;</IncludePath>
+    <IncludePath>..\D3D12RaytracingFallback\include;..\D3D12RaytracingFallback\src;..;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(OutDir);..\PBRTParser\include;..\DirectXTex;..\imgui;..\include;</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64;;$(OutDir);lib;..\lib</LibraryPath>
-    <IncludePath>..;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(OutDir);..\PBRTParser\include;..\DirectXTex;..\imgui;..\include;</IncludePath>
+    <IncludePath>..\D3D12RaytracingFallback\include;..\D3D12RaytracingFallback\src;..;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(OutDir);..\PBRTParser\include;..\DirectXTex;..\imgui;..\include;</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -416,6 +416,20 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_p%(Filename)</VariableName>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </AdditionalOptions>
+    </FxCompile>
+    <FxCompile Include="SoftwareRayTraceCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)%(Filename).h</HeaderFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)%(Filename).h</HeaderFileOutput>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_p%(Filename)</VariableName>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_p%(Filename)</VariableName>
     </FxCompile>
     <FxCompile Include="TemporalAccumulationCS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
