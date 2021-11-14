@@ -131,13 +131,18 @@ struct SoftwareRayQuery
 #define IGNORE      0
 #define ACCEPT      1
 
-static
-uint    stack[TRAVERSAL_MAX_STACK_DEPTH];
+groupshared
+uint    stack[TRAVERSAL_MAX_STACK_DEPTH * 64];
+
+uint GetStackIndex(uint stackTop)
+{
+    return GI * TRAVERSAL_MAX_STACK_DEPTH + stackTop;
+}
 
 void StackPush(inout int stackTop, uint value, uint level, uint tidInWave)
 {
-    uint stackIndex = stackTop;
-    stack[stackIndex] = value;
+    uint stackIndex = GetStackIndex(stackTop);
+    stack[ stackIndex] = value;
 #if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
     depthStack[stackIndex] = level;
 #endif
@@ -148,8 +153,8 @@ void StackPush2(inout int stackTop, bool selector, uint valueA, uint valueB, uin
 {
     const uint store0 = selector ? valueA : valueB;
     const uint store1 = selector ? valueB : valueA;
-    const uint stackIndex0 = (stackTop + 0);
-    const uint stackIndex1 = (stackTop + 1);
+    const uint stackIndex0 = GetStackIndex(stackTop);
+    const uint stackIndex1 = GetStackIndex(stackTop+1);
     stack[stackIndex0] = store0;
     stack[stackIndex1] = store1;
 
@@ -164,7 +169,7 @@ void StackPush2(inout int stackTop, bool selector, uint valueA, uint valueB, uin
 uint StackPop(inout int stackTop, out uint depth, uint tidInWave)
 {
     --stackTop;
-    uint stackIndex = stackTop;
+    uint stackIndex = GetStackIndex(stackTop);
 #if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
     depth = depthStack[stackIndex];
 #endif
