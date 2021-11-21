@@ -328,7 +328,7 @@ private:
 	bool m_bSupportsHardwareRaytracing;
 	bool m_bSupportsInlineRaytracing;
 
-	ComPtr<ID3D12Resource> m_pBottomLevelAS;
+	std::vector<ComPtr<ID3D12Resource>> m_pBottomLevelASList;
 	ComPtr<ID3D12Resource> m_pTopLevelAS;
 	ComPtr<ID3D12Resource> m_pConfigConstants;
 
@@ -497,7 +497,6 @@ private:
 		IndirectArgsUAV,
 		StatsBufferUAV,
 #if SUPPORT_SW_RAYTRACING
-		BottomLevelAccelerationStructureUAV,
 		TopLevelAccelerationStructureUAV,
 #endif
 		NumReservedViewSlots,
