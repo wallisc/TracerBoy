@@ -1099,19 +1099,28 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		resourcesToDelete.push_back(pEnvironmentMapScratchBuffer);
 #if SUPPORT_SW_RAYTRACING
 		ComPtr<ID3D12RaytracingFallbackCommandList> m_fallbackCommandList;
-		m_fallbackDevice->QueryRaytracingCommandList(pCommandList.Get(), IID_PPV_ARGS(&m_fallbackCommandList));
+		if (EmulateRaytracing())
+		{
+			m_fallbackDevice->QueryRaytracingCommandList(pCommandList.Get(), IID_PPV_ARGS(&m_fallbackCommandList));
 
-		ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
-		m_fallbackCommandList->SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
+			ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
+			m_fallbackCommandList->SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
+		}
+
+		std::vector<UINT32> BLASDescriptorList;
 #endif
 
+		const bool bAllGeometryInSingleBLAS = true;
+		UINT32 numInstances = bAllGeometryInSingleBLAS ? 1 : geometryDescs.size();
+		
+		for(UINT32 i = 0; i < numInstances; i++)
 		{
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildBottomLevelDesc = {};
 			buildBottomLevelDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			buildBottomLevelDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
 			buildBottomLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-			buildBottomLevelDesc.Inputs.NumDescs = static_cast<UINT>(geometryDescs.size());
-			buildBottomLevelDesc.Inputs.pGeometryDescs = geometryDescs.data();
+			buildBottomLevelDesc.Inputs.NumDescs = bAllGeometryInSingleBLAS ? static_cast<UINT>(geometryDescs.size()) : 1;
+			buildBottomLevelDesc.Inputs.pGeometryDescs = geometryDescs.data() + i;
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
 #if SUPPORT_SW_RAYTRACING
@@ -1125,15 +1134,20 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				m_pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&buildBottomLevelDesc.Inputs, &prebuildInfo);
 			}
 			D3D12_RESOURCE_DESC bottomLevelASDesc = CD3DX12_RESOURCE_DESC::Buffer(prebuildInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+			ComPtr<ID3D12Resource> pBLAS;
 			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
 				&defaultHeapDesc,
 				D3D12_HEAP_FLAG_NONE,
 				&bottomLevelASDesc,
 				EmulateRaytracing() ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
 				nullptr,
-				IID_GRAPHICS_PPV_ARGS(m_pBottomLevelAS.ReleaseAndGetAddressOf())));
+				IID_GRAPHICS_PPV_ARGS(pBLAS.ReleaseAndGetAddressOf())));
+			m_pBottomLevelASList.push_back(pBLAS);
 
 #if SUPPORT_SW_RAYTRACING
+			UINT32 BLASDescriptorSlot = AllocateDescriptorHeapSlot();
+			BLASDescriptorList.push_back(BLASDescriptorSlot);
 			if (EmulateRaytracing())
 			{
 				D3D12_UNORDERED_ACCESS_VIEW_DESC blasDesc = {};
@@ -1141,7 +1155,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				blasDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 				blasDesc.Buffer.NumElements = bottomLevelASDesc.Width / sizeof(UINT32);
 				blasDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
-				m_pDevice->CreateUnorderedAccessView(m_pBottomLevelAS.Get(), nullptr, &blasDesc, GetCPUDescriptorHandle(BottomLevelAccelerationStructureUAV));
+				m_pDevice->CreateUnorderedAccessView(pBLAS.Get(), nullptr, &blasDesc, GetCPUDescriptorHandle(BLASDescriptorSlot));
 			}
 #endif
 
@@ -1157,7 +1171,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			resourcesToDelete.push_back(pScratchBuffer);
 
 			buildBottomLevelDesc.ScratchAccelerationStructureData = pScratchBuffer->GetGPUVirtualAddress();
-			buildBottomLevelDesc.DestAccelerationStructureData = m_pBottomLevelAS->GetGPUVirtualAddress();
+			buildBottomLevelDesc.DestAccelerationStructureData = pBLAS->GetGPUVirtualAddress();
 
 #if SUPPORT_SW_RAYTRACING
 			if (EmulateRaytracing())
@@ -1171,38 +1185,44 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 		}
 
-		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_pBottomLevelAS.Get());
+		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
 		pCommandList->ResourceBarrier(1, &uavBarrier);
 
 		{
-
-
-			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-			instanceDesc.AccelerationStructure = m_pBottomLevelAS->GetGPUVirtualAddress();
-#if SUPPORT_SW_RAYTRACING
-			if (EmulateRaytracing())
+			std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+			for (UINT32 i = 0; i < numInstances; i++)
 			{
-				WRAPPED_GPU_POINTER BLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(BottomLevelAccelerationStructureUAV);
-				instanceDesc.AccelerationStructure = BLAS.GpuVA;
-			}
+				D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
+				instanceDesc.AccelerationStructure = m_pBottomLevelASList[i]->GetGPUVirtualAddress();
+#if SUPPORT_SW_RAYTRACING
+				if (EmulateRaytracing())
+				{
+					WRAPPED_GPU_POINTER BLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(BLASDescriptorList[i]);
+					instanceDesc.AccelerationStructure = BLAS.GpuVA;
+				}
 #endif
-			instanceDesc.Transform[0][0] = 1.0;
-			instanceDesc.Transform[1][1] = 1.0;
-			instanceDesc.Transform[2][2] = 1.0;
-			instanceDesc.InstanceMask = 1;
+				instanceDesc.Transform[0][0] = 1.0;
+				instanceDesc.Transform[1][1] = 1.0;
+				instanceDesc.Transform[2][2] = 1.0;
+				instanceDesc.InstanceMask = 1;
+
+				instanceDescs.push_back(instanceDesc);
+			}
+
+			
 			ComPtr<ID3D12Resource> pInstanceDescBuffer;
 
-			AllocateUploadBuffer(sizeof(instanceDesc), pInstanceDescBuffer);
+			AllocateUploadBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceDescs.size(), pInstanceDescBuffer);
 			resourcesToDelete.push_back(pInstanceDescBuffer);
 			void* pData;
 			pInstanceDescBuffer->Map(0, nullptr, &pData);
-			memcpy(pData, &instanceDesc, sizeof(instanceDesc));
+			memcpy(pData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceDescs.size());
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildTopLevelDesc = {};
 			buildTopLevelDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			buildTopLevelDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 			buildTopLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-			buildTopLevelDesc.Inputs.NumDescs = 1;
+			buildTopLevelDesc.Inputs.NumDescs = numInstances;
 			buildTopLevelDesc.Inputs.InstanceDescs = pInstanceDescBuffer->GetGPUVirtualAddress();
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
@@ -1611,9 +1631,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 
 #if SUPPORT_SW_RAYTRACING
 	ComPtr<ID3D12RaytracingFallbackCommandList> m_fallbackCommandList;
-	m_fallbackDevice->QueryRaytracingCommandList(&commandList, IID_PPV_ARGS(&m_fallbackCommandList));
 	if (EmulateRaytracing())
 	{
+		m_fallbackDevice->QueryRaytracingCommandList(&commandList, IID_PPV_ARGS(&m_fallbackCommandList));
+
 		WRAPPED_GPU_POINTER TLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(TopLevelAccelerationStructureUAV);
 		m_fallbackCommandList->BindDescriptorHeap(m_pRayTracingRootSignature.Get(), m_pViewDescriptorHeap.Get(), TLAS);
 	}
