@@ -246,7 +246,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 		result.x = Query.CommittedRayT();
 
 		float3 barycentrics = GetBarycentrics3(Query.CommittedTriangleBarycentrics());
-		GeometryInfo Geometry = GetGeometryInfo(Query.CommittedGeometryIndex());
+		uint GeometryIndex = Query.CommittedInstanceIndex() + Query.CommittedGeometryIndex();
+		GeometryInfo Geometry = GetGeometryInfo(GeometryIndex);
 		HitInfo hit = GetHitInfo(Geometry, Query.CommittedPrimitiveIndex(), barycentrics);
 		payload.uv = hit.uv;
 		payload.materialIndex = Geometry.MaterialIndex;
@@ -461,7 +462,6 @@ float hash13(vec3 p3)
 
 bool ShouldSkipRay()
 {
-	return false;
 	return ShouldSkipRay(
 		OutputTexture,
 		JitteredOutputTexture,
