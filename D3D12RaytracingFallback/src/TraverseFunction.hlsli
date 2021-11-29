@@ -9,6 +9,7 @@
 //
 //*********************************************************
 
+#define FAST_PATH 1
 
 #define INSTANCE_FLAG_NONE                              0x0
 #define INSTANCE_FLAG_TRIANGLE_CULL_DISABLE             0x1
@@ -143,9 +144,6 @@ void StackPush(inout int stackTop, uint value, uint level, uint tidInWave)
 {
     uint stackIndex = GetStackIndex(stackTop);
     stack[ stackIndex] = value;
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-    depthStack[stackIndex] = level;
-#endif
     stackTop++;
 }
 
@@ -158,11 +156,6 @@ void StackPush2(inout int stackTop, bool selector, uint valueA, uint valueB, uin
     stack[stackIndex0] = store0;
     stack[stackIndex1] = store1;
 
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-    depthStack[stackIndex0] = level;
-    depthStack[stackIndex1] = level;
-#endif
-
     stackTop += 2;
 }
 
@@ -170,9 +163,6 @@ uint StackPop(inout int stackTop, out uint depth, uint tidInWave)
 {
     --stackTop;
     uint stackIndex = GetStackIndex(stackTop);
-#if ENABLE_ACCELERATION_STRUCTURE_VISUALIZATION
-    depth = depthStack[stackIndex];
-#endif
     return stack[stackIndex];
 }
 
@@ -541,7 +531,7 @@ bool Traverse(
     RayData currentRayData = GetRayData(SWRayQuery.RayDesc.Origin, SWRayQuery.RayDesc.Direction);
 
     uint flagContainer = 0;
-    SetBoolFlag(flagContainer, ProcessingBottomLevel, false);
+    SetBoolFlag(flagContainer, ProcessingBottomLevel, FAST_PATH ? true : false);
 
     uint nodesToProcess[NUM_BVH_LEVELS];
     GpuVA currentGpuVA = TopLevelAccelerationStructureGpuVA;
@@ -551,7 +541,9 @@ bool Traverse(
     uint instanceId = 0;
 
     uint stackPointer = 0;
-    nodesToProcess[TOP_LEVEL_INDEX] = 0;
+
+    const uint TopLevelIndex = FAST_PATH ? BOTTOM_LEVEL_INDEX : TOP_LEVEL_INDEX;
+    nodesToProcess[TopLevelIndex] = 0;
 
     RWByteAddressBufferPointer topLevelAccelerationStructure = CreateRWByteAddressBufferPointerFromGpuVA(currentGpuVA);
         
@@ -571,12 +563,12 @@ bool Traverse(
         topLevelBox.halfDim))
     {
         StackPush(stackPointer, 0, 0, GI);
-        nodesToProcess[TOP_LEVEL_INDEX]++;
+        nodesToProcess[TopLevelIndex]++;
     }
 
     float closestBoxT = FLT_MAX;
 
-    while (nodesToProcess[TOP_LEVEL_INDEX] != 0)
+    while (nodesToProcess[TopLevelIndex] != 0)
     {
         do
         {
@@ -595,6 +587,7 @@ bool Traverse(
             {
                 if (IsLeaf(flags))
                 {
+#if !FAST_PATH
                     if (!GetBoolFlag(flagContainer, ProcessingBottomLevel))
                     {
                         uint leafIndex = GetLeafIndexFromFlag(flags);
@@ -631,6 +624,7 @@ bool Traverse(
                         }
                     }
                     else // if it's a bottom level
+#endif
                     {
                         RWByteAddressBufferPointer bottomLevelAccelerationStructure = CreateRWByteAddressBufferPointerFromGpuVA(currentGpuVA);
                         const uint leafIndex = GetLeafIndexFromFlag(flags);
@@ -654,8 +648,13 @@ bool Traverse(
                             SWRayQuery.RayFlags,
                             flags,
                             instanceFlags,
+#if FAST_PATH
+                            SWRayQuery.RayDesc.Origin,
+                            SWRayQuery.RayDesc.Direction,
+#else
                             SWRayQuery.ObjectRayOrigin,
                             SWRayQuery.ObjectRayDirection,
+#endif
                             SWRayQuery.TMin(),
                             currentRayData.SwizzledIndices,
                             currentRayData.Shear,
@@ -747,7 +746,10 @@ bool Traverse(
                 }
             }
         } while (nodesToProcess[GetBoolFlag(flagContainer, ProcessingBottomLevel)] != 0);
+
+#if !FAST_PATH
         SetBoolFlag(flagContainer, ProcessingBottomLevel, false);
+#endif
         currentRayData = GetRayData(SWRayQuery.RayDesc.Origin, SWRayQuery.RayDesc.Direction);
         currentGpuVA = TopLevelAccelerationStructureGpuVA;
     } 

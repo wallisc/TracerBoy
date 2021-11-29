@@ -13,6 +13,7 @@
 #include "XInput.h"
 
 #define USE_ANYHIT 1
+#define USE_FAST_PATH_WITH_FALLBACK 1
 struct HitGroupShaderRecord
 {
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
@@ -1248,7 +1249,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			
 			
 #if SUPPORT_SW_RAYTRACING
-			if (EmulateRaytracing())
+			if (EmulateRaytracing() && !USE_FAST_PATH_WITH_FALLBACK)
 			{
 				D3D12_UNORDERED_ACCESS_VIEW_DESC tlasDesc = {};
 				tlasDesc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -1257,6 +1258,10 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				tlasDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 
 				m_pDevice->CreateUnorderedAccessView(m_pTopLevelAS.Get(), nullptr, &tlasDesc, GetCPUDescriptorHandle(TopLevelAccelerationStructureUAV));
+			}
+			else
+			{
+				m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(TopLevelAccelerationStructureUAV), GetCPUDescriptorHandle(BLASDescriptorList[0]), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 			}
 #endif
 
