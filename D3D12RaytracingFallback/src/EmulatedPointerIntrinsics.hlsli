@@ -13,7 +13,11 @@
 
 RWByteAddressBuffer PointerGetBuffer(GpuVA address)
 {
+#if FAST_PATH
+    return DescriptorHeapBufferTable[address[EmulatedPointerDescriptorHeapIndex]];
+#else
     return DescriptorHeapBufferTable[NonUniformResourceIndex(address[EmulatedPointerDescriptorHeapIndex])];
+#endif
 }
 
 uint PointerGetBufferStartOffset(GpuVA address)

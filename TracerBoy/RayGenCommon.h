@@ -215,8 +215,8 @@ void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution);
 #define HLSL
 #define DISABLE_ANYHIT
 #define DISABLE_PROCEDURAL_GEOMETRY
-#include "C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\D3D12RaytracingFallback\src\RayTracingHlslCompat.h"
-#include "C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\D3D12RaytracingFallback\src\TraverseShader.hlsli"
+#include "..\D3D12RaytracingFallback\src\RayTracingHlslCompat.h"
+#include "..\D3D12RaytracingFallback\src\TraverseShader.hlsli"
 #endif
 
 float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
