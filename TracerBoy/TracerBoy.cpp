@@ -1157,6 +1157,10 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				blasDesc.Buffer.NumElements = bottomLevelASDesc.Width / sizeof(UINT32);
 				blasDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 				m_pDevice->CreateUnorderedAccessView(pBLAS.Get(), nullptr, &blasDesc, GetCPUDescriptorHandle(BLASDescriptorSlot));
+				if (USE_FAST_PATH_WITH_FALLBACK)
+				{
+					m_pDevice->CreateUnorderedAccessView(pBLAS.Get(), nullptr, &blasDesc, GetCPUDescriptorHandle(TopLevelAccelerationStructureUAV));
+				}
 			}
 #endif
 
@@ -1258,10 +1262,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				tlasDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 
 				m_pDevice->CreateUnorderedAccessView(m_pTopLevelAS.Get(), nullptr, &tlasDesc, GetCPUDescriptorHandle(TopLevelAccelerationStructureUAV));
-			}
-			else
-			{
-				m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(TopLevelAccelerationStructureUAV), GetCPUDescriptorHandle(BLASDescriptorList[0]), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 			}
 #endif
 

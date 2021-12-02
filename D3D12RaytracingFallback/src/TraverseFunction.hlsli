@@ -132,12 +132,22 @@ struct SoftwareRayQuery
 #define IGNORE      0
 #define ACCEPT      1
 
-groupshared
-uint    stack[TRAVERSAL_MAX_STACK_DEPTH * 64];
+#define USE_GROUPSHARED_STACK 0
+
+#if USE_GROUPSHARED_STACK
+groupshared uint stack[TRAVERSAL_MAX_STACK_DEPTH * 64];
+#else
+static uint stack[TRAVERSAL_MAX_STACK_DEPTH];
+#endif
+
 
 uint GetStackIndex(uint stackTop)
 {
+#if USE_GROUPSHARED_STACK
     return GI * TRAVERSAL_MAX_STACK_DEPTH + stackTop;
+#else
+    return stackTop;
+#endif
 }
 
 void StackPush(inout int stackTop, uint value, uint level, uint tidInWave)
