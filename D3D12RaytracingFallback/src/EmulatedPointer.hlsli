@@ -23,11 +23,23 @@ GpuVA PointerAdd(GpuVA address, uint offset)
 
 struct RWByteAddressBufferPointer
 {
-    RWByteAddressBuffer buffer;
+#if FAST_PATH
+    ByteAddressBuffer
+#else
+    RWByteAddressBuffer
+#endif
+        buffer;
     uint offsetInBytes;
 };
 
-RWByteAddressBufferPointer CreateRWByteAddressBufferPointer(in RWByteAddressBuffer buffer, uint offsetInBytes)
+RWByteAddressBufferPointer CreateRWByteAddressBufferPointer(
+    
+#if FAST_PATH
+    in ByteAddressBuffer buffer,
+#else
+    in RWByteAddressBuffer buffer,
+#endif
+    uint offsetInBytes)
 {
     RWByteAddressBufferPointer pointer;
     pointer.buffer = buffer;

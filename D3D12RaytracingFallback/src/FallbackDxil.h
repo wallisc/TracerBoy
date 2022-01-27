@@ -68,6 +68,7 @@ enum RootSignatureParameterOffset
 {
     CbvSrvUavDescriptorHeapAliasedTables = 0,
     AccelerationStructuresList,
+    AccelerationStructureBuffer,
     NumParameters
 };
 #endif

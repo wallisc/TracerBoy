@@ -11,10 +11,15 @@
 #pragma once
 #include "EmulatedPointer.hlsli"
 
-RWByteAddressBuffer PointerGetBuffer(GpuVA address)
+#if FAST_PATH
+ByteAddressBuffer
+#else
+RWByteAddressBuffer 
+#endif
+PointerGetBuffer(GpuVA address)
 {
 #if FAST_PATH
-    return DescriptorHeapBufferTable[address[EmulatedPointerDescriptorHeapIndex]];
+    return TLAS;
 #else
     return DescriptorHeapBufferTable[NonUniformResourceIndex(address[EmulatedPointerDescriptorHeapIndex])];
 #endif

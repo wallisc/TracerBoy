@@ -9,8 +9,6 @@
 //
 //*********************************************************
 
-#define FAST_PATH 1
-
 #define INSTANCE_FLAG_NONE                              0x0
 #define INSTANCE_FLAG_TRIANGLE_CULL_DISABLE             0x1
 #define INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE   0x2
@@ -132,7 +130,7 @@ struct SoftwareRayQuery
 #define IGNORE      0
 #define ACCEPT      1
 
-#define USE_GROUPSHARED_STACK 0
+#define USE_GROUPSHARED_STACK 1
 
 #if USE_GROUPSHARED_STACK
 groupshared uint stack[TRAVERSAL_MAX_STACK_DEPTH * 64];

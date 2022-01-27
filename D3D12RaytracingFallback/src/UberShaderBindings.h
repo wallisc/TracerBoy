@@ -25,6 +25,7 @@ cbuffer AccelerationStructureList : CONSTANT_REGISTER_SPACE(FallbackLayerAcceler
     uint2 TopLevelAccelerationStructureGpuVA;
 };
 
+ByteAddressBuffer TLAS : SRV_REGISTER_SPACE(2, FallbackLayerRegisterSpace);
 
 RWByteAddressBuffer DescriptorHeapBufferTable[] : UAV_REGISTER_SPACE(FallbackLayerDescriptorHeapTable, FallbackLayerDescriptorHeapRegisterSpace);
 #else

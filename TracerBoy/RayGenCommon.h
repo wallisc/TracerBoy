@@ -215,6 +215,7 @@ void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution);
 #define HLSL
 #define DISABLE_ANYHIT
 #define DISABLE_PROCEDURAL_GEOMETRY
+#define FAST_PATH 1
 #include "..\D3D12RaytracingFallback\src\RayTracingHlslCompat.h"
 #include "..\D3D12RaytracingFallback\src\TraverseShader.hlsli"
 #endif

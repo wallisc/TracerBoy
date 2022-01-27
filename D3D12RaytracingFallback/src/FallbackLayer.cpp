@@ -228,6 +228,8 @@ namespace FallbackLayer
             UINT patchedParameterOffset = pRootSignature->NumParameters;
             patchedRootParameters[patchedParameterOffset + CbvSrvUavDescriptorHeapAliasedTables].InitAsDescriptorTable(CbvSrvUavParamterCount, patchedRanges.data());
             patchedRootParameters[patchedParameterOffset + AccelerationStructuresList].InitAsConstants(SizeOfInUint32(WRAPPED_GPU_POINTER), FallbackLayerAccelerationStructureList, FallbackLayerRegisterSpace);
+            patchedRootParameters[patchedParameterOffset + AccelerationStructureBuffer].InitAsShaderResourceView(2, FallbackLayerRegisterSpace);
+            
 
             patchedRootSignatureDesc.pParameters = (decltype(patchedRootSignatureDesc.pParameters))patchedRootParameters.data();
             patchedRootSignatureDesc.NumParameters = static_cast<UINT>(patchedRootParameters.size());
@@ -550,11 +552,16 @@ namespace FallbackLayer
             m_patchRootSignatureParameterStart + CbvSrvUavDescriptorHeapAliasedTables,
             pCbvSrvUavDescriptorHeaps->GetGPUDescriptorHandleForHeapStart());
 
+        WRAPPED_GPU_POINTER Pointer = {};
         m_pCommandList->SetComputeRoot32BitConstants(
             m_patchRootSignatureParameterStart + AccelerationStructuresList,
             sizeof(TLAS) / sizeof(UINT32),
-            &TLAS,
+            &Pointer,
             0);
+
+        m_pCommandList->SetComputeRootShaderResourceView(
+            m_patchRootSignatureParameterStart + AccelerationStructureBuffer,
+            TLAS.GpuVA);
     }
 
     void *STDMETHODCALLTYPE RaytracingStateObject::GetShaderIdentifier(LPCWSTR pExportName)

@@ -1640,7 +1640,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		m_fallbackDevice->QueryRaytracingCommandList(&commandList, IID_PPV_ARGS(&m_fallbackCommandList));
 
-		WRAPPED_GPU_POINTER TLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(TopLevelAccelerationStructureUAV);
+		WRAPPED_GPU_POINTER TLAS;
+#if USE_FAST_PATH_WITH_FALLBACK
+		TLAS.GpuVA = m_pBottomLevelASList[0]->GetGPUVirtualAddress();
+#else 
+		TLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(TopLevelAccelerationStructureUAV);
+#endif
 		m_fallbackCommandList->BindDescriptorHeap(m_pRayTracingRootSignature.Get(), m_pViewDescriptorHeap.Get(), TLAS);
 	}
 	else
