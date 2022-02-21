@@ -173,6 +173,39 @@ namespace pbrt {
     return mat;
   }
 
+  Material::SP SemanticParser::createMaterial_subsurface(pbrt::syntactic::Material::SP in)
+  {
+      SubSurfaceMaterial::SP mat = std::make_shared<SubSurfaceMaterial>(in->name);
+      for (auto it : in->param) {
+          std::string name = it.first;
+          if (name == "uroughness") {
+              mat->uRoughness = in->getParam1f(name);
+          }
+          else if (name == "vroughness") {
+              mat->vRoughness = in->getParam1f(name);
+          }
+          else if (name == "remaproughness") {
+              mat->remapRoughness = in->getParamBool(name);
+          }
+          else if (name == "eta") {
+              mat->eta = in->getParam1f(name);
+          }
+          else if (name == "mfp") {
+              in->getParam3f(&mat->mfp.x, name);
+          }
+          else if (name == "Kd") {
+              assert(in->hasParamTexture(name));
+              mat->map_kd = findOrCreateTexture(in->getParamTexture(name));
+          }
+          else if (name == "type") {
+              /* ignore */
+          }
+          else
+              throw std::runtime_error("un-handled metal-material parameter '" + it.first + "'");
+      };
+      return mat;
+  }
+
   Material::SP SemanticParser::createMaterial_matte(pbrt::syntactic::Material::SP in)
   {
     MatteMaterial::SP mat = std::make_shared<MatteMaterial>(in->name);
@@ -461,6 +494,9 @@ namespace pbrt {
       return createMaterial_glass(in);
 
     // ==================================================================
+    if (type == "subsurface") 
+      return createMaterial_subsurface(in);
+
 #ifndef NDEBUG
     std::cout << "Warning: un-recognizd material type '"+type+"'" << std::endl;
 #endif

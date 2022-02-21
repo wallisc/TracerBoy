@@ -125,6 +125,7 @@ namespace pbrt {
     Material::SP createMaterial_plastic(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_translucent(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_glass(pbrt::syntactic::Material::SP in);
+    Material::SP createMaterial_subsurface(pbrt::syntactic::Material::SP in);
     /*! @} */
     
     /*! do create a track representation of given material, _without_

@@ -537,9 +537,15 @@ namespace pbrt {
     /*! serialize _in_ from given binary file reader */
     virtual void readFrom(BinaryReader &) override;
 
+    Texture::SP map_kd;
+    float eta{ 1.3f };
+    vec3f mfp{ 1.f };
+
     float uRoughness { 0.f };
     float vRoughness { 0.f };
     bool  remapRoughness { true };
+
+
     /*! in the one pbrt v3 model that uses that, these materials
       carry 'name' fields like "Apple" etc - not sure if that's
       supposed to specify some sub-surface medium properties!? */

@@ -1169,12 +1169,14 @@ namespace pbrt {
   }
 
 
-
-
   /*! serialize out to given binary writer */
   int SubSurfaceMaterial::writeTo(BinaryWriter &binary) 
   {
     Material::writeTo(binary);
+
+    binary.write(map_kd);
+    binary.write(eta);
+    binary.write(mfp);
     binary.write(uRoughness);
     binary.write(vRoughness);
     binary.write(remapRoughness);
@@ -1186,6 +1188,9 @@ namespace pbrt {
   void SubSurfaceMaterial::readFrom(BinaryReader &binary) 
   {
     Material::readFrom(binary);
+    binary.read(map_kd);
+    binary.read(eta);
+    binary.read(mfp);
     binary.read(uRoughness);
     binary.read(vRoughness);
     binary.read(remapRoughness);

@@ -391,6 +391,16 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	}
 	else if (pSubsurfaceMaterial)
 	{
+		{
+			if (pSubsurfaceMaterial->map_kd)
+			{
+				material.albedoIndex = textureAlloator.CreateTexture(pSubsurfaceMaterial->map_kd, true);
+			}
+			material.IOR = pSubsurfaceMaterial->eta;
+			material.roughness = pSubsurfaceMaterial->uRoughness;
+			material.scattering = ChannelAverage(pSubsurfaceMaterial->mfp);
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+		}
 	}
 	else if (pTranslucentMaterial)
 	{
