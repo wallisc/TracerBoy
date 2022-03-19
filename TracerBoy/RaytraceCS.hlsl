@@ -33,12 +33,6 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 		(Resolution.y - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1);
 	uint TotalDispatchCount = GroupDimensions.x * GroupDimensions.y;
 
-	bool bIsFirstThread = all(Gid == 0 && GTid == 0);
-	if (bIsFirstThread)
-	{
-		OutputGlobalStats(TotalDispatchCount);
-	}
-
 	uint2 ThreadGroupDimensions = uint2 (RAYTRACE_THREAD_GROUP_WIDTH, RAYTRACE_THREAD_GROUP_HEIGHT);
 	DTid.xy = ThreadGroupTilingX(
 		Resolution / ThreadGroupDimensions,
@@ -60,6 +54,9 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 		bool bSkipRay = ShouldSkipRay();
 		OutputLivePixels(bSkipRay);
 		if (bSkipRay) return;
+
+		uint unused;
+		StatsBuffer.InterlockedAdd(0, 1, unused);
 	}
 #endif
 
