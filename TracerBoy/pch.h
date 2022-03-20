@@ -62,6 +62,8 @@ using namespace DirectX;
 #include "AssimpImporter.h"
 #endif
 
+#include "RazerChromaManager.h"
+
 #define _USE_MATH_DEFINES // for C++
 #include <cmath>
 

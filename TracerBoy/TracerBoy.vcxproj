@@ -100,7 +100,8 @@
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -117,7 +118,8 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -138,7 +140,8 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -159,7 +162,8 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -167,6 +171,7 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     <ClCompile Include="D3D12App.cpp" />
     <ClCompile Include="DenoiserPass.cpp" />
     <ClCompile Include="FidelityFXSuperResolution.cpp" />
+    <ClCompile Include="RazerChromaManager.cpp" />
     <ClCompile Include="TemporalAccumulationPass.cpp" />
     <ClCompile Include="TracerBoy.cpp" />
     <ClCompile Include="UIController.cpp" />
@@ -184,6 +189,7 @@ xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"</Command>
     <ClInclude Include="GLSLCompat.h" />
     <ClInclude Include="DeviceWrapper.h" />
     <ClInclude Include="RayGenCommon.h" />
+    <ClInclude Include="RazerChromaManager.h" />
     <ClInclude Include="SharedHitGroup.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>

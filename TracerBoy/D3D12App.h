@@ -78,6 +78,8 @@ private:
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	DeviceWrapper& m_deviceWrapper;
 
+	RazerChromaManager m_razerChromaManager;
+
 	std::unique_ptr<TracerBoy> m_pTracerBoy;
 #if ENABLE_UI
 	std::unique_ptr<UIController> m_pUIController;

@@ -168,6 +168,27 @@ void D3D12App::Render()
 
 	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), outputSettings);
 
+	{
+		uint TotalPixels = pBackBuffer->GetDesc().Width* pBackBuffer->GetDesc().Height;
+		float colorInterp = (float)TracerStats.ActivePixels / (float)TotalPixels;
+
+		auto Lerp = [](const pbrt::math::vec3f& a, const pbrt::math::vec3f& b, float interpValue) -> pbrt::math::vec3f
+		{
+			return a * (1.0 - interpValue) + b * interpValue;
+		};
+
+		const pbrt::math::vec3f red = pbrt::math::vec3f(1.0, 0.0, 0.0);
+		const pbrt::math::vec3f green = pbrt::math::vec3f(0.0, 1.0, 0.0);
+		const pbrt::math::vec3f blue = pbrt::math::vec3f(0.0, 0.0, 1.0);
+		
+		// Gradually change the color from red -> blue -> green
+		pbrt::math::vec3f color = (colorInterp > 0.5f) ?
+			Lerp(blue, red, (colorInterp - 0.5f) * 2.0f) :
+			Lerp(green, blue, colorInterp * 2.0f);
+
+		m_razerChromaManager.UpdateLighting(color.x, color.y, color.z);
+	}
+
 	static bool bConverged = false;
 	if (m_pTracerBoy->GetNumberOfSamplesSinceLastInvalidate() == 1)
 	{

@@ -39,6 +39,9 @@
     <ClCompile Include="FidelityFXSuperResolution.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RazerChromaManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -108,6 +111,9 @@
       <Filter>Shaders</Filter>
     </ClInclude>
     <ClInclude Include="DeviceWrapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RazerChromaManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
