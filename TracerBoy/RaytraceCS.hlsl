@@ -53,10 +53,18 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 	{
 		bool bSkipRay = ShouldSkipRay();
 		OutputLivePixels(bSkipRay);
+
+		uint activeRayCount = WaveActiveCountBits(!bSkipRay);
+		if (activeRayCount > 0 && all(GTid == 0))
+		{
+			uint unused;
+			StatsBuffer.InterlockedAdd(0, 1, unused);
+			StatsBuffer.InterlockedAdd(4, activeRayCount, unused);
+		}
+
 		if (bSkipRay) return;
 
-		uint unused;
-		StatsBuffer.InterlockedAdd(0, 1, unused);
+
 	}
 #endif
 

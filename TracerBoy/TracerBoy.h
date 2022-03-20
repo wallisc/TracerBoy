@@ -246,6 +246,7 @@ public:
 	struct ReadbackStats
 	{
 		UINT ActiveWaves;
+		UINT ActivePixels;
 	};
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
