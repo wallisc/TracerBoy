@@ -211,7 +211,7 @@ public:
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
 		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
-		postProcessSettings.m_bEnableFSR = true;
+		postProcessSettings.m_bEnableFSR = false;
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
