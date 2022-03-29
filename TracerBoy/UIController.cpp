@@ -96,6 +96,10 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::Text("%.2f seconds since last invalidate", stats.ElapsedTimeSinceLastInvalidate);
 	ImGui::Text("%d Waves executed last frame", stats.NumberOfWavesExecuted);
+	ImGui::Text("%d Pixels active out of %d total (%d%% active)", 
+		stats.NumberOfPixelsActive, 
+		stats.NumberOfTotalPixels, 
+		(UINT32)(100.0f * stats.NumberOfPixelsActive / (float)stats.NumberOfTotalPixels));
 	
 	const char* RenderModes[] = { "Unbiased", "Real-time"};
 	ImGui::Combo("Render Mode", (int*)&m_outputSettings.m_renderMode, RenderModes, IM_ARRAYSIZE(RenderModes));

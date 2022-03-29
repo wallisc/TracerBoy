@@ -168,8 +168,8 @@ void D3D12App::Render()
 
 	m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), outputSettings);
 
+	uint TotalPixels = pBackBuffer->GetDesc().Width * pBackBuffer->GetDesc().Height;
 	{
-		uint TotalPixels = pBackBuffer->GetDesc().Width* pBackBuffer->GetDesc().Height;
 		float colorInterp = (float)TracerStats.ActivePixels / (float)TotalPixels;
 
 		auto Lerp = [](const pbrt::math::vec3f& a, const pbrt::math::vec3f& b, float interpValue) -> pbrt::math::vec3f
@@ -185,6 +185,10 @@ void D3D12App::Render()
 		pbrt::math::vec3f color = (colorInterp > 0.5f) ?
 			Lerp(blue, red, (colorInterp - 0.5f) * 2.0f) :
 			Lerp(green, blue, colorInterp * 2.0f);
+
+		// Visual tweak: Keep at least one of the 3 colors channels at 1.0 so that the lights stay bright
+		float colorPadding = std::min(std::min(1.0f - color.x, 1.0f - color.y), 1.0f - color.z);
+		color = color + pbrt::math::vec3f(colorPadding);
 
 		m_razerChromaManager.UpdateLighting(color.x, color.y, color.z);
 	}
@@ -203,6 +207,8 @@ void D3D12App::Render()
 		UIController::PerFrameStats stats;
 
 		stats.NumberOfWavesExecuted = TracerStats.ActiveWaves;
+		stats.NumberOfPixelsActive = TracerStats.ActivePixels;
+		stats.NumberOfTotalPixels = TotalPixels;
 		if (stats.NumberOfWavesExecuted < 20 && !bConverged)
 		{
 			m_TimeSinceConvergence = std::chrono::steady_clock::now();

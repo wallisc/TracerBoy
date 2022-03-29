@@ -11,6 +11,8 @@ public:
 	{
 		float ElapsedTimeSinceLastInvalidate;
 		UINT32 NumberOfWavesExecuted;
+		UINT32 NumberOfPixelsActive;
+		UINT32 NumberOfTotalPixels;
 	};
 
 	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats);
