@@ -22,7 +22,7 @@ inline void ThrowFailure(HRESULT hr, LPCWSTR errorString = nullptr)
             OutputDebugString(errorString);
             OutputDebugString(L"\n");
         }
-        //throw _com_error(hr);
+        throw _com_error(hr);
     }
 }
 
