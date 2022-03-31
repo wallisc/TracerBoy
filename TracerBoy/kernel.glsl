@@ -1023,7 +1023,6 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
     
     return materials[MaterialID];
 }
-#endif
 
 // For most material purposes, GetMaterial can be used. This should be used for 
 // accurate albedo information. Abusing this function can result in skyrocketing 
@@ -1042,12 +1041,11 @@ Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPos
     return GetMaterial(MaterialID, PrimitiveID, WorldPosition, uv);
 } 
 
-
-
 Material GetAreaLightMaterial()
 {
     return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0));
 }
+#endif
 
 struct Intersection
 {
@@ -1299,7 +1297,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
         {   
             vec3 RayPoint = GetRayPoint(ray, result.x);
             ray.origin = RayPoint + normal * EPSILON;
-            Material material = GetMaterialWithTextures(int(result.y), PrimitiveID, RayPoint, uv);
+
+            float RayDirectionDotN = dot(normal, ray.direction);
+            bool IsBacksideOfGeometry = RayDirectionDotN > 0.0;
+            Material material = GetMaterial(int(result.y), PrimitiveID, RayPoint, uv, IsBacksideOfGeometry);
 
             // Keep normals derived from a normal/bump map separate from the mesh normal.
             // Detail normals are used whenever possible but should be avoided anytime they're
@@ -1313,8 +1314,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(detailNormal);
 			}
-            float RayDirectionDotN = dot(normal, ray.direction);
-            bool IsInsidePrimitve = RayDirectionDotN > 0.0;
+
+            // Duplicate but a more readable variable depending on the scenario
+            bool IsInsidePrimitve = IsBacksideOfGeometry;
               
             float CurrentIOR = IsInsidePrimitve ? material.IOR : AIR_IOR;
             float NewIOR = IsInsidePrimitve ? AIR_IOR : material.IOR;
@@ -1552,7 +1554,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
 #endif
 							break;
 						}
-						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV);
+
+                        float LightDirectionDotN = dot(shadowNormal, lightDirection);
+                        bool IsShadowFeelerIntersectingBacksideOfGeometry = LightDirectionDotN > 0.0;
+						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV, IsShadowFeelerIntersectingBacksideOfGeometry);
 
 						//if(IsLight(material))
 						if(false)

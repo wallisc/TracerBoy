@@ -162,9 +162,16 @@ float3 GetDetailNormal(Material mat, float3 normal, float3 tangent, float2 uv)
 }
 
 
-Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv)
+Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv, bool IsBacksideOfGeometry)
 {
 	Material mat = MaterialBuffer[MaterialID];
+	// Following PBRT's implementation and choosing not to emit light on the backside of geometry
+	bool ShouldIgnoreEmissive = IsBacksideOfGeometry;
+	if (ShouldIgnoreEmissive)
+	{
+		mat.emissive = float3(0, 0, 0);
+	}
+
 	if ((mat.Flags & MIX_MATERIAL_FLAG) != 0)
 	{
 		if (rand() < mat.albedo.z)
@@ -182,7 +189,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
 		mat.albedo = GetTextureData(mat.albedoIndex, uv);
 	}
 
-	if (IsValidTexture(mat.emissiveIndex))
+	if (IsValidTexture(mat.emissiveIndex) && !ShouldIgnoreEmissive)
 	{
 		mat.emissive = GetTextureData(mat.emissiveIndex, uv);
 	}
