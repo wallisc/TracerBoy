@@ -398,7 +398,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 			}
 			material.IOR = pSubsurfaceMaterial->eta;
 			material.roughness = pSubsurfaceMaterial->uRoughness;
-			material.scattering = ChannelAverage(pSubsurfaceMaterial->mfp);
+			material.absorption = 0.1;
+			material.scattering = 1.0f / ChannelAverage(pSubsurfaceMaterial->mfp);
 			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		}
 	}
@@ -2163,7 +2164,7 @@ UINT TracerBoy::GetPreviousFrameWorldPositionSRV()
 
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 {
-	float downscaleFactor = 0.5;
+	float downscaleFactor = 1.0;
 
 	D3D12_RESOURCE_DESC upscaledBackBufferDesc = pBackBuffer->GetDesc();
 	D3D12_RESOURCE_DESC backBufferDesc = upscaledBackBufferDesc;
