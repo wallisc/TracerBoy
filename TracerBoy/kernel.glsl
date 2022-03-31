@@ -1769,7 +1769,7 @@ vec4 PathTrace(in vec2 pixelCoord)
 
     // Add some jitter for anti-aliasing
 	BlueNoiseData BlueNoise = GetBlueNoise();
-    //uv += (BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5)) * pixelUVSize;
+    uv += (BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5)) * pixelUVSize;
     
     float aspectRatio = GetResolution().x / GetResolution().y ; 
     vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
