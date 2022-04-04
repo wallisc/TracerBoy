@@ -20,7 +20,7 @@ float3 SampleEnvironmentMap(float3 v)
 	float3 viewDir = normalize(v);
 	float2 uv;
 	float p = atan2(
-#if 1
+#if 0
 		viewDir.z, 
 #else
 		viewDir.y, 
@@ -29,7 +29,7 @@ float3 SampleEnvironmentMap(float3 v)
 	p = p > 0 ? p : p + 2 * 3.14;
 	uv.x = p / (2 * 3.14);
 	uv.y = acos(
-#if 1
+#if 0
 		viewDir.y
 #else
 		viewDir.z
