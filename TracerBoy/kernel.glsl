@@ -1791,7 +1791,11 @@ vec4 PathTrace(in vec2 pixelCoord)
     if(perFrameConstants.DOFFocusDistance > 0.0f)
     {
         vec3 FocusPoint = GetRayPoint(cameraRay, perFrameConstants.DOFFocusDistance);
-        vec2 FocalJitter = (BlueNoise.DOFJitter - vec2(0.5, 0.5)) * perFrameConstants.DOFApertureWidth;
+
+        vec2 DOFJitter = BlueNoise.DOFJitter;
+        float Radius = sqrt(DOFJitter.x) * perFrameConstants.DOFApertureWidth;
+        float Theta = BlueNoise.DOFJitter.y * 2.0 * PI;
+        vec2 FocalJitter = vec2(cos(Theta) * Radius, sin(Theta) * Radius);
         cameraRay.origin += FocalJitter.x * GetCameraRight() + FocalJitter.y * GetCameraUp();
     
         cameraRay.direction = normalize(FocusPoint - cameraRay.origin);
