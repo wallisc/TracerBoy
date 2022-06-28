@@ -1330,6 +1330,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 detailNormal = -detailNormal;
             }
 
+			accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
+
             float fresnelFactor = FresnelFactor(
                 CurrentIOR,
                 NewIOR,
@@ -1614,7 +1616,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					}
 					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
-				accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
                 if(bFirstRay)
                 {
                     OutputPrimaryEmissive(material.emissive);
