@@ -117,14 +117,18 @@ BlueNoiseData GetBlueNoise()
 	return data;
 }
 
-void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue)
+void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue, out float3 LightNormal)
 {
-	LightPosition = float3(-0.05, 1.9, -0.03);
+	LightPosition = float3(-0.05, 1.98, -0.03);
+	float2 LightHalfDimension = float2(0.235, 0.19);
 	BlueNoiseData BlueNoise = GetBlueNoise();
-	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * float2(0.235 , 0.19);
+	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * LightHalfDimension;
+	LightNormal = float3(0, -1, 0);
 
-	LightColor = 0.25 * float3(1, 1, 1);
-	PDFValue = 0.0;
+	float LightSurfaceArea = LightHalfDimension.x * 2 * LightHalfDimension.y * 2;
+
+	LightColor = float3(17.0, 12.0, 4.0);
+	PDFValue = 0.0 / LightSurfaceArea;
 }
 
 

@@ -239,7 +239,7 @@ void D3D12App::OnSampleSubmit(ID3D12Resource &backBuffer)
 		m_SamplesRendered++;
 		if (m_SamplesRendered == m_pUIController->GetCaptureSamplesPerFrame())
 		{
-			std::wstring filename = L"render/frame" + std::to_wstring(m_FramesRendered) + L".jpg";
+			std::wstring filename = L"frame" + std::to_wstring(m_FramesRendered) + L".jpg";
 			DirectX::ScratchImage scratchImage;
 			DirectX::CaptureTexture(m_pCommandQueue.Get(), &backBuffer, false, scratchImage, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
 			DirectX::SaveToWICFile(*scratchImage.GetImage(0, 0, 0), DirectX::WIC_FLAGS_FORCE_SRGB, GUID_ContainerFormatPng, filename.c_str(), nullptr);

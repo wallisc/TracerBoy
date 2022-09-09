@@ -63,7 +63,6 @@ struct Material
     
     float roughness;
     vec3 emissive;
-    
     float absorption;    
     float scattering;
     int Flags;
@@ -1140,8 +1139,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
     
 	float lightPDF;
-    vec3 lightPosition, lightColor;
-    GetOneLightSample(lightPosition, lightColor, lightPDF);
+    vec3 lightPosition, lightColor, lightNormal;
+    GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
     
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
@@ -1330,7 +1329,119 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 detailNormal = -detailNormal;
             }
 
-			accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
+            // Omit emissives if the intersected object is marked as a light. This is because 
+            // we will sample the lighting contribution when adding direct lighting 
+            // and adding the emissive contribution here would double it's contribution.
+            // However, we DO take the emissive contribution if it's the first primary ray 
+            // as a special case so that the light doesn't just appear black
+            if(bFirstRay || !IsLight(material))
+            {
+			    accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
+            }
+
+            if(IsLight(material))
+			{
+				break;
+			}
+
+            {
+                vec3 lightDirection = lightPosition - RayPoint;
+				if(lightPDF > EPSILON && dot(lightDirection, lightNormal) < 0.0)
+				{
+            		float lightDistance = length(lightDirection);
+            		lightDirection = lightDirection / lightDistance;
+
+					#define SHADOW_BOUNCES 1
+					vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
+					Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
+					for(int i = 0; i < SHADOW_BOUNCES; i++)
+					{
+						vec3 shadowNormal;
+                        vec3 shadowTangent;
+						vec2 shadowUV;
+						uint shadowPrimitiveID;
+                        vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
+                        //vec2 shadowResult = IntersectAnything(shadowFeeler, 999999.0, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
+						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
+                     
+						int materialID = int(shadowResult.y);
+
+						// TODO: This shouldn't really be possible unless we're talking a directional light...
+						if(materialID == INVALID_MATERIAL_ID)
+						{
+#if SUPPORTS_VOLUMES
+                            float lightStartT, lightEndT;
+                            if(RayAABIntersect(
+                                lightStartT, 
+                                lightEndT,
+                                LARGE_NUMBER,
+                                shadowFeeler,
+                                (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
+                                VolumeDimensions / 2.0f))
+                            {
+                                float marchSize = MARCH_SIZE;
+                                float currentT = lightStartT + marchSize;
+                                for(uint i = 0; i < 400 && currentT < lightEndT; i++)
+                                {       
+                                    vec3 RayPoint = GetRayPoint(shadowFeeler, currentT);
+                                    vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
+                                    float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
+                                    ShadowMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
+                                    currentT += marchSize;
+                                }
+                            }
+#endif
+							break;
+						}
+
+                        float LightDirectionDotN = dot(shadowNormal, lightDirection);
+                        bool IsShadowFeelerIntersectingBacksideOfGeometry = LightDirectionDotN > 0.0;
+						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV, IsShadowFeelerIntersectingBacksideOfGeometry);
+
+                        if(IsLight(material))
+                        {
+							break;
+						}
+						else if(false)//IsSubsurfaceScattering(material))
+						{
+						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
+						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
+							AIR_IOR,
+							material.IOR,
+							shadowNormal,
+							shadowFeeler.direction));
+                        
+						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID);
+						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
+						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
+                       
+						   if(material.absorption > EPSILON)
+						   {
+							   vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
+							   ShadowMultiplier *= exp(-inverseAlbedo * subsurfacePathLength * material.absorption);
+						   }
+						   float ScatterChance = min(material.scattering * subsurfacePathLength, 1.0);
+                        
+						   ShadowMultiplier *= (1.0 - ScatterChance); // Ignoring possiblity of in scattering
+						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
+							  material.IOR,
+							  AIR_IOR,
+							  -shadowNormal,
+							  shadowFeeler.direction));
+                        
+						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
+						}
+						else
+						{
+							ShadowMultiplier = vec3(0.0, 0.0, 0.0);
+							break;
+						}
+					}
+                
+            		float lightMultiplier = DiffuseBRDF(lightDirection, detailNormal) * abs(dot(lightNormal, lightDirection)) / (lightPDF * lightDistance * lightDistance);
+					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
+                }
+            }
 
             float fresnelFactor = FresnelFactor(
                 CurrentIOR,
@@ -1421,8 +1532,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
             
             
 			float lightPDF;
-            vec3 lightPosition, lightColor;
-            GetOneLightSample(lightPosition, lightColor, lightPDF);
+            vec3 lightPosition, lightColor, lightNormal;
+            GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
                 
             if(IsSubsurfaceScattering(material) && !bSpecularRay)
             {
@@ -1508,114 +1619,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             }
             else
             {
-				if(lightPDF > EPSILON)
-				{
-				    vec3 lightDirection = lightPosition - RayPoint;
-            		float lightDistance = length(lightDirection);
-            		lightDirection = lightDirection / lightDistance;
-
-					#define SHADOW_BOUNCES 1
-					vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
-					Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
-					for(int i = 0; i < SHADOW_BOUNCES; i++)
-					{
-						vec3 shadowNormal;
-                        vec3 shadowTangent;
-						vec2 shadowUV;
-						uint shadowPrimitiveID;
-                        vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
-                        //vec2 shadowResult = IntersectAnything(shadowFeeler, 999999.0, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
-						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
-                     
-						int materialID = int(shadowResult.y);
-
-						// TODO: This shouldn't really be possible unless we're talking a directional light...
-						if(materialID == INVALID_MATERIAL_ID)
-						{
-#if SUPPORTS_VOLUMES
-                            float lightStartT, lightEndT;
-                            if(RayAABIntersect(
-                                lightStartT, 
-                                lightEndT,
-                                LARGE_NUMBER,
-                                shadowFeeler,
-                                (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
-                                VolumeDimensions / 2.0f))
-                            {
-                                float marchSize = MARCH_SIZE;
-                                float currentT = lightStartT + marchSize;
-                                for(uint i = 0; i < 400 && currentT < lightEndT; i++)
-                                {       
-                                    vec3 RayPoint = GetRayPoint(shadowFeeler, currentT);
-                                    vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
-                                    float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
-                                    ShadowMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
-                                    currentT += marchSize;
-                                }
-                            }
-#endif
-							break;
-						}
-
-                        float LightDirectionDotN = dot(shadowNormal, lightDirection);
-                        bool IsShadowFeelerIntersectingBacksideOfGeometry = LightDirectionDotN > 0.0;
-						Material material = GetMaterial(materialID, shadowPrimitiveID, shadowPoint, shadowUV, IsShadowFeelerIntersectingBacksideOfGeometry);
-
-						//if(IsLight(material))
-						if(false)
-                        {
-							break;
-						}
-						else if(false)//IsSubsurfaceScattering(material))
-						{
-						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
-						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
-							AIR_IOR,
-							material.IOR,
-							shadowNormal,
-							shadowFeeler.direction));
-                        
-						   shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID);
-						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
-						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
-                       
-						   if(material.absorption > EPSILON)
-						   {
-							   vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
-							   ShadowMultiplier *= exp(-inverseAlbedo * subsurfacePathLength * material.absorption);
-						   }
-						   float ScatterChance = min(material.scattering * subsurfacePathLength, 1.0);
-                        
-						   ShadowMultiplier *= (1.0 - ScatterChance); // Ignoring possiblity of in scattering
-						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
-							  material.IOR,
-							  AIR_IOR,
-							  -shadowNormal,
-							  shadowFeeler.direction));
-                        
-						   shadowFeeler.origin = GetRayPoint(shadowFeeler, shadowResult.x);
-						}
-						else
-						{
-							ShadowMultiplier = vec3(0.0, 0.0, 0.0);
-							break;
-						}
-					}
-                
-            		float lightMultiplier = DiffuseBRDF(lightDirection, detailNormal);
-					if(IsSubsurfaceScattering(material))
-					{
-						// TODO: What was this trying to accomplish again?
-						float nDotL = dot(lightDirection, normal);
-						lightMultiplier = GetDiffuseMultiplier(material) * dot(lightDirection, normal);
-						if(!UsePerfectSpecularOptimization(material.roughness))
-						{
-							lightMultiplier *= SpecularBTDF(-previousDirection, material.IOR, ray.direction, AIR_IOR, normal, material.roughness);
-						}
-
-					}
-					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
-                }
+			    
                 if(bFirstRay)
                 {
                     OutputPrimaryEmissive(material.emissive);
