@@ -14,6 +14,8 @@ float3 GetCameraRight() { return perFrameConstants.CameraRight; }
 float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
+float GetRotationFactor() { return 0.0f; }
+
 float3 SampleEnvironmentMap(float3 v)
 {
 	v = mul(v, (configConstants.EnvironmentMapTransform)).xyz;

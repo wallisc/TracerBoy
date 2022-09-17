@@ -22,14 +22,44 @@ vec3 GetResolution() { return iResolution; }
 vec3 mul(vec3 v, mat3 m) { return v * m; }
 vec4 GetAccumulatedColor(vec2 uv) { return texture(iChannel0, uv); }
 vec4 GetLastFrameData() { return texture(iChannel0, vec2(0.0)); }
+
+float GetRotationFactor()
+{
+    if(GetMouse().x <= 0.0)
+    {
+        // Default value when shader is initially loaded up
+        return 0.5f;
+    }
+    
+    return GetMouse().x / GetResolution().x;
+}
+
+float GetLastFrameRotationFactor(vec4 lastFrameData)
+{
+    return fract(lastFrameData.a);
+}
+
+float GetLastFrameCount(vec4 lastFrameData)
+{
+    return lastFrameData.x;
+}
+
+bool areFloatsEqual(float a, float b)
+{
+    return a + EPSILON > b && a - EPSILON < b;
+}
+
+bool HasCameraMoved(float lastFrameRotationFactor, float rotationFactor)
+{
+    return !areFloatsEqual(lastFrameRotationFactor, rotationFactor);
+}
+
 bool ShouldInvalidateHistory()
 {
     float rotationFactor = GetRotationFactor();
-    LightPositionYOffset = GetLightYOffset();
     
     vec4 lastFrameData = GetLastFrameData();
-    return HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor) ||
-      !areFloatsEqual(GetLastFrameLightYPosition(lastFrameData), LightPositionYOffset);
+    return HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor);
 }
 
 vec3 GetCameraPosition() { return vec3(0.0, 2.0, 3.5); }
@@ -45,6 +75,26 @@ struct Ray
     vec3 direction; 
 };
 
+struct BlueNoiseData
+{
+	vec2 PrimaryJitter;
+	vec2 SecondaryRayDirection;
+	vec2 AreaLightJitter;
+	vec2 DOFJitter;
+};
+
+BlueNoiseData GetBlueNoise()
+{
+	BlueNoiseData data;
+
+	data.PrimaryJitter = float2(rand(), rand());
+	data.SecondaryRayDirection = float2(rand(), rand());
+	data.AreaLightJitter = float2(rand(), rand());
+	data.DOFJitter = float2(rand(), rand());
+
+	return data;
+}
+
 vec3 SampleEnvironmentMap(vec3 v)
 {
     const float EnvironmentLightMultipier = 0.05;
@@ -55,6 +105,7 @@ vec3 SampleEnvironmentMap(vec3 v)
 #define METALLIC_MATERIAL_FLAG 0x1
 #define SUBSURFACE_SCATTER_MATERIAL_FLAG 0x2
 #define NO_SPECULAR_MATERIAL_FLAG 0x4
+#define LIGHT_MATERIAL_FLAG 0x8
     
 struct Material
 {
@@ -103,6 +154,7 @@ bool IsMetallic(Material material)
 
 bool IsSubsurfaceScattering(Material material)
 {
+    return false;
     return (material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
 }
 
@@ -350,20 +402,20 @@ bool RayAABIntersect(
     out float exitT,
     float closestT,
     Ray ray,
-    float3 boxCenter,
-    float3 boxHalfDim)
+    vec3 boxCenter,
+    vec3 boxHalfDim)
 {
-    float3 rayInverseDirection = rcp(ray.direction);
-    float3 rayOriginTimesRayInverseDirection = ray.origin * rayInverseDirection;
+    vec3 rayInverseDirection = 1.0 / (ray.direction);
+    vec3 rayOriginTimesRayInverseDirection = ray.origin * rayInverseDirection;
 
-    const float3 relativeMiddle = boxCenter * rayInverseDirection - rayOriginTimesRayInverseDirection;
-    const float3 maxL = relativeMiddle + boxHalfDim * abs(rayInverseDirection);
-    const float3 minL = relativeMiddle - boxHalfDim * abs(rayInverseDirection);
+    vec3 relativeMiddle = boxCenter * rayInverseDirection - rayOriginTimesRayInverseDirection;
+    vec3 maxL = relativeMiddle + boxHalfDim * abs(rayInverseDirection);
+    vec3 minL = relativeMiddle - boxHalfDim * abs(rayInverseDirection);
 
-    const float minT = max(max(minL.x, minL.y), minL.z);
-    const float maxT = min(min(maxL.x, maxL.y), maxL.z);
+    float minT = max(max(minL.x, minL.y), minL.z);
+    float maxT = min(min(maxL.x, maxL.y), maxL.z);
 
-    entryT = max(minT, 0);
+    entryT = max(minT, 0.0);
     exitT = min(maxT, closestT);
     return entryT < exitT;
 }
@@ -652,14 +704,216 @@ Scene CurrentScene = Scene(
     )
 );
 
-void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue)
+float atan2(float x, float y)
+{
+    if(x > 0.0) return atan(y/x);
+    else if(x < 0.0 && y >= 0.0) return atan(y/x) + PI;
+    else if(x < 0.0 && y < 0.0) return atan(y/x) - PI;
+    return 0.0;   
+}
+
+void GetSphereAttributes(
+    in vec3 worldPosition,
+    in Sphere sphere,
+    out vec2 uv)
+{
+    vec3 objectSpacePosition = (worldPosition - sphere.origin) / sphere.radius;
+    uv = vec2(acos(objectSpacePosition.y) / PI, (atan2(objectSpacePosition.z, objectSpacePosition.x) + PI / 2.0) / PI);
+}
+    
+void GetPrimitiveAttributes(
+    in vec3 worldPosition,
+    in uint primitiveID,
+    out vec2 uv) 
+{
+    uint PrimitiveIDIterator = 0u;
+    
+    if(primitiveID < PrimitiveIDIterator + uint(numSpheres))
+    {
+        uint SphereIndex = primitiveID - PrimitiveIDIterator;
+        GetSphereAttributes(worldPosition, 
+                            CurrentScene.Spheres[SphereIndex],
+                            uv);
+        return;
+    }
+    PrimitiveIDIterator += uint(numSpheres);
+    
+    if(primitiveID < PrimitiveIDIterator + uint(numBoundedPlanes))
+    {
+        // not supporting UVs for bounded planes
+        return;
+    }
+    PrimitiveIDIterator += uint(numBoundedPlanes);
+    
+    if(primitiveID < PrimitiveIDIterator + uint(numBoxes))
+    {
+        // not supporting UVs for boxes
+        return;
+    }
+    PrimitiveIDIterator += uint(numBoxes);
+}
+
+// TODO: Consolidate with GetFloorMaterial
+Material GetCheckerMaterial(uint PrimitiveID, vec3 WorldPosition)
+{
+    vec2 uv;
+    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
+    // Checker board pattern 
+    
+    const float ScaleMultiplier = 4.0;
+    
+    float IOR = 2.0;
+    float roughness = 0.0;
+    Material Mat0 = NormalMaterial(vec3(0.725, .1, .1), IOR, roughness);
+    Material Mat1 = NormalMaterial(vec3(0.1, .1, .1), IOR, roughness);
+    if(uint(uv.x * ScaleMultiplier) % 2u == 0u)
+    {
+        if(uint(uv.y * ScaleMultiplier) % 2u == 0u)
+        {
+            return Mat0;
+        }
+    }
+    else
+    {
+        if(uint(uv.y * ScaleMultiplier) % 2u == 1u)
+        {
+            return Mat0;
+        }
+    }
+    return Mat1;
+}
+
+
+Material GetGlassPebbleMaterial(uint PrimitiveID, vec3 WorldPosition)
+{
+    vec2 uv;
+    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
+    
+    vec3 albedo = texture(iChannel3, uv.yx).rgb;
+    albedo = albedo.bgr;
+    return SubsurfaceScatterMaterial(albedo, 0.35, 1.05, 3.0, 0.0);
+}
+
+
+Material GetFloorMaterial(vec3 WorldPosition)
+{
+    // Checker board pattern 
+    
+    // Use this to scale the size of the checker board tiling
+    const float ScaleMultiplier = 0.01;
+    
+    float IOR = 1.5;
+    float roughness = 1.0;
+    Material Mat0 = MatteMaterial(vec3(0.725, .71, .68));
+    Material Mat1 = MatteMaterial(vec3(0.325, .35, .25));
+    if(uint(fract(WorldPosition.x * ScaleMultiplier) * 10.0) % 2u == 0u)
+    {
+        if(uint(fract(WorldPosition.z * ScaleMultiplier) * 10.0) % 2u == 0u)
+        {
+            return Mat0;
+        }
+    }
+    else
+    {
+        if(uint(fract(WorldPosition.z * ScaleMultiplier) * 10.0) % 2u == 1u)
+        {
+            return Mat0;
+        }
+    }
+    return Mat1;
+}
+
+Material GetWoodMaterial(uint PrimitiveID, vec3 WorldPosition)
+{
+    vec2 uv;
+    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
+    
+    float IOR = 1.0;
+    float roughness = 0.5;
+    vec3 albedo = texture(iChannel2, uv.yx).rgb;
+    return NormalMaterial(albedo * albedo, IOR, roughness);
+}
+
+Material GetCustomScatteringMaterial(uint PrimitiveID)
+{
+    float absorptionLerpValue = float(PrimitiveID % 5u) / 4.0; 
+    float absorption = mix(0.0, 10.0, absorptionLerpValue);
+    
+    float scatteringLerpValue = float(PrimitiveID / 5u) / 4.0; 
+    float scattering = mix(0.0, 3.0, scatteringLerpValue);
+    
+    return SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, absorption, scattering);
+}
+
+Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 uv, bool IsBacksideOfGeometry)
+{
+    if(MaterialID == FLOOR_MATERIAL_ID)
+    {
+        return GetFloorMaterial(WorldPosition);
+    }
+    else if(MaterialID == CHECKER_MATERIAL_ID)
+    {
+        return GetCheckerMaterial(PrimitiveID, WorldPosition);
+    }
+    if(MaterialID == WOOD_MATERIAL_ID || MaterialID == GLASS_PEBBLE_MATERIAL_ID)
+    {
+        return NormalMaterial(vec3(0.5, 0.5, 0.5), 0.5, 0.5);
+    }
+    if(MaterialID == CUSTOM_SCATTERING_MATERIAL_ID)
+    {
+		return GetCustomScatteringMaterial(PrimitiveID);
+    }
+    
+    Material materials[NUM_MATERIALS];
+    materials[WAX_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.725, .1, .1), 0.2, 1.05, 0.2, 5.0);
+    materials[DEFAULT_WALL_MATERIAL_ID] = NormalMaterial(vec3(0.9, 0.9, 0.9), 2.2, 0.001);
+    materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
+    materials[GOLD_MATERIAL_ID] = MetalMaterial(vec3(0.65, .5, .075), 1.18, 0.15);
+    materials[BLUE_PLASTIC_MATERIAL_ID] = PlasticMaterial(vec3(.05, .05, .55));
+    materials[RADIOACTIVE_MATERIAL_ID] = EmissiveMaterial(vec3(.05, .45, .05), vec3(0.0, .1, 0.0));
+    materials[MIRROR_MATERIAL_ID] = ReflectiveMaterial();    
+    materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
+    materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
+    
+    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.1, 0.2); // ice
+    
+    materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
+    materials[AREA_LIGHT_MATERIAL_ID] = LightMaterial(vec3(0.45, 0.45, 0.45));
+    
+    return materials[MaterialID];
+}
+
+// For most material purposes, GetMaterial can be used. This should be used for 
+// accurate albedo information. Abusing this function can result in skyrocketing 
+// shader compile times
+Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 uv)
+{
+	if(MaterialID == WOOD_MATERIAL_ID)
+    {
+        return GetWoodMaterial(PrimitiveID, WorldPosition);
+    }
+    else if(MaterialID == GLASS_PEBBLE_MATERIAL_ID)
+    {
+        return GetGlassPebbleMaterial(PrimitiveID, WorldPosition);
+    }
+    
+    return GetMaterial(MaterialID, PrimitiveID, WorldPosition, uv, false);
+} 
+
+Material GetAreaLightMaterial()
+{
+    return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0), false);
+}
+
+void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue, out vec3 LightNormal)
 {
     vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
     LightPosition = CurrentScene.BoundedPlanes[AreaLightIndex].origin +
         CurrentScene.BoundedPlanes[AreaLightIndex].Axis1 * areaLightUV.x +
         CurrentScene.BoundedPlanes[AreaLightIndex].Axis2 * areaLightUV.y;
+    LightNormal = CurrentScene.BoundedPlanes[AreaLightIndex].normal;
     LightColor = GetAreaLightMaterial().albedo;
-	PDFValue = 1.0
+	PDFValue = 1.0;
 }
 #else
 GLOBAL Scene CurrentScene;
@@ -693,9 +947,9 @@ vec3 ReorientVectorAroundNormal(vec3 v, vec3 normal)
 
 vec3 GenerateRandomDirection(vec3 normal)
 { 
-    const float theta = PI * 2.0f * rand();
-    const float u     = rand();
-    const float r     = sqrt(1.0 - u * u);
+    float theta = PI * 2.0f * rand();
+    float u     = rand();
+    float r     = sqrt(1.0 - u * u);
 	return ReorientVectorAroundNormal(vec3(r * cos(theta), u, r * sin(theta)), normal);
 }
 
@@ -747,14 +1001,14 @@ vec3 ImportanceSampleGGX(vec3 incomingRay, vec3 normal, float roughness)
     float a2 = a * a;
     float u1 = rand(), u2 = rand();
     float theta = 2.0 * PI * u2;
-    float phi = acos(sqrt((1.0 - u1) / ((a2 - 1.0) * u1 + 1)));
+    float phi = acos(sqrt((1.0 - u1) / ((a2 - 1.0) * u1 + 1.0)));
 
     vec3 direction = vec3(
         sin(phi) * cos(theta),
         cos(phi),
         sin(phi) * sin(theta));
     
-	float3 GGXSampledNormal = ReorientVectorAroundNormal(direction, normal);
+	vec3 GGXSampledNormal = ReorientVectorAroundNormal(direction, normal);
     return reflect(incomingRay, GGXSampledNormal);
 }
 
@@ -776,7 +1030,7 @@ vec3 GenerateRandomImportanceSampledDirection(vec3 normal, float roughness, out 
 }
 
 #if IS_SHADER_TOY
-vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tangent, out float2 uv, out uint PrimitiveID)
+vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tangent, out vec2 uv, out uint PrimitiveID)
 {
     float t = 999999.0;
     float materialID = float(INVALID_MATERIAL_ID);
@@ -836,215 +1090,6 @@ vec2 Intersect(Ray ray, out vec3 normal, out vec3 tangent, out vec2 uv, out uint
     return result;
 }
 
-float atan2(float x, float y)
-{
-    if(x > 0.0) return atan(y/x);
-    else if(x < 0.0 && y >= 0.0) return atan(y/x) + PI;
-    else if(x < 0.0 && y < 0.0) return atan(y/x) - PI;
-    return 0.0;   
-}
-
-void GetSphereAttributes(
-    in vec3 worldPosition,
-    in Sphere sphere,
-    out vec2 uv)
-{
-    vec3 objectSpacePosition = (worldPosition - sphere.origin) / sphere.radius;
-    uv = vec2(acos(objectSpacePosition.y) / PI, (atan2(objectSpacePosition.z, objectSpacePosition.x) + PI / 2.0) / PI);
-}
-    
-void GetPrimitiveAttributes(
-    in vec3 worldPosition,
-    in uint primitiveID,
-    out vec2 uv) 
-{
-    uint PrimitiveIDIterator = 0u;
-    
-    if(primitiveID < PrimitiveIDIterator + uint(numSpheres))
-    {
-        uint SphereIndex = primitiveID - PrimitiveIDIterator;
-        GetSphereAttributes(worldPosition, 
-                            CurrentScene.Spheres[SphereIndex],
-                            uv);
-        return;
-    }
-    PrimitiveIDIterator += uint(numSpheres);
-    
-    if(primitiveID < PrimitiveIDIterator + uint(numBoundedPlanes))
-    {
-        // not supporting UVs for bounded planes
-        return;
-    }
-    PrimitiveIDIterator += uint(numBoundedPlanes);
-    
-    if(primitiveID < PrimitiveIDIterator + uint(numBoxes))
-    {
-        // not supporting UVs for boxes
-        return;
-    }
-    PrimitiveIDIterator += uint(numBoxes);
-}
-
-Material GetCustomScatteringMaterial(uint PrimitiveID)
-{
-    float absorptionLerpValue = float(PrimitiveID % 5u) / 4.0; 
-    float absorption = mix(0.0, 10.0, absorptionLerpValue);
-    
-    float scatteringLerpValue = float(PrimitiveID / 5u) / 4.0; 
-    float scattering = mix(0.0, 3.0, scatteringLerpValue);
-    
-    return SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, absorption, scattering);
-}
-
-Material GetWoodMaterial(uint PrimitiveID, vec3 WorldPosition)
-{
-    vec2 uv;
-    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
-    
-    float IOR = 1.0;
-    float roughness = 0.5;
-#if IS_SHADER_TOY
-    vec3 albedo = texture(iChannel2, uv.yx).rgb;
-#else
-	vec3 albedo = vec3(1, 1, 1);
-#endif
-    return NormalMaterial(albedo * albedo, IOR, roughness);
-}
-
-Material GetGlassPebbleMaterial(uint PrimitiveID, vec3 WorldPosition)
-{
-    vec2 uv;
-    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
-    
-#if IS_SHADER_TOY
-    vec3 albedo = texture(iChannel3, uv.yx).rgb;
-#else
-	vec3 albedo = vec3(1, 1, 1);
-#endif
-    albedo = albedo.bgr;
-    return SubsurfaceScatterMaterial(albedo, 0.35, 1.05, 3.0, 0.0);
-}
-
-
-Material GetFloorMaterial(vec3 WorldPosition)
-{
-    // Checker board pattern 
-    
-    // Use this to scale the size of the checker board tiling
-    const float ScaleMultiplier = 0.01;
-    
-    float IOR = 1.5;
-    float roughness = 1.0;
-    Material Mat0 = MatteMaterial(vec3(0.725, .71, .68));
-    Material Mat1 = MatteMaterial(vec3(0.325, .35, .25));
-    if(uint(fract(WorldPosition.x * ScaleMultiplier) * 10.0) % 2u == 0u)
-    {
-        if(uint(fract(WorldPosition.z * ScaleMultiplier) * 10.0) % 2u == 0u)
-        {
-            return Mat0;
-        }
-    }
-    else
-    {
-        if(uint(fract(WorldPosition.z * ScaleMultiplier) * 10.0) % 2u == 1u)
-        {
-            return Mat0;
-        }
-    }
-    return Mat1;
-}
-
-// TODO: Consolidate with GetFloorMaterial
-Material GetCheckerMaterial(uint PrimitiveID, vec3 WorldPosition)
-{
-    vec2 uv;
-    GetPrimitiveAttributes(WorldPosition, PrimitiveID, uv);
-    // Checker board pattern 
-    
-    const float ScaleMultiplier = 4.0;
-    
-    float IOR = 2.0;
-    float roughness = 0.0;
-    Material Mat0 = NormalMaterial(vec3(0.725, .1, .1), IOR, roughness);
-    Material Mat1 = NormalMaterial(vec3(0.1, .1, .1), IOR, roughness);
-    if(uint(uv.x * ScaleMultiplier) % 2u == 0u)
-    {
-        if(uint(uv.y * ScaleMultiplier) % 2u == 0u)
-        {
-            return Mat0;
-        }
-    }
-    else
-    {
-        if(uint(uv.y * ScaleMultiplier) % 2u == 1u)
-        {
-            return Mat0;
-        }
-    }
-    return Mat1;
-}
-
-#if IS_SHADER_TOY
-Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition)
-{
-    if(MaterialID == FLOOR_MATERIAL_ID)
-    {
-        return GetFloorMaterial(WorldPosition);
-    }
-    else if(MaterialID == CHECKER_MATERIAL_ID)
-    {
-        return GetCheckerMaterial(PrimitiveID, WorldPosition);
-    }
-    if(MaterialID == WOOD_MATERIAL_ID || MaterialID == GLASS_PEBBLE_MATERIAL_ID)
-    {
-        return NormalMaterial(vec3(0.5, 0.5, 0.5), 0.5, 0.5);
-    }
-    if(MaterialID == CUSTOM_SCATTERING_MATERIAL_ID)
-    {
-		return GetCustomScatteringMaterial(PrimitiveID);
-    }
-    
-    Material materials[NUM_MATERIALS];
-    materials[WAX_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.725, .1, .1), 0.2, 1.05, 0.2, 5.0);
-    materials[DEFAULT_WALL_MATERIAL_ID] = NormalMaterial(vec3(0.9, 0.9, 0.9), 2.2, 0.001);
-    materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
-    materials[GOLD_MATERIAL_ID] = MetalMaterial(vec3(0.65, .5, .075), 1.18, 0.15);
-    materials[BLUE_PLASTIC_MATERIAL_ID] = PlasticMaterial(vec3(.05, .05, .55));
-    materials[RADIOACTIVE_MATERIAL_ID] = EmissiveMaterial(vec3(.05, .45, .05), vec3(0.0, .1, 0.0));
-    materials[MIRROR_MATERIAL_ID] = ReflectiveMaterial();    
-    materials[ROUGH_MIRROR_MATERIAL_ID] = MetalMaterial(vec3(1.0, 1.0, 1.0), 1.5, 0.5);
-    materials[REFRACTIVE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 1.0, 1.0), 0.0, 1.5, 0.0, 0.0);
-    
-    materials[ICE_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.65, 0.65, 0.8), 0.3, 1.1, 0.1, 0.2); // ice
-    
-    materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
-    materials[AREA_LIGHT_MATERIAL_ID] = LightMaterial(vec3(0.45, 0.45, 0.45));
-    
-    return materials[MaterialID];
-}
-
-// For most material purposes, GetMaterial can be used. This should be used for 
-// accurate albedo information. Abusing this function can result in skyrocketing 
-// shader compile times
-Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPosition, float2 uv)
-{
-	if(MaterialID == WOOD_MATERIAL_ID)
-    {
-        return GetWoodMaterial(PrimitiveID, WorldPosition);
-    }
-    else if(MaterialID == GLASS_PEBBLE_MATERIAL_ID)
-    {
-        return GetGlassPebbleMaterial(PrimitiveID, WorldPosition);
-    }
-    
-    return GetMaterial(MaterialID, PrimitiveID, WorldPosition, uv);
-} 
-
-Material GetAreaLightMaterial()
-{
-    return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0));
-}
-#endif
 
 struct Intersection
 {
@@ -1115,7 +1160,7 @@ float AbsPow(float x, float y)
     return pow(abs(x), y);
 }
 
-float3 GetHalfVectorSafe(float3 a, float3 b, float3 normal)
+vec3 GetHalfVectorSafe(vec3 a, vec3 b, vec3 normal)
 {
     float aDotB = dot(a, b);
     if(aDotB > (-1.0 + EPSILON))
@@ -1680,52 +1725,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
     return vec4(accumulatedColor, float(FirstPrimitiveID));
 }
 
-bool areFloatsEqual(float a, float b)
-{
-    return a + EPSILON > b && a - EPSILON < b;
-}
-
-float GetRotationFactor()
-{
-    if(GetMouse().x <= 0.0)
-    {
-        // Default value when shader is initially loaded up
-        return 0.5f;
-    }
-    
-    return GetMouse().x / GetResolution().x;
-}
-
-float GetLightYOffset()
-{
-    if(GetMouse().y <= 0.0)
-    {
-        // Default value when shader is initially loaded up
-        return 1.0f;
-    }
-    return mix(-2.0, 3.0, GetMouse().y / GetResolution().y);
-}
-
-float GetLastFrameRotationFactor(vec4 lastFrameData)
-{
-    return fract(lastFrameData.a);
-}
-
-float GetLastFrameLightYPosition(vec4 lastFrameData)
-{
-    return lastFrameData.b;
-}
-
-float GetLastFrameCount(vec4 lastFrameData)
-{
-    return lastFrameData.x;
-}
-
-bool HasCameraMoved(float lastFrameRotationFactor, float rotationFactor)
-{
-    return !areFloatsEqual(lastFrameRotationFactor, rotationFactor);
-}
-
 mat3 GetViewMatrix(float xRotationFactor)
 { 
    float xRotation = ((1.0 - xRotationFactor) - 0.5) * PI * 1.75;
@@ -1753,7 +1752,6 @@ vec4 PathTrace(in vec2 pixelCoord)
     const float2 pixelUVSize = 1.0 / GetResolution().xy;
     vec2 uv = pixelCoord.xy * pixelUVSize;
     float rotationFactor = GetRotationFactor();
-    LightPositionYOffset = GetLightYOffset();
     
     vec4 lastFrameData = GetLastFrameData();
     
