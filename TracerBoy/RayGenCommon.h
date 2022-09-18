@@ -449,12 +449,6 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 	DistanceToNeighbor += distanceToNeighbor;
 }
 
-bool IsFogEnabled()
-{
-	return false;
-	return perFrameConstants.fogScatterDistance > EPSILON;
-}
-
 void ClearAOVs()
 {
 	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 1.0);

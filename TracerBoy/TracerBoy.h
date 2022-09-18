@@ -146,12 +146,6 @@ public:
 		float m_ApertureWidth;
 	};
 
-	struct FogSettings
-	{
-		float ScatterDistance;
-		float ScatterDirection;
-	};
-
 	struct PostProcessSettings
 	{
 		float m_ExposureMultiplier;
@@ -191,7 +185,6 @@ public:
 		PostProcessSettings m_postProcessSettings;
 		CameraOutputSettings m_cameraSettings;
 		DenoiserSettings m_denoiserSettings;
-		FogSettings m_fogSettings;
 		PerformanceSettings m_performanceSettings;
 	};
 
@@ -225,10 +218,6 @@ public:
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
 		denoiserSettings.m_fireflyClampValue = 0.0f;
-
-		FogSettings& fogSettings = outputSettings.m_fogSettings;
-		fogSettings.ScatterDistance = 0.0f;
-		fogSettings.ScatterDirection = 0.0f;
 
 		PerformanceSettings& performanceSettings = outputSettings.m_performanceSettings;
 		performanceSettings.m_SampleTarget = 256;

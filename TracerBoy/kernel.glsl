@@ -1207,15 +1207,13 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
         bool bLastRay = (i == MAX_BOUNCES - 1);
         bool bFirstRay = (i == 0);
-        bool bLimitRayCastDistance = IsFogEnabled() && !bLastRay;
-        float marchDistance = bLimitRayCastDistance ? max(-log(rand()), 0.1) * perFrameConstants.fogScatterDistance : 999999.0f;
 
         vec3 normal;
         vec3 tangent;
         vec2 uv;
         uint PrimitiveID;
 
-	    vec2 result = IntersectWithMaxDistance(ray, marchDistance, normal, tangent, uv, PrimitiveID);
+	    vec2 result = IntersectWithMaxDistance(ray, 999999.0f, normal, tangent, uv, PrimitiveID);
 
         if(i == 0)
         {
@@ -1318,24 +1316,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
-            if(!IsFogEnabled() || bLastRay)
+            accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
+            if(bFirstRay)
             {
-                accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
-                if(bFirstRay)
-                {
-                    OutputPrimaryEmissive(accumulatedColor);
-                }
-                break;
+                OutputPrimaryEmissive(accumulatedColor);
             }
-            else
-            {
-                vec3 RayPoint = GetRayPoint(ray, marchDistance);
-                ray.origin = RayPoint;
-                float pdfValue;
-                ray.direction = GenerateNewDirectionFromBSDF(ray.direction, perFrameConstants.fogScatterDirection, pdfValue); 
-                continue;
-            }
-
+            break;
         }
 		else
         {   

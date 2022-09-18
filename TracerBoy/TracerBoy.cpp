@@ -1324,8 +1324,6 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
-		m_CachedOutputSettings.m_fogSettings.ScatterDirection != outputSettings.m_fogSettings.ScatterDirection ||
-		m_CachedOutputSettings.m_fogSettings.ScatterDistance != outputSettings.m_fogSettings.ScatterDistance ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableBlueNoise != outputSettings.m_performanceSettings.m_bEnableBlueNoise)
 	{
 		InvalidateHistory(m_CachedOutputSettings.m_renderMode != outputSettings.m_renderMode);
@@ -1624,8 +1622,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.DOFApertureWidth = outputSettings.m_cameraSettings.m_ApertureWidth;
 	constants.InvalidateHistory = m_bInvalidateHistory;
 	constants.FireflyClampValue = outputSettings.m_denoiserSettings.m_fireflyClampValue;
-	constants.fogScatterDistance = outputSettings.m_fogSettings.ScatterDistance;
-	constants.fogScatterDirection = outputSettings.m_fogSettings.ScatterDirection;
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;

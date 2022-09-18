@@ -129,14 +129,6 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputFloat("Firefly Clamping value", &denoiserSettings.m_fireflyClampValue, 1.0f, 10.0f, "%.1f");
 		ImGui::TreePop();
 	}
-	if (ImGui::TreeNode("Fog"))
-	{
-		auto& fogSettings = m_outputSettings.m_fogSettings;
-		
-		ImGui::InputFloat("Scatter distance", &fogSettings.ScatterDistance, 0.1f, 1.0f, "%.2f");
-		ImGui::InputFloat("Scatter direction", &fogSettings.ScatterDirection, 0.01f, .1f, "%.3f");
-		ImGui::TreePop();
-	}
 
 	if (ImGui::TreeNode("Post Processing"))
 	{

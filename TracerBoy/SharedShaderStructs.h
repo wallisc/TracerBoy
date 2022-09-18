@@ -52,8 +52,6 @@ struct PerFrameConstants
 	float FocalDistance;
 	float FireflyClampValue;
 
-	float fogScatterDistance;
-	float fogScatterDirection;
 	uint GlobalFrameCount;
 	float MinConvergence;
 
