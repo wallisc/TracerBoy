@@ -16,6 +16,8 @@ float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
 float GetRotationFactor() { return 0.0f; }
 
+bool IsTargettingRealTime() { return perFrameConstants.IsRealTime; }
+
 float3 SampleEnvironmentMap(float3 v)
 {
 	v = mul(v, (configConstants.EnvironmentMapTransform)).xyz;

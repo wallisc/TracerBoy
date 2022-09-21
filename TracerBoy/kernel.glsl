@@ -14,15 +14,32 @@
 #define IS_SHADER_TOY 1
 #endif
 
+#ifndef SUPPORT_VOLUMES
+#define SUPPORT_VOLUMES 0
+#endif
+
+
 #if IS_SHADER_TOY
 #define GLOBAL
+bool IsTargettingRealTime() { return false; }
 float GetTime() { return iTime; }
 vec4 GetMouse() { return iMouse; }
 vec3 GetResolution() { return iResolution; }
 vec3 mul(vec3 v, mat3 m) { return v * m; }
 vec4 GetAccumulatedColor(vec2 uv) { return texture(iChannel0, uv); }
 vec4 GetLastFrameData() { return texture(iChannel0, vec2(0.0)); }
+void OutputPrimaryEmissive(vec3 Emissive) {}
+void OutputPrimaryAlbedo(vec3 Albedo, float DiffuseContribution) {}
+void OutputPrimaryNormal(vec3 Normal) {}
+void OutputPrimaryWorldPosition(vec3 WorldPosition, float DistanceToNeighbor) {}
 
+float saturate(float x) { return clamp(x, 0.0, 1.0); }
+#endif
+
+GLOBAL float seed = 0.;
+float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
+
+#if IS_SHADER_TOY
 float GetRotationFactor()
 {
     if(GetMouse().x <= 0.0)
@@ -87,10 +104,10 @@ BlueNoiseData GetBlueNoise()
 {
 	BlueNoiseData data;
 
-	data.PrimaryJitter = float2(rand(), rand());
-	data.SecondaryRayDirection = float2(rand(), rand());
-	data.AreaLightJitter = float2(rand(), rand());
-	data.DOFJitter = float2(rand(), rand());
+	data.PrimaryJitter = vec2(rand(), rand());
+	data.SecondaryRayDirection = vec2(rand(), rand());
+	data.AreaLightJitter = vec2(rand(), rand());
+	data.DOFJitter = vec2(rand(), rand());
 
 	return data;
 }
@@ -114,14 +131,19 @@ struct Material
     
     float roughness;
     vec3 emissive;
+
     float absorption;    
     float scattering;
+    float SpecularCoef;
     int Flags;
 };
-#endif 
 
-GLOBAL float seed = 0.;
-float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
+vec3 GetDetailNormal(Material mat, vec3 normal, vec3 tangent, vec2 uv)
+{
+    // Not supported for ShaderToy
+    return normal;
+}
+#endif 
 
 Ray NewRay(vec3 origin, vec3 direction)
 {
@@ -190,6 +212,7 @@ Material NewMaterial(vec3 albedo, float IOR, float roughness, vec3 emissive, flo
 	m.emissive = emissive;
 	m.absorption = absorption;
 	m.scattering = scattering;
+    m.SpecularCoef = 0.0;
 	m.Flags = flags;
 	return m;
 }
@@ -216,7 +239,7 @@ Material PlasticMaterial(vec3 albedo)
 
 Material LightMaterial(vec3 albedo)
 {
-    return NewMaterial(albedo, PLASTIC_IOR, 0.2,  vec3(0.0, 0.0, 0.0), 0.0, 0.0, LIGHT_MATERIAL_FLAG);
+    return NewMaterial(vec3(0.0, 0.0, 0.0), PLASTIC_IOR, 0.2,  albedo, 0.0, 0.0, LIGHT_MATERIAL_FLAG);
 }
 
 Material NormalMaterial(vec3 color, float IOR, float roughness)
@@ -615,21 +638,11 @@ float SpecularBTDF(
 #define CHECKER_MATERIAL_ID 35
 #define CUSTOM_SCATTERING_MATERIAL_ID 36
 
-#define USE_LARGE_SCENE 1
-#define USE_FOG_SCENE 0
 
 #define numBoundedPlanes  2
 #define AreaLightIndex (numBoundedPlanes - 1)
-#if USE_FOG_SCENE
-#define numBoxes 4
-#else
 #define numBoxes 1
-#endif
-#if USE_LARGE_SCENE
 #define numSpheres 19
-#else
-#define numSpheres 10
-#endif
 
 struct Scene 
 {
@@ -658,14 +671,7 @@ Scene CurrentScene = Scene(
     ),
         
    Box[numBoxes](
-#if USE_FOG_SCENE
-       Box(vec3( 6.2, 0.6, 2.0), vec3(0, 4.0, 0), vec3(-2.0, 0., 0), vec3(0., 0., -2.0), DEFAULT_WALL_MATERIAL_ID),
-       Box(vec3( 2.6, 0.6, 2.0), vec3(0, 1.05, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID),
-       Box(vec3( 0.0, 0.6, 2.0), vec3(0, 2.0, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID),
-       Box(vec3(-2.6, 0.6, 2.0), vec3(0, 1.35, 0), vec3(-1.0, 0., 0), vec3(0., 0., -1.0), DEFAULT_WALL_MATERIAL_ID)
-#else
        Box(vec3(0.0, 0.6, -1.5), vec3(0, 0.6, 0), vec3(-0.285, 0., 0.09), vec3(-0.09, 0., -0.29), DEFAULT_WALL_MATERIAL_ID)
-#endif
    ),
    
     Sphere[numSpheres](
@@ -680,11 +686,7 @@ Scene CurrentScene = Scene(
         Sphere(vec3(-2.0, 0.4, -1.5), 0.4f, GLASS_MATERIAL_ID),
         Sphere(vec3(-1.0, 0.4, -1.5), 0.4f, CHECKER_MATERIAL_ID),
         Sphere(vec3(2.0, 0.4,  -1.5), 0.4f, BLUE_PLASTIC_MATERIAL_ID),
-        Sphere(vec3(1.0, 0.4,  -1.5), 0.4f, MIRROR_MATERIAL_ID)
-        
-
-        #if USE_LARGE_SCENE
-        ,
+        Sphere(vec3(1.0, 0.4,  -1.5), 0.4f, MIRROR_MATERIAL_ID),
         
         // Third Row
         Sphere(vec3(2.0, 0.4,  -3.5), 0.4f, RADIOACTIVE_MATERIAL_ID),
@@ -699,8 +701,6 @@ Scene CurrentScene = Scene(
         Sphere(vec3(0.0, 0.4,  -5.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID),
         Sphere(vec3(-1.0, 0.4, -5.5), 0.4f, GOLD_MATERIAL_ID),
         Sphere(vec3(-2.0, 0.4, -5.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID)
-        #endif
-        
     )
 );
 
@@ -1038,7 +1038,7 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tan
     uint PrimitiveIDIterator = 0u;    
     PrimitiveID = uint(-1);
     float intersect;
-	uv = float2(0.0, 0.0);
+	uv = vec2(0.0, 0.0);
     
     for (int i = 0; i < numSpheres; i++)
     {
@@ -1220,7 +1220,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
             FirstPrimitiveID = PrimitiveID;
         }
 
-        if(all(accumulatedIndirectLightMultiplier < EPSILON))
+        if(accumulatedIndirectLightMultiplier.r < EPSILON && 
+            accumulatedIndirectLightMultiplier.g < EPSILON &&
+            accumulatedIndirectLightMultiplier.b < EPSILON)
         {
             // No longer tracking any reasonable amount of light,
             // early out
@@ -1337,7 +1339,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             // used to calculate the ray direction because it can lead to generating rays
             // that go into a mesh. Not really aware of anyway around this since normal maps
             // are really a hack to start with
-            float3 detailNormal = GetDetailNormal(material, normal, tangent, uv);
+            vec3 detailNormal = GetDetailNormal(material, normal, tangent, uv);
 			if(i == 0)
 			{	
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
@@ -1400,7 +1402,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						// TODO: This shouldn't really be possible unless we're talking a directional light...
 						if(materialID == INVALID_MATERIAL_ID)
 						{
-#if SUPPORTS_VOLUMES
+#if SUPPORT_VOLUMES
                             float lightStartT, lightEndT;
                             if(RayAABIntersect(
                                 lightStartT, 
@@ -1548,12 +1550,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
             float DiffusePDF = dot(ray.direction, normal) / PI;
             if(AllowsSpecular(material))
             {
-                float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
+                vec3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
 
                 float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                 float DistributionPDF = ImportanceSampleGGXPDF(normal, ray.direction, halfVector, material.roughness);
                 float SpecularPDF = DistributionPDF;
-                float PDFValue = IsMetallic(material) ? SpecularPDF : lerp(SpecularPDF, DiffusePDF, 0.5);
+                float PDFValue = IsMetallic(material) ? SpecularPDF : mix(SpecularPDF, DiffusePDF, 0.5);
                 accumulatedIndirectLightMultiplier /= PDFValue;
             }
             else
@@ -1661,15 +1663,15 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					break;
 				}
 				
-                bool bDecoupleFirstAlbedoFromOutput = perFrameConstants.IsRealTime;
+                bool bDecoupleFirstAlbedoFromOutput = IsTargettingRealTime();
                 bool bRemoveAlbedo = bDecoupleFirstAlbedoFromOutput && bFirstRay;
-                float3 albedo = bRemoveAlbedo ? float3(1,1,1) : material.albedo;
+                vec3 albedo = bRemoveAlbedo ? vec3(1,1,1) : material.albedo;
                 float diffuseContribution = 1.0;
                 if(IsMetallic(material))
                 {
-                    float3 halfVector = normalize(-previousDirection + ray.direction);
+                    vec3 halfVector = normalize(-previousDirection + ray.direction);
                     float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
-                    float3 specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
+                    float specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
                         (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
                     accumulatedIndirectLightMultiplier *= specular * albedo * saturate(dot(ray.direction, normal));
                 }
@@ -1677,7 +1679,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 {
                     if(AllowsSpecular(material))
                     {
-                        float3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
+                        vec3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
                         
                         float ReflectionCoefficient = material.SpecularCoef;
                         float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * 
@@ -1687,14 +1689,14 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             * (1.0 - ReflectionCoefficient)
                             * (1.0 - pow(1.0 - 0.5 * dot(-previousDirection, normal), 5.0))
                             * (1.0 - pow(1.0 - 0.5 * dot(ray.direction, normal), 5.0));
-                        float3 diffuse = albedo * diffuseMultiplier;
+                        vec3 diffuse = albedo * diffuseMultiplier;
 
                         float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                         float specular = GGXNormalDistributionFunction(detailNormal, halfVector, roughnessSquared) / 
                             (4.0 * abs(dot(-previousDirection, halfVector)) * max(abs(dot(-previousDirection, normal)), abs(dot(ray.direction, normal))));
                         
-                        float3 IndirectLightMultiplier = (diffuse + fresnel * specular)* saturate(dot(ray.direction, normal));
-                        diffuseContribution = diffuse / ((diffuseMultiplier + fresnel * specular)* saturate(dot(ray.direction, normal)));
+                        vec3 IndirectLightMultiplier = (diffuse + fresnel * specular)* saturate(dot(ray.direction, normal));
+                        diffuseContribution = diffuse.r / ((diffuseMultiplier + fresnel * specular)* saturate(dot(ray.direction, normal)));
 
                         accumulatedIndirectLightMultiplier *= IndirectLightMultiplier;
                     }
@@ -1719,7 +1721,7 @@ mat3 GetViewMatrix(float xRotationFactor)
                 -sin(xRotation),0.0, cos(xRotation));
 }
 
-float3 GetLensPosition(in vec2 uv, float aspectRatio, float rotationFactor)
+vec3 GetLensPosition(in vec2 uv, float aspectRatio, float rotationFactor)
 {
     vec3 lensPoint = GetCameraPosition();
 
@@ -1735,7 +1737,7 @@ float3 GetLensPosition(in vec2 uv, float aspectRatio, float rotationFactor)
 
 vec4 PathTrace(in vec2 pixelCoord)
 {
-    const float2 pixelUVSize = 1.0 / GetResolution().xy;
+    vec2 pixelUVSize = 1.0 / GetResolution().xy;
     vec2 uv = pixelCoord.xy * pixelUVSize;
     float rotationFactor = GetRotationFactor();
     
@@ -1743,13 +1745,14 @@ vec4 PathTrace(in vec2 pixelCoord)
     
     bool HasSceneChanged = ShouldInvalidateHistory();
 
+#if IS_SHADER_TOY
     // Sacrifice the top left pixel to store previous frame meta-data
-    //if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)
-    //{
-    //    float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
-    //    return vec4(FrameCount + 1.0, 0, LightPositionYOffset, rotationFactor);
-    //}
-    //CurrentScene.BoundedPlanes[AreaLightIndex].origin.y += LightPositionYOffset;
+    if(int(pixelCoord.x) == 0 && int(pixelCoord.y) == 0)
+    {
+        float FrameCount = HasSceneChanged ? 0.0 : GetLastFrameCount(lastFrameData);
+        return vec4(FrameCount + 1.0, 0, 0.0f, rotationFactor);
+    }
+#endif
 
 #if IS_SHADER_TOY
     seed = GetTime() + GetResolution().y * pixelCoord.x / GetResolution().x + pixelCoord.y / GetResolution().y;
@@ -1777,6 +1780,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     Ray cameraRay = NewRay(focalPoint, normalize(lensPoint - focalPoint));
     Ray neighborCameraRay = NewRay(focalPoint, normalize(neighborLensPoint - focalPoint));
 
+#if !IS_SHADER_TOY
     if(perFrameConstants.DOFFocusDistance > 0.0f)
     {
         vec3 FocusPoint = GetRayPoint(cameraRay, perFrameConstants.DOFFocusDistance);
@@ -1789,16 +1793,24 @@ vec4 PathTrace(in vec2 pixelCoord)
     
         cameraRay.direction = normalize(FocusPoint - cameraRay.origin);
     }
+#endif 
     
     // Use the alpha channel as the counter for how 
     // many samples have been takes so far
     vec4 result = Trace(cameraRay, neighborCameraRay);
     vec3 outputColor = result.rgb;
+
+#if !IS_SHADER_TOY
     if(perFrameConstants.FireflyClampValue >= EPSILON)
     {
         outputColor = min(outputColor, perFrameConstants.FireflyClampValue);
     }
+#endif
     
+#if IS_SHADER_TOY
+    outputColor += accumulatedColor.rgb;
+#endif
+
     return vec4(outputColor, 1.0);
 }
 
