@@ -14,7 +14,7 @@ float3 GetCameraRight() { return perFrameConstants.CameraRight; }
 float GetCameraLensHeight() { return configConstants.CameraLensHeight; }
 float GetCameraFocalDistance() { return perFrameConstants.FocalDistance; }
 
-float GetRotationFactor() { return 0.0f; }
+float GetRotationFactor() { return 0.5f; }
 
 bool IsTargettingRealTime() { return perFrameConstants.IsRealTime; }
 
@@ -132,7 +132,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	float LightSurfaceArea = LightHalfDimension.x * 2 * LightHalfDimension.y * 2;
 
 	LightColor = float3(17.0, 12.0, 4.0);
-	PDFValue = 0.0 / LightSurfaceArea;
+	PDFValue = 1.0 / LightSurfaceArea;
 }
 
 
