@@ -20,6 +20,10 @@
 
 
 #if IS_SHADER_TOY
+#define SCENE_TRACERBOY_BENCHMARK 0
+#define SCENE_CORNELL_BOX 1
+#define SELECTED_SCENE SCENE_CORNELL_BOX
+
 #define GLOBAL
 bool IsTargettingRealTime() { return false; }
 float GetTime() { return iTime; }
@@ -617,6 +621,7 @@ float SpecularBTDF(
 }
 
 #define INVALID_MATERIAL_ID -1
+#if SELECTED_SCENE == SCENE_TRACERBOY_BENCHMARK
 #define DEFAULT_WALL_MATERIAL_ID 0
 #define BRONZE_MATERIAL_ID 1
 #define BLUE_PLASTIC_MATERIAL_ID 2
@@ -631,6 +636,15 @@ float SpecularBTDF(
 #define AREA_LIGHT_MATERIAL_ID 11
 #define NUM_MATERIALS 12
 
+#elif SELECTED_SCENE == SCENE_CORNELL_BOX
+#define DEFAULT_WALL_MATERIAL_ID 0
+#define LEFT_WALL_MATERIAL_ID 1
+#define RIGHT_WALL_MATERIAL_ID 2
+#define AREA_LIGHT_MATERIAL_ID 3
+#define NUM_MATERIALS 4
+#endif
+
+
 // Materials with custom functions
 #define FLOOR_MATERIAL_ID 32
 #define WOOD_MATERIAL_ID 33
@@ -639,22 +653,32 @@ float SpecularBTDF(
 #define CUSTOM_SCATTERING_MATERIAL_ID 36
 
 
+#if SELECTED_SCENE == SCENE_TRACERBOY_BENCHMARK
 #define numBoundedPlanes  2
 #define AreaLightIndex (numBoundedPlanes - 1)
 #define numBoxes 1
 #define numSpheres 19
+#elif SELECTED_SCENE == SCENE_CORNELL_BOX
+#define numBoundedPlanes  6
+#define AreaLightIndex (numBoundedPlanes - 1)
+#define numBoxes 2
+#define numSpheres 0
+#endif
 
 struct Scene 
 {
     CameraDescription camera;    
     BoundedPlane BoundedPlanes[numBoundedPlanes];
     Box Boxes[numBoxes];
+#if numSpheres > 0
     Sphere Spheres[numSpheres];
+#endif
 };
 
 #if IS_SHADER_TOY
 // Cornell Box
 Scene CurrentScene = Scene(
+#if SELECTED_SCENE == SCENE_TRACERBOY_BENCHMARK
     CameraDescription(
         vec3(0.0, 1.3, 1.8), // position
         vec3(0.0, 1.0, 0.0), // lookAt
@@ -702,6 +726,31 @@ Scene CurrentScene = Scene(
         Sphere(vec3(-1.0, 0.4, -5.5), 0.4f, GOLD_MATERIAL_ID),
         Sphere(vec3(-2.0, 0.4, -5.5), 0.4f, ROUGH_MIRROR_MATERIAL_ID)
     )
+#elif SELECTED_SCENE == SCENE_CORNELL_BOX
+    CameraDescription(
+        vec3(0.0, 1.0, 1.8), // position
+        vec3(0.0, 1.0, 0.0), // lookAt
+        vec3(0.0, 1.0, 0.0), // up
+        vec3(1.0, 0.0, 0.0), // right
+        2.0,                 // lensHeight
+        5.822                // focalDistance
+    ),
+    
+    // Scene Geometry
+    BoundedPlane[numBoundedPlanes](
+       BoundedPlane(vec3(-1, 1, 0), vec3(1, 0, 0), vec3(0, 1, 0), vec3(0, 0, 1), LEFT_WALL_MATERIAL_ID),
+       BoundedPlane(vec3(1, 1, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, 0, 1), RIGHT_WALL_MATERIAL_ID), // Right wall
+       BoundedPlane(vec3(0, 1, -1), vec3(0, 0, 1), vec3(1, 0, 0), vec3(0,1,0),DEFAULT_WALL_MATERIAL_ID), // Back wall 
+       BoundedPlane(vec3(0, 2, 0), vec3(0, -1, 0), vec3(1,0,0), vec3(0,0,1), DEFAULT_WALL_MATERIAL_ID), // Top wall
+       BoundedPlane(vec3(0, 0, 0), vec3(0, 1, 0), vec3(1,0,0), vec3(0,0,1), DEFAULT_WALL_MATERIAL_ID), // Bottom wall
+       BoundedPlane(vec3(-0.005, 1.98, 0.085), vec3(0, -1, 0), vec3(.235,0,0), vec3(0,0,.19), AREA_LIGHT_MATERIAL_ID)
+    ),
+        
+   Box[numBoxes](
+       Box(vec3(0.3275, 0.3, 0.3275), vec3(0, 0.3, 0), vec3(0.2875, 0., 0.0875), vec3(0.0875, 0.0, -0.2875), DEFAULT_WALL_MATERIAL_ID),
+       Box(vec3(-0.335, 0.6, -.29), vec3(0, 0.6, 0), vec3(-0.285, 0., 0.09), vec3(-0.09, 0., -0.29), DEFAULT_WALL_MATERIAL_ID)
+   )
+#endif
 );
 
 float atan2(float x, float y)
@@ -728,6 +777,7 @@ void GetPrimitiveAttributes(
 {
     uint PrimitiveIDIterator = 0u;
     
+#if numSpheres > 0
     if(primitiveID < PrimitiveIDIterator + uint(numSpheres))
     {
         uint SphereIndex = primitiveID - PrimitiveIDIterator;
@@ -737,7 +787,8 @@ void GetPrimitiveAttributes(
         return;
     }
     PrimitiveIDIterator += uint(numSpheres);
-    
+#endif
+
     if(primitiveID < PrimitiveIDIterator + uint(numBoundedPlanes))
     {
         // not supporting UVs for bounded planes
@@ -865,6 +916,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 
     }
     
     Material materials[NUM_MATERIALS];
+#if SELECTED_SCENE == SCENE_TRACERBOY_BENCHMARK
     materials[WAX_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(0.725, .1, .1), 0.2, 1.05, 0.2, 5.0);
     materials[DEFAULT_WALL_MATERIAL_ID] = NormalMaterial(vec3(0.9, 0.9, 0.9), 2.2, 0.001);
     materials[BRONZE_MATERIAL_ID] = MetalMaterial(vec3(0.55, .2, .075), 1.18, 0.1);
@@ -879,6 +931,12 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 
     
     materials[GLASS_MATERIAL_ID] = SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, 0.1, 0.0);
     materials[AREA_LIGHT_MATERIAL_ID] = LightMaterial(vec3(0.45, 0.45, 0.45));
+#elif SELECTED_SCENE == SCENE_CORNELL_BOX
+    materials[DEFAULT_WALL_MATERIAL_ID] = MatteMaterial(vec3(0.725, .71, .68));
+    materials[LEFT_WALL_MATERIAL_ID] = MatteMaterial(vec3(0.63, .065, .05));
+    materials[RIGHT_WALL_MATERIAL_ID] = MatteMaterial(vec3(.14, .45, .091));
+    materials[AREA_LIGHT_MATERIAL_ID] = EmissiveMaterial(vec3(0, 0, 0), vec3(17.0, 12.0, 4.0));
+#endif
     
     return materials[MaterialID];
 }
@@ -907,6 +965,7 @@ Material GetAreaLightMaterial()
 
 void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue, out vec3 LightNormal)
 {
+#if 0
     vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
     LightPosition = CurrentScene.BoundedPlanes[AreaLightIndex].origin +
         CurrentScene.BoundedPlanes[AreaLightIndex].Axis1 * areaLightUV.x +
@@ -914,6 +973,17 @@ void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PD
     LightNormal = CurrentScene.BoundedPlanes[AreaLightIndex].normal;
     LightColor = GetAreaLightMaterial().albedo;
 	PDFValue = 1.0;
+#else
+	LightPosition = vec3(-0.05, 1.98, -0.03);
+	vec2 LightHalfDimension = vec2(0.235, 0.19);
+	BlueNoiseData BlueNoise = GetBlueNoise();
+	LightPosition.xz += vec2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * LightHalfDimension;
+
+	float LightSurfaceArea = LightHalfDimension.x * 2.0 * LightHalfDimension.y * 2.0;
+
+	LightColor = vec3(17.0, 12.0, 4.0);
+	PDFValue = 1.0 / LightSurfaceArea;
+#endif
 }
 #else
 GLOBAL Scene CurrentScene;
@@ -1040,6 +1110,7 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tan
     float intersect;
 	uv = vec2(0.0, 0.0);
     
+#if numSpheres > 0
     for (int i = 0; i < numSpheres; i++)
     {
         vec3 sphereNormal;
@@ -1053,6 +1124,7 @@ vec2 IntersectWithMaxDistance(Ray ray, float maxT, out vec3 normal, out vec3 tan
         }
         PrimitiveIDIterator++;
     }
+#endif
     
     for (int i = 0; i < numBoundedPlanes; i++)
     {
