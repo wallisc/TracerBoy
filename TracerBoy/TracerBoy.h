@@ -162,6 +162,7 @@ public:
 		float m_ConvergencePercentage;
 		bool m_bEnableBlueNoise;
 		bool m_bEnableInlineRaytracing;
+		bool m_bEnablePixelShaderRaytracing;
 		bool m_bEnableExecuteIndirect;
 		int m_OccupancyMultiplier;
 	};
@@ -226,6 +227,7 @@ public:
 		performanceSettings.m_ConvergencePercentage = 0.001;
 		performanceSettings.m_bEnableBlueNoise = true;
 		performanceSettings.m_bEnableInlineRaytracing = true;
+		performanceSettings.m_bEnablePixelShaderRaytracing = true;
 		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
 
@@ -375,6 +377,7 @@ private:
 	ComPtr<ID3D12StateObject> m_pRayTracingStateObject;
 	ComPtr<ID3D12PipelineState> m_pRayTracingPSO;
 	ComPtr<ID3D12PipelineState> m_pSoftwareRayTracingPSO;
+	ComPtr<ID3D12PipelineState> m_pPixelShaderRayTracingPSO;
 
 	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
 	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;
