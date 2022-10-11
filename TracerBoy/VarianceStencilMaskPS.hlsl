@@ -1,5 +1,6 @@
 #define IS_COMPUTE_SHADER 1
 
+
 #include "RayGenCommon.h"
 #include "ComputeShaderUtil.h"
 
@@ -22,10 +23,10 @@
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP, addressW = TEXTURE_ADDRESS_WRAP)," \
 	"StaticSampler(s2, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 
-[earlydepthstencil]
 [RootSignature(ComputeRS)]
-void main(float4 pos : SV_POSITION)
+void main(float4 pos : SV_POSITION, out float depth : SV_DEPTH )
 {
+	depth = 1.0;
 	OutputTexture.GetDimensions(Resolution.x, Resolution.y);
 
 	uint2 GroupDimensions = uint2(
@@ -37,29 +38,16 @@ void main(float4 pos : SV_POSITION)
 
 	ClearAOVs();
 
-	seed = hash13(float3(GetDispatchIndex().x, GetDispatchIndex().y, perFrameConstants.GlobalFrameCount));
-
-
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
 	if (!perFrameConstants.IsRealTime)
 	{
 		bool bSkipRay = ShouldSkipRay();
-		OutputLivePixels(bSkipRay);
-
-		uint activeRayCount = WaveActiveCountBits(!bSkipRay);
-		if (activeRayCount > 0 && WaveIsFirstLane())
+		if (bSkipRay)
 		{
-			uint unused;
-			StatsBuffer.InterlockedAdd(0, 1, unused);
-			StatsBuffer.InterlockedAdd(4, activeRayCount, unused);
+			//discard;
+			depth = 0.0;
 		}
-
-		if (bSkipRay) return;
-
-
 	}
 #endif
-
-	RayTraceCommon();
 }

@@ -307,6 +307,7 @@ private:
 	ComPtr<ID3D12Device5> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
+	ComPtr<ID3D12DescriptorHeap> m_pDepthDescriptorHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pNonShaderVisibleDescriptorHeap;
 #if SUPPORT_SW_RAYTRACING
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
@@ -378,6 +379,7 @@ private:
 	ComPtr<ID3D12PipelineState> m_pRayTracingPSO;
 	ComPtr<ID3D12PipelineState> m_pSoftwareRayTracingPSO;
 	ComPtr<ID3D12PipelineState> m_pPixelShaderRayTracingPSO;
+	ComPtr<ID3D12PipelineState> m_pVarianceStencilPSO;
 
 	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
 	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;
@@ -415,6 +417,7 @@ private:
 	PassResource m_pUpscaleItermediateOutput;
 	PassResource m_pDenoiserBuffers[2];
 
+	ComPtr<ID3D12Resource> m_pDepthStencil;
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVCustomOutput;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition[2];

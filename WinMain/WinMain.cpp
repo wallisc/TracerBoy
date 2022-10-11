@@ -14,7 +14,7 @@ class WindowsDevice : public DeviceWrapper
 public:
 	WindowsDevice(HWND hwnd, UINT numBackBuffers) : m_hwnd(hwnd)
 	{
-#if defined _DEBUG
+#if 0
 		ComPtr<ID3D12Debug> debugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_GRAPHICS_PPV_ARGS(&debugController))))
 		{
@@ -172,7 +172,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	windowClass.lpszClassName = WindowName;
 	RegisterClassEx(&windowClass);
 
-	RECT windowRect = { 0, 0, 2560, 1440};
+	RECT windowRect = { 0, 0, 1920, 1080};
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	g_hwnd = CreateWindow(

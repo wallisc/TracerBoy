@@ -13,7 +13,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>C:\Users\chris\OneDrive\Documents\GitHub\TracerBoy\Scenes\cornell-box\scene.pbrt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:\Users\chwallis\Documents\GitHub\TracerBoy\Scenes\bistro\Bistro_Exterior.fbx</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
