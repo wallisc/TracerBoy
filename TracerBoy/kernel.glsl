@@ -44,6 +44,13 @@ GLOBAL float seed = 0.;
 float rand() { return fract(sin(seed++ + GetTime())*43758.5453123); }
 
 #if IS_SHADER_TOY
+float hash13(vec3 p3)
+{
+	p3  = fract(p3 * .1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 float GetRotationFactor()
 {
     if(GetMouse().x <= 0.0)
@@ -83,13 +90,6 @@ bool ShouldInvalidateHistory()
     return HasCameraMoved(GetLastFrameRotationFactor(lastFrameData), rotationFactor);
 }
 
-vec3 GetCameraPosition() { return vec3(0.0, 2.0, 3.5); }
-vec3 GetCameraLookAt() { return vec3(0.0, 1.0, 0.0); }
-vec3 GetCameraUp() { return vec3(0.0, 1.0, 0.0); }
-vec3 GetCameraRight() { return vec3(1.0, 0.0, 0.0); }
-float GetCameraLensHeight() { return 2.0; }
-float GetCameraFocalDistance() { return 7.0; }
-
 struct Ray
 { 
     vec3 origin; 
@@ -118,8 +118,12 @@ BlueNoiseData GetBlueNoise()
 
 vec3 SampleEnvironmentMap(vec3 v)
 {
+#if SELECTED_SCENE == SCENE_CORNELL_BOX
+    return vec3(0, 0, 0);
+#else
     const float EnvironmentLightMultipier = 0.05;
 	return EnvironmentLightMultipier * texture(iChannel1, v).xyz;
+#endif
 }
 
 #define DEFAULT_MATERIAL_FLAG 0x0
@@ -728,12 +732,12 @@ Scene CurrentScene = Scene(
     )
 #elif SELECTED_SCENE == SCENE_CORNELL_BOX
     CameraDescription(
-        vec3(0.0, 1.0, 1.8), // position
+        vec3(0.0, 1.0, 0.97), // position
         vec3(0.0, 1.0, 0.0), // lookAt
         vec3(0.0, 1.0, 0.0), // up
         vec3(1.0, 0.0, 0.0), // right
         2.0,                 // lensHeight
-        5.822                // focalDistance
+        5.819                // focalDistance
     ),
     
     // Scene Geometry
@@ -752,6 +756,13 @@ Scene CurrentScene = Scene(
    )
 #endif
 );
+
+vec3 GetCameraPosition() { return CurrentScene.camera.position; }
+vec3 GetCameraLookAt() { return CurrentScene.camera.lookAt; }
+vec3 GetCameraUp() { return CurrentScene.camera.up; }
+vec3 GetCameraRight() { return CurrentScene.camera.right; }
+float GetCameraLensHeight() { return CurrentScene.camera.lensHeight; }
+float GetCameraFocalDistance() { return CurrentScene.camera.focalDistance; }
 
 float atan2(float x, float y)
 {
@@ -935,7 +946,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 
     materials[DEFAULT_WALL_MATERIAL_ID] = MatteMaterial(vec3(0.725, .71, .68));
     materials[LEFT_WALL_MATERIAL_ID] = MatteMaterial(vec3(0.63, .065, .05));
     materials[RIGHT_WALL_MATERIAL_ID] = MatteMaterial(vec3(.14, .45, .091));
-    materials[AREA_LIGHT_MATERIAL_ID] = EmissiveMaterial(vec3(0, 0, 0), vec3(17.0, 12.0, 4.0));
+    materials[AREA_LIGHT_MATERIAL_ID] = LightMaterial(vec3(17.0, 12.0, 4.0));
 #endif
     
     return materials[MaterialID];
@@ -975,6 +986,7 @@ void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PD
 	PDFValue = 1.0;
 #else
 	LightPosition = vec3(-0.05, 1.98, -0.03);
+    LightNormal = vec3(0, -1, 0);
 	vec2 LightHalfDimension = vec2(0.235, 0.19);
 	BlueNoiseData BlueNoise = GetBlueNoise();
 	LightPosition.xz += vec2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * LightHalfDimension;
@@ -1827,7 +1839,7 @@ vec4 PathTrace(in vec2 pixelCoord)
 #endif
 
 #if IS_SHADER_TOY
-    seed = GetTime() + GetResolution().y * pixelCoord.x / GetResolution().x + pixelCoord.y / GetResolution().y;
+    seed = hash13(vec3(pixelCoord.x, pixelCoord.y, iFrame));
 #endif
 	vec4 accumulatedColor = GetAccumulatedColor(uv);
 
