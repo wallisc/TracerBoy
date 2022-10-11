@@ -36,10 +36,7 @@ void main(float4 pos : SV_POSITION)
 	DispatchIndex = pos.xy;
 
 	ClearAOVs();
-
 	seed = hash13(float3(GetDispatchIndex().x, GetDispatchIndex().y, perFrameConstants.GlobalFrameCount));
-
-
 
 #if USE_ADAPTIVE_RAY_DISPATCHING
 	if (!perFrameConstants.IsRealTime)

@@ -16,10 +16,10 @@ bool ShouldSkipRay(
 		
 		bool isBlack = all(color <= 0.0);
 	
-		// Pure black pixel will cause divide by 0. If the pixel is still pure black after 16 samples
+		// Pure black pixel will cause divide by 0. If the pixel is still pure black after 1024 samples
 		// just consider it converged to black. This happens when a primary ray misses and there's 
 		// no environment map
-		bSkipRay = isBlack;
+		bSkipRay = isBlack && FrameCount > 1024;
 		if (!bSkipRay)
 		{
 			float error = (abs(jitteredColor.r - color.r) + abs(jitteredColor.g - color.g) + abs(jitteredColor.b - color.b)) / sqrt(color.r + color.g + color.b);
