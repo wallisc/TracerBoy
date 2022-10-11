@@ -862,7 +862,15 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		std::shared_ptr<pbrt::Scene> pScene;
 		if (sceneFileExtension.compare("pbrt") == 0)
 		{
+
+			auto pbrtImportStart = std::chrono::high_resolution_clock::now();
+
 			pScene = pbrt::importPBRT(sceneFileName);
+			auto pbrtImportEnd = std::chrono::high_resolution_clock::now();
+
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(pbrtImportEnd - pbrtImportStart);
+			std::string pbrtImportLengthMessage = "PBRT import time: " + std::to_string(0.001f * (float)duration.count()) + " seconds";
+			OutputDebugString(pbrtImportLengthMessage.c_str());
 
 			// PBRT uses GL style texture sampling
 			m_flipTextureUVs = true;
