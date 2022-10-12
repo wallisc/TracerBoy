@@ -874,7 +874,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			if (bCachePBF)
 			{
 				std::string pbfFileName = sceneFileName.substr(0, sceneFileName.size() - 4) + "pbf";
-				pScene->saveTo("C:\\Users\\chwallis\\Documents\\GitHub\\TracerBoy\\Scenes\\Teapot\\Teapot.pbf");
+				pScene->saveTo(pbfFileName);
 			}
 
 			// PBRT uses GL style texture sampling
