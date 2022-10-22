@@ -17,6 +17,10 @@
 
 #define USE_ANYHIT 1
 #define USE_FAST_PATH_WITH_FALLBACK 1
+
+// Useful for loading levels where the textures won't fit into memory
+#define DISABLE_MATERIALS 0
+
 struct HitGroupShaderRecord
 {
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
@@ -84,6 +88,22 @@ float3 ConvertFloat3(const pbrt::vec3f& v)
 float4 ConvertFloat4(const pbrt::vec3f& v, float w)
 {
 	return { v.x, v.y, v.z, w };
+}
+
+void ConvertAffine3f(const pbrt::affine3f m, FLOAT Transform[3][4])
+{
+	Transform[0][0] = m.l.vx.x;
+	Transform[0][1] = m.l.vx.y;
+	Transform[0][2] = m.l.vx.z;
+	Transform[0][3] = m.p.x;
+	Transform[1][0] = m.l.vy.x;
+	Transform[1][1] = m.l.vy.y;
+	Transform[1][2] = m.l.vy.z;
+	Transform[1][3] = m.p.y;
+	Transform[2][0] = m.l.vz.x;
+	Transform[2][1] = m.l.vz.y;
+	Transform[2][2] = m.l.vz.z;
+	Transform[2][3] = m.p.z;
 }
 
 float ChannelAverage(const pbrt::vec3f& v)
@@ -895,6 +915,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			VERIFY(false); // Unsupported file type
 #endif
 		}
+		
+		auto d3d12SceneLoadStart = std::chrono::high_resolution_clock::now();
 
 		assert(pScene->cameras.size() > 0);
 		auto& pCamera = pScene->cameras[0];
@@ -936,6 +958,18 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		TextureAllocator textureAllocator(*this, *pCommandList.Get());
 		MaterialTracker materialTracker;
 
+#if DISABLE_MATERIALS
+		std::shared_ptr<pbrt::UberMaterial> pMaterial = std::make_shared<pbrt::UberMaterial>();
+		pbrt::Material::SP spMaterial = pMaterial;
+		materialTracker.AddMaterial(pMaterial.get(),
+			CreateMaterial(
+				spMaterial,
+				nullptr,
+				pbrt::vec3f(0, 0, 0),
+				materialTracker,
+				textureAllocator));
+#endif
+
 		const void* pHitGroupShaderIdentifier = nullptr;
 		if (m_bSupportsHardwareRaytracing)
 		{
@@ -946,7 +980,28 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		UINT geometryCount = 0;
 		UINT triangleCount = 0;
-		for (UINT i = 0; i < pScene->world->shapes.size() + pScene->world->instances.size(); i++)
+
+		struct ShapeCacheEntry
+		{
+			D3D12_RAYTRACING_GEOMETRY_DESC GeometryDesc;
+			UINT VertexBufferIndex;
+			UINT IndexBufferIndex;
+			D3D12_GPU_VIRTUAL_ADDRESS BLAS;
+		};
+
+		std::map<pbrt::Shape*, ShapeCacheEntry> shapeCache;
+
+		struct InstanceEntry
+		{
+			pbrt::Shape* pShape;
+			pbrt::affine3f Transform;
+		};
+
+		std::vector<InstanceEntry> instanceList;
+		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
+		instanceList.reserve(instanceCount);
+
+		for (UINT i = 0; i < instanceCount; i++)
 		{
 			pbrt::Shape::SP pGeometry;
 			pbrt::affine3f transform = pbrt::affine3f::identity();
@@ -962,6 +1017,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				transform = pInstance->xfm;
 				pGeometry = pInstance->object->shapes[0];
 			}
+
+			auto shapeCacheEntryIter = shapeCache.find(pGeometry.get());
+			bool bShapeAlreadyCreated = shapeCacheEntryIter != shapeCache.end();
+			if (!bShapeAlreadyCreated)
+			{
+				shapeCache[pGeometry.get()] = {};
+				shapeCacheEntryIter = shapeCache.find(pGeometry.get());
+			}
+			ShapeCacheEntry& shapeCacheEntry = shapeCacheEntryIter->second;
+
 			pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
 			if (!pTriangleMesh)
 			{
@@ -976,6 +1041,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 
 			UINT materialIndex = 0;
+#if !DISABLE_MATERIALS
 			if (materialTracker.Exists(pTriangleMesh->material.get()))
 			{
 				materialIndex = materialTracker.GetMaterial(pTriangleMesh->material.get());
@@ -989,106 +1055,130 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 					materialTracker, 
 					textureAllocator));
 			}
+#endif
 
-			ComPtr<ID3D12Resource> pVertexBuffer;
-			ComPtr<ID3D12Resource> pUploadVertexBuffer;
-			UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
-			UINT vertexSize = sizeof(Vertex);
-			UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
-			AllocateUploadBuffer(vertexBufferSize, pUploadVertexBuffer);
-			bool bNormalsProvided = pTriangleMesh->normal.size();
-			Vertex* pVertexBufferData;
+			if (!bShapeAlreadyCreated)
 			{
-				VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
-				for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
+				ComPtr<ID3D12Resource> pVertexBuffer;
+				ComPtr<ID3D12Resource> pUploadVertexBuffer;
+				UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
+				UINT vertexSize = sizeof(Vertex);
+				UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
+				AllocateUploadBuffer(vertexBufferSize, pUploadVertexBuffer);
+				bool bNormalsProvided = pTriangleMesh->normal.size();
+				Vertex* pVertexBufferData;
 				{
-					auto parserVertex = transform * pTriangleMesh->vertex[v];
-					pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
-					pbrt::vec3f parserTangent(0, 0, 1);
-					if (bNormalsProvided)
+					VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
+					for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 					{
-						parserNormal = normalize(xfmNormal(transform, pTriangleMesh->normal[v]));
+						bool bBakeTransformIntoVertexBuffer = false;
+						pbrt::affine3f vertexBufferTransform = bBakeTransformIntoVertexBuffer ? transform : pbrt::affine3f::identity();
+						auto parserVertex = vertexBufferTransform * pTriangleMesh->vertex[v];
+						pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
+						pbrt::vec3f parserTangent(0, 0, 1);
+						if (bNormalsProvided)
+						{
+							parserNormal = normalize(xfmNormal(vertexBufferTransform, pTriangleMesh->normal[v]));
+						}
+						if (v < pTriangleMesh->tangents.size())
+						{
+							parserTangent = normalize(xfmNormal(vertexBufferTransform, pTriangleMesh->tangents[v]));
+						}
+						pbrt::vec2f uv(0.0, 0.0);
+						if (v < pTriangleMesh->texcoord.size())
+						{
+							uv = pTriangleMesh->texcoord[v];
+						}
+						pVertexBufferData[v].Position = { parserVertex.x, parserVertex.y, parserVertex.z };
+						pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
+						pVertexBufferData[v].UV = { uv.x, uv.y };
+						pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
 					}
-					if (v < pTriangleMesh->tangents.size())
-					{
-						parserTangent = normalize(xfmNormal(transform, pTriangleMesh->tangents[v]));
-					}
-					pbrt::vec2f uv(0.0, 0.0);
-					if (v < pTriangleMesh->texcoord.size())
-					{
-						uv = pTriangleMesh->texcoord[v];
-					}
-					pVertexBufferData[v].Position = { parserVertex.x, parserVertex.y, parserVertex.z };
-					pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
-					pVertexBufferData[v].UV = { uv.x, uv.y };
-					pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
+
+					D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+					D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+					SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+					SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
+					SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+					SRVDesc.Buffer.NumElements = desc.Width / 4;
+
+					pVertexBuffer = CreateSRV(L"VertexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
 				}
 
-				D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-				D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-				SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
-				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				SRVDesc.Buffer.NumElements = desc.Width / 4;
-
-				pVertexBuffer = CreateSRV(L"VertexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
-			}
-
-			UINT indexSize = sizeof(UINT32);
-			UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
-			ComPtr<ID3D12Resource> pUploadIndexBuffer;
-			ComPtr<ID3D12Resource> pIndexBuffer;
-			UINT IndexBufferIndex = AllocateDescriptorHeapSlot();
-			{
-				AllocateUploadBuffer(indexBufferSize, pUploadIndexBuffer);
-				UINT32* pIndexBufferData;
-				VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
-				for (UINT i = 0; i < pTriangleMesh->index.size(); i++)
+				UINT indexSize = sizeof(UINT32);
+				UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
+				ComPtr<ID3D12Resource> pUploadIndexBuffer;
+				ComPtr<ID3D12Resource> pIndexBuffer;
+				UINT IndexBufferIndex = AllocateDescriptorHeapSlot();
 				{
-					auto triangleIndices = pTriangleMesh->index[i];
-					pIndexBufferData[3 * i] = triangleIndices.x;
-					pIndexBufferData[3 * i + 1] = triangleIndices.y;
-					pIndexBufferData[3 * i + 2] = triangleIndices.z;
-					if (!bNormalsProvided)
+					AllocateUploadBuffer(indexBufferSize, pUploadIndexBuffer);
+					UINT32* pIndexBufferData;
+					VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
+					for (UINT i = 0; i < pTriangleMesh->index.size(); i++)
 					{
-						pbrt::vec3f edge1 = pTriangleMesh->vertex[triangleIndices.y] - pTriangleMesh->vertex[triangleIndices.x];
-						pbrt::vec3f edge2 = pTriangleMesh->vertex[triangleIndices.z] - pTriangleMesh->vertex[triangleIndices.y];
-						pbrt::vec3f normal = pbrt::math::cross(pbrt::math::normalize(edge1), pbrt::math::normalize(edge2));
+						auto triangleIndices = pTriangleMesh->index[i];
+						pIndexBufferData[3 * i] = triangleIndices.x;
+						pIndexBufferData[3 * i + 1] = triangleIndices.y;
+						pIndexBufferData[3 * i + 2] = triangleIndices.z;
+						if (!bNormalsProvided)
+						{
+							pbrt::vec3f edge1 = pTriangleMesh->vertex[triangleIndices.y] - pTriangleMesh->vertex[triangleIndices.x];
+							pbrt::vec3f edge2 = pTriangleMesh->vertex[triangleIndices.z] - pTriangleMesh->vertex[triangleIndices.y];
+							pbrt::vec3f normal = pbrt::math::cross(pbrt::math::normalize(edge1), pbrt::math::normalize(edge2));
 
-						pVertexBufferData[triangleIndices.x].Normal = { normal.x, normal.y, normal.z };
-						pVertexBufferData[triangleIndices.y].Normal = { normal.x, normal.y, normal.z };
-						pVertexBufferData[triangleIndices.z].Normal = { normal.x, normal.y, normal.z };
+							pVertexBufferData[triangleIndices.x].Normal = { normal.x, normal.y, normal.z };
+							pVertexBufferData[triangleIndices.y].Normal = { normal.x, normal.y, normal.z };
+							pVertexBufferData[triangleIndices.z].Normal = { normal.x, normal.y, normal.z };
+						}
 					}
+					D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
+					D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+					SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+					SRVDesc.Format = DXGI_FORMAT_R32_UINT;
+					SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+					SRVDesc.Buffer.NumElements = desc.Width / 4;
+
+					pIndexBuffer = CreateSRV(L"IndexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(IndexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
 				}
-				D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
-				D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-				SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				SRVDesc.Format = DXGI_FORMAT_R32_UINT;
-				SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				SRVDesc.Buffer.NumElements = desc.Width / 4;
+				triangleCount += pTriangleMesh->index.size() / 3;
 
-				pIndexBuffer = CreateSRV(L"IndexBuffer", desc, SRVDesc, GetCPUDescriptorHandle(IndexBufferIndex), D3D12_RESOURCE_STATE_COPY_DEST);
+				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
+				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+				geometryDesc.Triangles.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
+				geometryDesc.Triangles.IndexCount = static_cast<UINT>(pIndexBuffer->GetDesc().Width) / (sizeof(UINT32));
+				geometryDesc.Triangles.IndexFormat = indexSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+				geometryDesc.Triangles.Transform3x4 = 0;
+				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+				geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / vertexSize;
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress();
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
+				geometryDesc.Flags = USE_ANYHIT ? D3D12_RAYTRACING_GEOMETRY_FLAG_NONE : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+				geometryDescs.push_back(geometryDesc);
+
+				commandList.CopyResource(pVertexBuffer.Get(), pUploadVertexBuffer.Get());
+				commandList.CopyResource(pIndexBuffer.Get(), pUploadIndexBuffer.Get());
+				D3D12_RESOURCE_BARRIER copyBarriers[] =
+				{
+					CD3DX12_RESOURCE_BARRIER::Transition(pVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
+					CD3DX12_RESOURCE_BARRIER::Transition(pIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
+				};
+				commandList.ResourceBarrier(ARRAYSIZE(copyBarriers), copyBarriers);
+
+				m_pBuffers.push_back(pIndexBuffer);
+				m_pBuffers.push_back(pVertexBuffer);
+				resourcesToDelete.push_back(pUploadIndexBuffer);
+				resourcesToDelete.push_back(pUploadVertexBuffer);
+
+				shapeCacheEntry.GeometryDesc = geometryDesc;
+				shapeCacheEntry.VertexBufferIndex = VertexBufferIndex;
+				shapeCacheEntry.IndexBufferIndex = IndexBufferIndex;
 			}
-			triangleCount += pTriangleMesh->index.size() / 3;
-
-			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
-			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-			geometryDesc.Triangles.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
-			geometryDesc.Triangles.IndexCount = static_cast<UINT>(pIndexBuffer->GetDesc().Width) / (sizeof(UINT32));
-			geometryDesc.Triangles.IndexFormat = indexSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
-			geometryDesc.Triangles.Transform3x4 = 0;
-			geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-			geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / vertexSize;
-			geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress();
-			geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
-			geometryDesc.Flags = USE_ANYHIT ? D3D12_RAYTRACING_GEOMETRY_FLAG_NONE : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-			geometryDescs.push_back(geometryDesc);
 
 			HitGroupShaderRecord shaderRecord = {};
 			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.MaterialIndex = materialIndex;
-			shaderRecord.VertexBufferIndex = VertexBufferIndex;
-			shaderRecord.IndexBufferIndex = IndexBufferIndex;
+			shaderRecord.VertexBufferIndex = shapeCacheEntry.VertexBufferIndex;
+			shaderRecord.IndexBufferIndex = shapeCacheEntry.IndexBufferIndex;
 
 			if (m_bSupportsHardwareRaytracing)
 			{
@@ -1097,19 +1187,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			hitGroupShaderTable.push_back(shaderRecord);
 
-			commandList.CopyResource(pVertexBuffer.Get(), pUploadVertexBuffer.Get());
-			commandList.CopyResource(pIndexBuffer.Get(), pUploadIndexBuffer.Get());
-			D3D12_RESOURCE_BARRIER copyBarriers[] =
-			{
-				CD3DX12_RESOURCE_BARRIER::Transition(pVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
-				CD3DX12_RESOURCE_BARRIER::Transition(pIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
-			};
-			commandList.ResourceBarrier(ARRAYSIZE(copyBarriers), copyBarriers);
+			InstanceEntry instanceEntry;
+			instanceEntry.Transform = transform;
+			instanceEntry.pShape = pGeometry.get();
 
-			m_pBuffers.push_back(pIndexBuffer);
-			m_pBuffers.push_back(pVertexBuffer);
-			resourcesToDelete.push_back(pUploadIndexBuffer);
-			resourcesToDelete.push_back(pUploadVertexBuffer);
+			instanceList.push_back(instanceEntry);
 		}
 
 		ComPtr<ID3D12Resource> pUploadHitGroupShaderTable;
@@ -1152,7 +1234,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			if (pInfiniteLightSource)
 			{
 				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end());
-				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
+				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer, true);
 				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
 			}
 		}
@@ -1187,17 +1269,20 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		std::vector<UINT32> BLASDescriptorList;
 #endif
 
-		const bool bAllGeometryInSingleBLAS = true;
-		UINT32 numInstances = bAllGeometryInSingleBLAS ? 1 : geometryDescs.size();
+		UINT32 numShapes = shapeCache.size();
+		UINT32 numInstances = instanceList.size();
 		
-		for(UINT32 i = 0; i < numInstances; i++)
+		UINT32 i = 0;
+		for(auto &iter : shapeCache)
 		{
+			ShapeCacheEntry &shapeCacheEntry = iter.second;
+
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildBottomLevelDesc = {};
 			buildBottomLevelDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			buildBottomLevelDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
 			buildBottomLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-			buildBottomLevelDesc.Inputs.NumDescs = bAllGeometryInSingleBLAS ? static_cast<UINT>(geometryDescs.size()) : 1;
-			buildBottomLevelDesc.Inputs.pGeometryDescs = geometryDescs.data() + i;
+			buildBottomLevelDesc.Inputs.NumDescs = 1;
+			buildBottomLevelDesc.Inputs.pGeometryDescs = &shapeCacheEntry.GeometryDesc;
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
 #if SUPPORT_SW_RAYTRACING
@@ -1221,6 +1306,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				nullptr,
 				IID_GRAPHICS_PPV_ARGS(pBLAS.ReleaseAndGetAddressOf())));
 			m_pBottomLevelASList.push_back(pBLAS);
+			shapeCacheEntry.BLAS = pBLAS->GetGPUVirtualAddress();
 
 #if SUPPORT_SW_RAYTRACING
 			UINT32 BLASDescriptorSlot = AllocateDescriptorHeapSlot();
@@ -1264,6 +1350,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			{
 				pCommandList->BuildRaytracingAccelerationStructure(&buildBottomLevelDesc, 0, nullptr);
 			}
+			i++;
 		}
 
 		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
@@ -1273,8 +1360,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 			for (UINT32 i = 0; i < numInstances; i++)
 			{
+				auto &instanceEntry = instanceList[i];
+				auto& shapeCacheEntry = shapeCache[instanceEntry.pShape];
+				
 				D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-				instanceDesc.AccelerationStructure = m_pBottomLevelASList[i]->GetGPUVirtualAddress();
+				instanceDesc.AccelerationStructure = shapeCacheEntry.BLAS;
 #if SUPPORT_SW_RAYTRACING
 				if (EmulateRaytracing())
 				{
@@ -1282,15 +1372,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 					instanceDesc.AccelerationStructure = BLAS.GpuVA;
 				}
 #endif
-				instanceDesc.Transform[0][0] = 1.0;
-				instanceDesc.Transform[1][1] = 1.0;
-				instanceDesc.Transform[2][2] = 1.0;
-				instanceDesc.InstanceMask = 1;
 
+				ConvertAffine3f(instanceEntry.Transform, instanceDesc.Transform);
+				instanceDesc.InstanceMask = 1;
+				instanceDesc.InstanceContributionToHitGroupIndex = i;
 				instanceDescs.push_back(instanceDesc);
 			}
 
-			
 			ComPtr<ID3D12Resource> pInstanceDescBuffer;
 
 			AllocateUploadBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceDescs.size(), pInstanceDescBuffer);
@@ -1368,6 +1456,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		}
 
 		textureAllocator.ExtractScratchResources(resourcesToDelete);
+
+		auto d3d12SceneLoadEnd = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(d3d12SceneLoadEnd - d3d12SceneLoadStart);
+		std::string d3d12SceneLoadLengthMessage = "D3D12 Scene Load time: " + std::to_string(0.001f * (float)duration.count()) + " seconds";
+		OutputDebugString(d3d12SceneLoadLengthMessage.c_str());
 	}
 
 	{
@@ -1378,8 +1471,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		resourcesToDelete.push_back(pBlueNoise0UploadHeap);
 		resourcesToDelete.push_back(pBlueNoise1UploadHeap);
-	}
-	
+	}	
 }
 
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)

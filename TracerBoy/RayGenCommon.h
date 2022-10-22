@@ -294,7 +294,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	while (Query.Proceed())
 	{
 		float3 barycentrics = GetBarycentrics3(Query.CandidateTriangleBarycentrics());
-		GeometryInfo Geometry = GetGeometryInfo(Query.CandidateGeometryIndex());
+		uint GeometryIndex = Query.CandidateInstanceIndex() + Query.CandidateGeometryIndex();
+		GeometryInfo Geometry = GetGeometryInfo(GeometryIndex);
 		HitInfo hit = GetHitInfo(Geometry, Query.CandidatePrimitiveIndex(), barycentrics);
 
 		if (IsValidHit(Geometry, hit))
@@ -310,7 +311,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 		result.x = Query.CommittedRayT();
 
 		float3 barycentrics = GetBarycentrics3(Query.CommittedTriangleBarycentrics());
-		GeometryInfo Geometry = GetGeometryInfo(Query.CommittedGeometryIndex());
+		uint GeometryIndex = Query.CommittedInstanceIndex() + Query.CommittedGeometryIndex();
+		GeometryInfo Geometry = GetGeometryInfo(GeometryIndex);
 		HitInfo hit = GetHitInfo(Geometry, Query.CommittedPrimitiveIndex(), barycentrics);
 		payload.uv = hit.uv;
 		payload.materialIndex = Geometry.MaterialIndex;
