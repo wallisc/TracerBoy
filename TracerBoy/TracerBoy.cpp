@@ -776,6 +776,93 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
 }
 
+class HeapAllocator
+{
+public:
+	HeapAllocator(ID3D12Device& InDevice, UINT inAllocatorBlockSize, bool bUploadHeap) :
+		Device(InDevice),
+		AllocatorBlockSize(inAllocatorBlockSize),
+		Offset(0),
+		bUseUploadHeaps(bUploadHeap)
+	{
+	}
+
+	D3D12_GPU_VIRTUAL_ADDRESS Allocate(UINT Size, ComPtr<ID3D12Resource>* ppResource = nullptr, UINT* pOffset = nullptr)
+	{
+		// If it's too big to fit into an allocator block, just make a one-off resource just for this allocation request
+		if (Size > AllocatorBlockSize)
+		{
+			const D3D12_HEAP_PROPERTIES heapDesc = CD3DX12_HEAP_PROPERTIES(bUseUploadHeaps ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+			D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(Size);
+
+			ComPtr<ID3D12Resource> pResource;
+			VERIFY_HRESULT(Device.CreateCommittedResource(
+				&heapDesc,
+				D3D12_HEAP_FLAG_NONE,
+				&bufferDesc,
+				D3D12_RESOURCE_STATE_GENERIC_READ,
+				nullptr,
+				IID_GRAPHICS_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
+			if (pOffset) *pOffset = 0;
+			if (ppResource) *ppResource = pResource;
+			ResourceList.push_back(pResource);
+			return pResource->GetGPUVirtualAddress();
+		}
+
+		if (Offset + Size > AllocatorBlockSize || CurrentBlock == nullptr)
+		{
+			AllocateNewBlock();
+		}
+		
+		if (pOffset)
+		{
+			*pOffset = Offset;
+		}
+		if (ppResource)
+		{
+			*ppResource = CurrentBlock;
+		}
+		D3D12_GPU_VIRTUAL_ADDRESS GpuVA = CurrentBlock->GetGPUVirtualAddress() + Offset;
+		Offset += Size;
+
+		return GpuVA;
+	}
+
+	const std::vector<ComPtr<ID3D12Resource>>& GetAllocatedResources() const
+	{
+		return ResourceList;
+	}
+private:
+	void AllocateNewBlock()
+	{
+		if (CurrentBlock)
+		{
+			CurrentBlock = nullptr;
+			Offset = 0;
+		}
+
+		const D3D12_HEAP_PROPERTIES heapDesc = CD3DX12_HEAP_PROPERTIES(bUseUploadHeaps ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(AllocatorBlockSize);
+
+		VERIFY_HRESULT(Device.CreateCommittedResource(
+			&heapDesc,
+			D3D12_HEAP_FLAG_NONE,
+			&bufferDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_GRAPHICS_PPV_ARGS(CurrentBlock.ReleaseAndGetAddressOf())));
+
+		ResourceList.push_back(CurrentBlock);
+	}
+
+	ID3D12Device& Device;
+	UINT Offset;
+	UINT AllocatorBlockSize;
+	bool bUseUploadHeaps;
+	ComPtr<ID3D12Resource> CurrentBlock;
+	std::vector<ComPtr<ID3D12Resource>> ResourceList;
+};
+
 void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::string& sceneFileName, std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete)
 {
 	std::size_t lastDeliminator = sceneFileName.find_last_of("/\\");
@@ -783,6 +870,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
 	
+	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), 20 * 1024 * 1024, true);
 
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
@@ -999,6 +1087,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		std::vector<InstanceEntry> instanceList;
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
+		instanceCount = instanceCount / 2;
 		instanceList.reserve(instanceCount);
 
 		for (UINT i = 0; i < instanceCount; i++)
@@ -1064,11 +1153,17 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
 				UINT vertexSize = sizeof(Vertex);
 				UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
-				AllocateUploadBuffer(vertexBufferSize, pUploadVertexBuffer);
+				UINT32 uploadVertexBufferOffset;
+				UploadHeapAllocator.Allocate(vertexBufferSize, &pUploadVertexBuffer, &uploadVertexBufferOffset);				
 				bool bNormalsProvided = pTriangleMesh->normal.size();
 				Vertex* pVertexBufferData;
 				{
-					VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferData));
+					BYTE* pVertexBufferByteData;
+					VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferByteData));
+					pVertexBufferByteData += uploadVertexBufferOffset;
+					pVertexBufferData = (Vertex*)pVertexBufferByteData;
+
+					
 					for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 					{
 						bool bBakeTransformIntoVertexBuffer = false;
@@ -1109,11 +1204,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				UINT indexBufferSize = static_cast<UINT>(pTriangleMesh->index.size() * 3 * indexSize);
 				ComPtr<ID3D12Resource> pUploadIndexBuffer;
 				ComPtr<ID3D12Resource> pIndexBuffer;
+				UINT32 uploadIndexBufferOffset;
+				UploadHeapAllocator.Allocate(indexBufferSize, &pUploadIndexBuffer, &uploadIndexBufferOffset);
 				UINT IndexBufferIndex = AllocateDescriptorHeapSlot();
 				{
-					AllocateUploadBuffer(indexBufferSize, pUploadIndexBuffer);
-					UINT32* pIndexBufferData;
-					VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferData));
+					BYTE* pIndexBufferByteData;
+					VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferByteData));
+					pIndexBufferByteData += uploadIndexBufferOffset;
+
+					UINT32* pIndexBufferData = (UINT32*)pIndexBufferByteData;;
+
 					for (UINT i = 0; i < pTriangleMesh->index.size(); i++)
 					{
 						auto triangleIndices = pTriangleMesh->index[i];
@@ -1155,8 +1255,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				geometryDesc.Flags = USE_ANYHIT ? D3D12_RAYTRACING_GEOMETRY_FLAG_NONE : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 				geometryDescs.push_back(geometryDesc);
 
-				commandList.CopyResource(pVertexBuffer.Get(), pUploadVertexBuffer.Get());
-				commandList.CopyResource(pIndexBuffer.Get(), pUploadIndexBuffer.Get());
+				commandList.CopyBufferRegion(pVertexBuffer.Get(), 0, pUploadVertexBuffer.Get(), uploadVertexBufferOffset, vertexBufferSize);
+				commandList.CopyBufferRegion(pIndexBuffer.Get(), 0, pUploadIndexBuffer.Get(), uploadIndexBufferOffset, indexBufferSize);
 				D3D12_RESOURCE_BARRIER copyBarriers[] =
 				{
 					CD3DX12_RESOURCE_BARRIER::Transition(pVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ),
@@ -1166,8 +1266,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 				m_pBuffers.push_back(pIndexBuffer);
 				m_pBuffers.push_back(pVertexBuffer);
-				resourcesToDelete.push_back(pUploadIndexBuffer);
-				resourcesToDelete.push_back(pUploadVertexBuffer);
 
 				shapeCacheEntry.GeometryDesc = geometryDesc;
 				shapeCacheEntry.VertexBufferIndex = VertexBufferIndex;
@@ -1233,7 +1331,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
 			if (pInfiniteLightSource)
 			{
-				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end());
+				std::wstring textureName(L"C:\\Users\\chwallis\\Documents\\GitHub\\TracerBoy\\Scenes\\bistro\\san_giuseppe_bridge_4k.hdr");
 				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer, true);
 				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
 			}
@@ -1472,6 +1570,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		resourcesToDelete.push_back(pBlueNoise0UploadHeap);
 		resourcesToDelete.push_back(pBlueNoise1UploadHeap);
 	}	
+
+	auto& resourceList = UploadHeapAllocator.GetAllocatedResources();
+	for (auto &pResource : resourceList)
+	{
+		resourcesToDelete.push_back(pResource);
+	}
 }
 
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
