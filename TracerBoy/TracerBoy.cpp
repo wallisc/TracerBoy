@@ -19,7 +19,7 @@
 #define USE_FAST_PATH_WITH_FALLBACK 1
 
 // Useful for loading levels where the textures won't fit into memory
-#define DISABLE_MATERIALS 0
+#define DISABLE_MATERIALS 1
 
 struct HitGroupShaderRecord
 {
@@ -779,8 +779,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 class HeapAllocator
 {
 public:
-	HeapAllocator(ID3D12Device& InDevice, UINT inAllocatorBlockSize, bool bUploadHeap) :
+	HeapAllocator(ID3D12Device& InDevice, UINT inAllocatorBlockSize, D3D12_RESOURCE_STATES InResourceState, bool bUploadHeap) :
 		Device(InDevice),
+		ResourceState(InResourceState),
 		AllocatorBlockSize(inAllocatorBlockSize),
 		Offset(0),
 		bUseUploadHeaps(bUploadHeap)
@@ -800,7 +801,7 @@ public:
 				&heapDesc,
 				D3D12_HEAP_FLAG_NONE,
 				&bufferDesc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
+				ResourceState,
 				nullptr,
 				IID_GRAPHICS_PPV_ARGS(pResource.ReleaseAndGetAddressOf())));
 			if (pOffset) *pOffset = 0;
@@ -856,6 +857,7 @@ private:
 	}
 
 	ID3D12Device& Device;
+	D3D12_RESOURCE_STATES ResourceState;
 	UINT Offset;
 	UINT AllocatorBlockSize;
 	bool bUseUploadHeaps;
@@ -870,7 +872,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
 	
-	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), 20 * 1024 * 1024, true);
+	const UINT HeapBlockSize = 20 * 1024 * 1024;
+	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+	HeapAllocator RaytracingScratchMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
@@ -1087,7 +1091,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		std::vector<InstanceEntry> instanceList;
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
-		instanceCount = instanceCount / 2;
 		instanceList.reserve(instanceCount);
 
 		for (UINT i = 0; i < instanceCount; i++)
@@ -1331,7 +1334,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
 			if (pInfiniteLightSource)
 			{
-				std::wstring textureName(L"C:\\Users\\chwallis\\Documents\\GitHub\\TracerBoy\\Scenes\\bistro\\san_giuseppe_bridge_4k.hdr");
+				std::wstring textureName(L"C:\\Users\\chwallis\\Downloads\\island\\textures\\islandsunVIS.png");
+				//std::wstring textureName(L"C:\\Users\\chwallis\\Documents\\GitHub\\TracerBoy\\Scenes\\bistro\\san_giuseppe_bridge_4k.hdr");
 				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer, true);
 				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
 			}
@@ -1423,19 +1427,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				}
 			}
 #endif
-
-			D3D12_RESOURCE_DESC scratchBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(prebuildInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			ComPtr<ID3D12Resource> pScratchBuffer;
-			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-				&defaultHeapDesc,
-				D3D12_HEAP_FLAG_NONE,
-				&scratchBufferDesc,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-				nullptr,
-				IID_GRAPHICS_PPV_ARGS(pScratchBuffer.ReleaseAndGetAddressOf())));
-			resourcesToDelete.push_back(pScratchBuffer);
-
-			buildBottomLevelDesc.ScratchAccelerationStructureData = pScratchBuffer->GetGPUVirtualAddress();
+			buildBottomLevelDesc.ScratchAccelerationStructureData = RaytracingScratchMemoryHeapAllocator.Allocate(prebuildInfo.ScratchDataSizeInBytes);
 			buildBottomLevelDesc.DestAccelerationStructureData = pBLAS->GetGPUVirtualAddress();
 
 #if SUPPORT_SW_RAYTRACING
@@ -1527,18 +1519,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 #endif
 
-			D3D12_RESOURCE_DESC scratchBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(prebuildInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			ComPtr<ID3D12Resource> pScratchBuffer;
-			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-				&defaultHeapDesc,
-				D3D12_HEAP_FLAG_NONE,
-				&scratchBufferDesc,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-				nullptr,
-				IID_GRAPHICS_PPV_ARGS(pScratchBuffer.ReleaseAndGetAddressOf())));
-			resourcesToDelete.push_back(pScratchBuffer);
-
-			buildTopLevelDesc.ScratchAccelerationStructureData = pScratchBuffer->GetGPUVirtualAddress();
+			buildTopLevelDesc.ScratchAccelerationStructureData = RaytracingScratchMemoryHeapAllocator.Allocate(prebuildInfo.ScratchDataSizeInBytes);
 			buildTopLevelDesc.DestAccelerationStructureData = m_pTopLevelAS->GetGPUVirtualAddress();
 
 #if SUPPORT_SW_RAYTRACING
@@ -1571,8 +1552,14 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		resourcesToDelete.push_back(pBlueNoise1UploadHeap);
 	}	
 
-	auto& resourceList = UploadHeapAllocator.GetAllocatedResources();
-	for (auto &pResource : resourceList)
+	auto& uploadResourceList = UploadHeapAllocator.GetAllocatedResources();
+	for (auto &pResource : uploadResourceList)
+	{
+		resourcesToDelete.push_back(pResource);
+	}
+
+	auto& scratchResourceList = RaytracingScratchMemoryHeapAllocator.GetAllocatedResources();
+	for (auto& pResource : scratchResourceList)
 	{
 		resourcesToDelete.push_back(pResource);
 	}
