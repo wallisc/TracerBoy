@@ -779,9 +779,11 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 class HeapAllocator
 {
 public:
-	HeapAllocator(ID3D12Device& InDevice, UINT inAllocatorBlockSize, D3D12_RESOURCE_STATES InResourceState, bool bUploadHeap) :
+	HeapAllocator(ID3D12Device& InDevice, UINT inAllocatorBlockSize, D3D12_RESOURCE_STATES InResourceState, D3D12_RESOURCE_FLAGS InResourceFlags, UINT InAlignment, bool bUploadHeap) :
 		Device(InDevice),
 		ResourceState(InResourceState),
+		ResourceFlags(InResourceFlags),
+		Alignment(InAlignment),
 		AllocatorBlockSize(inAllocatorBlockSize),
 		Offset(0),
 		bUseUploadHeaps(bUploadHeap)
@@ -794,7 +796,7 @@ public:
 		if (Size > AllocatorBlockSize)
 		{
 			const D3D12_HEAP_PROPERTIES heapDesc = CD3DX12_HEAP_PROPERTIES(bUseUploadHeaps ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-			D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(Size);
+			D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(Size, ResourceFlags);
 
 			ComPtr<ID3D12Resource> pResource;
 			VERIFY_HRESULT(Device.CreateCommittedResource(
@@ -809,6 +811,8 @@ public:
 			ResourceList.push_back(pResource);
 			return pResource->GetGPUVirtualAddress();
 		}
+
+		Offset += Alignment - (Offset % Alignment);
 
 		if (Offset + Size > AllocatorBlockSize || CurrentBlock == nullptr)
 		{
@@ -843,7 +847,7 @@ private:
 		}
 
 		const D3D12_HEAP_PROPERTIES heapDesc = CD3DX12_HEAP_PROPERTIES(bUseUploadHeaps ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(AllocatorBlockSize);
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(AllocatorBlockSize, ResourceFlags);
 
 		VERIFY_HRESULT(Device.CreateCommittedResource(
 			&heapDesc,
@@ -859,7 +863,9 @@ private:
 	ID3D12Device& Device;
 	D3D12_RESOURCE_STATES ResourceState;
 	UINT Offset;
+	UINT Alignment;
 	UINT AllocatorBlockSize;
+	D3D12_RESOURCE_FLAGS ResourceFlags;
 	bool bUseUploadHeaps;
 	ComPtr<ID3D12Resource> CurrentBlock;
 	std::vector<ComPtr<ID3D12Resource>> ResourceList;
@@ -873,8 +879,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
 	
 	const UINT HeapBlockSize = 20 * 1024 * 1024;
-	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_GENERIC_READ, true);
-	HeapAllocator RaytracingScratchMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
+	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT, true);
+	HeapAllocator RaytracingScratchMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
 
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
@@ -994,7 +1000,14 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		}
 		else if (sceneFileExtension.compare("pbf") == 0)
 		{
+			auto pbfImportStart = std::chrono::high_resolution_clock::now();
+
 			pScene = pbrt::Scene::loadFrom(sceneFileName);
+			auto pbfImportEnd = std::chrono::high_resolution_clock::now();
+
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(pbfImportEnd - pbfImportStart);
+			std::string pbrtImportLengthMessage = "PBF import time: " + std::to_string(0.001f * (float)duration.count()) + " seconds";
+			OutputDebugString(pbrtImportLengthMessage.c_str());
 
 			// PBRT uses GL style texture sampling
 			m_flipTextureUVs = true;
@@ -1091,6 +1104,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		std::vector<InstanceEntry> instanceList;
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
+		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 		instanceList.reserve(instanceCount);
 
 		for (UINT i = 0; i < instanceCount; i++)
