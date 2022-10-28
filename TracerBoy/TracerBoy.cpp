@@ -853,7 +853,7 @@ private:
 			&heapDesc,
 			D3D12_HEAP_FLAG_NONE,
 			&bufferDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
+			ResourceState,
 			nullptr,
 			IID_GRAPHICS_PPV_ARGS(CurrentBlock.ReleaseAndGetAddressOf())));
 
