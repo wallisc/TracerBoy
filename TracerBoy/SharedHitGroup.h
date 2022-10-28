@@ -6,7 +6,7 @@ cbuffer LocalConstants : register(b2)
 	uint GeometryIndex;
 }
 
-#define VertexStride 11
+#define VertexStride 12
 
 struct HitGroupShaderRecord
 {

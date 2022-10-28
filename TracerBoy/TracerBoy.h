@@ -117,7 +117,7 @@ public:
 	TracerBoy(ID3D12CommandQueue *pQueue);
 
 	void LoadScene(
-		ID3D12GraphicsCommandList& commandList, 
+		std::vector<ID3D12GraphicsCommandList*> &commandLists, 
 		const std::string& sceneFileName, 
 		std::vector<ComPtr<ID3D12Resource>> &resourcesToDelete);
 

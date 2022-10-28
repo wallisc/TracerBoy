@@ -82,6 +82,7 @@ struct Vertex
 	float3 Normal;
 	float2 UV;
 	float3 Tangent;
+	float Padding;
 };
 
 #define DEFAULT_MATERIAL_FLAG 0x0
