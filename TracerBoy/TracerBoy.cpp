@@ -881,6 +881,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	const UINT HeapBlockSize = 20 * 1024 * 1024;
 	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT, true);
 	HeapAllocator RaytracingScratchMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
+	HeapAllocator RaytracingMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
 
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
@@ -1414,15 +1415,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			D3D12_RESOURCE_DESC bottomLevelASDesc = CD3DX12_RESOURCE_DESC::Buffer(prebuildInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 			ComPtr<ID3D12Resource> pBLAS;
-			VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-				&defaultHeapDesc,
-				D3D12_HEAP_FLAG_NONE,
-				&bottomLevelASDesc,
-				EmulateRaytracing() ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-				nullptr,
-				IID_GRAPHICS_PPV_ARGS(pBLAS.ReleaseAndGetAddressOf())));
-			m_pBottomLevelASList.push_back(pBLAS);
-			shapeCacheEntry.BLAS = pBLAS->GetGPUVirtualAddress();
+			UINT32 BLASOffset;
+			D3D12_GPU_VIRTUAL_ADDRESS BLAS = RaytracingMemoryHeapAllocator.Allocate(prebuildInfo.ResultDataMaxSizeInBytes, &pBLAS, &BLASOffset);
+
+			m_pBottomLevelASList.push_back(BLAS);
+			shapeCacheEntry.BLAS = BLAS;
 
 #if SUPPORT_SW_RAYTRACING
 			UINT32 BLASDescriptorSlot = AllocateDescriptorHeapSlot();
@@ -1434,6 +1431,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				blasDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 				blasDesc.Buffer.NumElements = bottomLevelASDesc.Width / sizeof(UINT32);
 				blasDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+				blasDesc.Buffer.FirstElement = BLASOffset / sizeof(UINT32);
 				m_pDevice->CreateUnorderedAccessView(pBLAS.Get(), nullptr, &blasDesc, GetCPUDescriptorHandle(BLASDescriptorSlot));
 				if (USE_FAST_PATH_WITH_FALLBACK)
 				{
@@ -1442,7 +1440,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			}
 #endif
 			buildBottomLevelDesc.ScratchAccelerationStructureData = RaytracingScratchMemoryHeapAllocator.Allocate(prebuildInfo.ScratchDataSizeInBytes);
-			buildBottomLevelDesc.DestAccelerationStructureData = pBLAS->GetGPUVirtualAddress();
+			buildBottomLevelDesc.DestAccelerationStructureData = BLAS;
 
 #if SUPPORT_SW_RAYTRACING
 			if (EmulateRaytracing())
@@ -1576,6 +1574,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	for (auto& pResource : scratchResourceList)
 	{
 		resourcesToDelete.push_back(pResource);
+	}
+
+	auto& raytracingResourceList = RaytracingMemoryHeapAllocator.GetAllocatedResources();
+	for (auto& pResource : raytracingResourceList)
+	{
+		m_pBuffers.push_back(pResource);
 	}
 }
 
@@ -2010,7 +2014,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 
 		WRAPPED_GPU_POINTER TLAS;
 #if USE_FAST_PATH_WITH_FALLBACK
-		TLAS.GpuVA = m_pBottomLevelASList[0]->GetGPUVirtualAddress();
+		TLAS.GpuVA = m_pBottomLevelASList[0];
 #else 
 		TLAS = m_fallbackDevice->GetWrappedPointerFromDescriptorHeapIndex(TopLevelAccelerationStructureUAV);
 #endif

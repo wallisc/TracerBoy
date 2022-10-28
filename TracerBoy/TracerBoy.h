@@ -321,7 +321,7 @@ private:
 	bool m_bSupportsHardwareRaytracing;
 	bool m_bSupportsInlineRaytracing;
 
-	std::vector<ComPtr<ID3D12Resource>> m_pBottomLevelASList;
+	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> m_pBottomLevelASList;
 	ComPtr<ID3D12Resource> m_pTopLevelAS;
 	ComPtr<ID3D12Resource> m_pConfigConstants;
 
