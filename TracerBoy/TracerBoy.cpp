@@ -93,15 +93,15 @@ float4 ConvertFloat4(const pbrt::vec3f& v, float w)
 void ConvertAffine3f(const pbrt::affine3f m, FLOAT Transform[3][4])
 {
 	Transform[0][0] = m.l.vx.x;
-	Transform[0][1] = m.l.vx.y;
-	Transform[0][2] = m.l.vx.z;
+	Transform[0][1] = m.l.vy.x;
+	Transform[0][2] = m.l.vz.x;
 	Transform[0][3] = m.p.x;
-	Transform[1][0] = m.l.vy.x;
+	Transform[1][0] = m.l.vx.y;
 	Transform[1][1] = m.l.vy.y;
-	Transform[1][2] = m.l.vy.z;
+	Transform[1][2] = m.l.vz.y;
 	Transform[1][3] = m.p.y;
-	Transform[2][0] = m.l.vz.x;
-	Transform[2][1] = m.l.vz.y;
+	Transform[2][0] = m.l.vx.z;
+	Transform[2][1] = m.l.vy.z;
 	Transform[2][2] = m.l.vz.z;
 	Transform[2][3] = m.p.z;
 }
