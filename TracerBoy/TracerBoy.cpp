@@ -19,7 +19,7 @@
 #define USE_FAST_PATH_WITH_FALLBACK 1
 
 // Useful for loading levels where the textures won't fit into memory
-#define DISABLE_MATERIALS 1
+#define DISABLE_MATERIALS 0
 
 struct HitGroupShaderRecord
 {
@@ -289,13 +289,23 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	else if (pDisneyMaterial)
 	{
 		material.albedo = ConvertFloat3(pDisneyMaterial->color);
+
+		if (material.albedo.x > 0.7) material.albedo = { 0.2, 0.2, 0.2 };
+
 		material.roughness = pDisneyMaterial->roughness;
 		material.IOR = pDisneyMaterial->eta;
-		
+
 		// Not supporting blend between normal and metallic surfaces
 		if (pDisneyMaterial->metallic > 0.5)
 		{
 			material.Flags |= METALLIC_MATERIAL_FLAG;
+		}
+
+		if (pDisneyMaterial->specTrans > 0.001)
+		{
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.absorption = 0.0;
+			material.roughness = 0.0;
 		}
 	}
 	else if (pUberMaterial)
@@ -441,7 +451,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	}
 	else
 	{
-		VERIFY(false);
+		//VERIFY(false);
 	}
 
 	return material;
@@ -989,7 +999,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			std::string pbrtImportLengthMessage = "PBRT import time: " + std::to_string(0.001f * (float)duration.count()) + " seconds";
 			OutputDebugString(pbrtImportLengthMessage.c_str());
 
-			bool bCachePBF = false;
+			bool bCachePBF = true;
 			if (bCachePBF)
 			{
 				std::string pbfFileName = sceneFileName.substr(0, sceneFileName.size() - 4) + "pbf";
@@ -1093,6 +1103,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			UINT VertexBufferIndex;
 			UINT IndexBufferIndex;
 			D3D12_GPU_VIRTUAL_ADDRESS BLAS;
+
+			UINT NumInstances;
+			bool bIncludeInGlobalBLAS;
 		};
 
 		std::map<pbrt::Shape*, ShapeCacheEntry> shapeCache;
@@ -1125,15 +1138,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				pGeometry = pInstance->object->shapes[0];
 			}
 
-			auto shapeCacheEntryIter = shapeCache.find(pGeometry.get());
-			bool bShapeAlreadyCreated = shapeCacheEntryIter != shapeCache.end();
-			if (!bShapeAlreadyCreated)
-			{
-				shapeCache[pGeometry.get()] = {};
-				shapeCacheEntryIter = shapeCache.find(pGeometry.get());
-			}
-			ShapeCacheEntry& shapeCacheEntry = shapeCacheEntryIter->second;
-
 			pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
 			if (!pTriangleMesh)
 			{
@@ -1141,10 +1145,21 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				continue;
 			}
 
+			auto shapeCacheEntryIter = shapeCache.find(pGeometry.get());
+			bool bShapeAlreadyCreated = shapeCacheEntryIter != shapeCache.end();
+			if (!bShapeAlreadyCreated)
+			{
+				shapeCache[pGeometry.get()] = {};
+				shapeCacheEntryIter = shapeCache.find(pGeometry.get());
+			}
+
+			ShapeCacheEntry& shapeCacheEntry = shapeCacheEntryIter->second;
+			shapeCacheEntry.NumInstances++;
+
 			pbrt::vec3f emissive(0.0f);
 			if (pTriangleMesh->areaLight)
 			{
-				emissive = GetAreaLightColor(pTriangleMesh->areaLight);
+				//emissive = GetAreaLightColor(pTriangleMesh->areaLight);
 			}
 
 			UINT materialIndex = 0;
@@ -1385,6 +1400,29 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		std::vector<UINT32> BLASDescriptorList;
 #endif
+
+		// Start at 1 assuming there will always be a global BLAS
+		instanceCount = 1;
+		UINT GlobalBLASTriangleCount = 0;
+		for (auto& iter : shapeCache)
+		{
+			ShapeCacheEntry& shapeCacheEntry = iter.second;
+			UINT primitiveCount = shapeCacheEntry.GeometryDesc.Triangles.IndexCount / 3;
+			if (true)
+			{
+				shapeCacheEntry.bIncludeInGlobalBLAS = true;
+				GlobalBLASTriangleCount += primitiveCount * shapeCacheEntry.NumInstances;
+			}
+			else
+			{
+				instanceCount += shapeCacheEntry.NumInstances;
+			}
+
+			std::string instanceCountMessage = "Instance Count: " + std::to_string(shapeCacheEntry.NumInstances) + "Triangle Count: " + std::to_string(primitiveCount) + "\n";
+			OutputDebugString(instanceCountMessage.c_str());
+		}
+		std::string instanceCountMessage = "Instance Count: " + std::to_string(instanceCount) + "Global BLAS Triangle Count: " + std::to_string(GlobalBLASTriangleCount);
+		OutputDebugString(instanceCountMessage.c_str());
 
 		UINT32 numShapes = shapeCache.size();
 		UINT32 numInstances = instanceList.size();

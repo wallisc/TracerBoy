@@ -184,7 +184,6 @@ bool IsMetallic(Material material)
 
 bool IsSubsurfaceScattering(Material material)
 {
-    return false;
     return (material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
 }
 
@@ -196,19 +195,6 @@ bool IsLight(Material material)
 bool UsePerfectSpecularOptimization(float roughness)
 {
     return roughness < 0.05f;
-}
-
-float GetDiffuseMultiplier(Material material)
-{
-    if(IsSubsurfaceScattering(material))
-    {
-        return 0.0;
-        //return min(material.scattering / 10.0, 1.0);
-    }
-    else
-    {
-        return 1.0f;
-    }
 }
     
 Material NewMaterial(vec3 albedo, float IOR, float roughness, vec3 emissive, float absorption, float scattering, int flags)
@@ -1617,12 +1603,13 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             // TODO: Overly darkens rough refractions for some reason
                             // accumulatedIndirectLightMultiplier /= PDFValue;
                         }
-
                     }
                     else
                     {
                         ray.direction = reflect(ray.direction, normal);
                     }
+                    // This is certain wrong but...
+                    continue;
                 } 
                 else 
                 {

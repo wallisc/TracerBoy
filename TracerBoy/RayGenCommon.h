@@ -132,7 +132,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	float LightSurfaceArea = LightHalfDimension.x * 2 * LightHalfDimension.y * 2;
 
 	LightColor = float3(17.0, 12.0, 4.0);
-	PDFValue = 1.0 / LightSurfaceArea;
+	PDFValue = 0.0 / LightSurfaceArea;
 }
 
 
