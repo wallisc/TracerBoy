@@ -891,7 +891,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	const UINT HeapBlockSize = 20 * 1024 * 1024;
 	HeapAllocator UploadHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT, true);
 	HeapAllocator RaytracingScratchMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
-	HeapAllocator RaytracingMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
+	HeapAllocator RaytracingMemoryHeapAllocator(*m_pDevice.Get(), HeapBlockSize, EmulateRaytracing() ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, false);
 
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	{
@@ -2004,7 +2004,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		0,
 		nullptr);
 
-	const bool bIsGraphics = outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing && outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing;
+	const bool bIsGraphics = !EmulateRaytracing() && outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing && outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing;
 	SetRootSignature(bIsGraphics, commandList, *m_pRayTracingRootSignature.Get());
 
 	ComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
@@ -2094,7 +2094,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 
 		if (outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing)
 		{
-			if (outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing)
+			if (!EmulateRaytracing() && outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing)
 			{
 				D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_pDepthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
