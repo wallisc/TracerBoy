@@ -1417,12 +1417,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			{
 				instanceCount += shapeCacheEntry.NumInstances;
 			}
-
-			std::string instanceCountMessage = "Instance Count: " + std::to_string(shapeCacheEntry.NumInstances) + "Triangle Count: " + std::to_string(primitiveCount) + "\n";
-			OutputDebugString(instanceCountMessage.c_str());
 		}
-		std::string instanceCountMessage = "Instance Count: " + std::to_string(instanceCount) + "Global BLAS Triangle Count: " + std::to_string(GlobalBLASTriangleCount);
-		OutputDebugString(instanceCountMessage.c_str());
 
 		UINT32 numShapes = shapeCache.size();
 		UINT32 numInstances = instanceList.size();
