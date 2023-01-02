@@ -1591,7 +1591,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
                             if(PDFValue < EPSILON)
                             {
-                                // This ray is satistically not relevant, attempt to find a better ray
+                                // This ray is statistically not relevant, attempt to find a better ray
                                 ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
                                 if(PDFValue < EPSILON)
                                 {
