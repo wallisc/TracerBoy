@@ -23,7 +23,7 @@
 
 #if IS_WINDOWS
 #include <d3d12.h>
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include "d3dx12.h"
 #define D3D12_ROOT_SIGNATURE_FLAG_RAYTRACING D3D12_ROOT_SIGNATURE_FLAG_NONE
 #endif

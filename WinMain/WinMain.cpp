@@ -22,15 +22,27 @@ public:
 		}
 #endif
 
-		VERIFY_HRESULT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_GRAPHICS_PPV_ARGS(&m_pDevice)));
+		ComPtr<IDXGIFactory2> pDxgiFactory2;
+		VERIFY_HRESULT(CreateDXGIFactory2(0, IID_GRAPHICS_PPV_ARGS(&pDxgiFactory2)));
+
+		ComPtr<IDXGIFactory6> pDxgiFactory6;
+		ComPtr<IDXGIAdapter1> pAdapter;
+		if (SUCCEEDED(pDxgiFactory2->QueryInterface(IID_GRAPHICS_PPV_ARGS(&pDxgiFactory6))))
+		{
+			pDxgiFactory6->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_GRAPHICS_PPV_ARGS(&pAdapter));
+			DXGI_ADAPTER_DESC1 adapterDesc;
+			pAdapter->GetDesc1(&adapterDesc);
+
+			std::wstring chosenAdapterMessage = L"Chosen D3D12 adapter: " + std::wstring(adapterDesc.Description);
+			OutputDebugString(chosenAdapterMessage.c_str());
+		}
+
+		VERIFY_HRESULT(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_GRAPHICS_PPV_ARGS(&m_pDevice)));
 
 		D3D12_COMMAND_QUEUE_DESC createCommandQueueDesc = {};
 		createCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 		createCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 		VERIFY_HRESULT(m_pDevice->CreateCommandQueue(&createCommandQueueDesc, IID_GRAPHICS_PPV_ARGS(&m_pCommandQueue)));
-
-		ComPtr<IDXGIFactory2> pDxgiFactory2;
-		VERIFY_HRESULT(CreateDXGIFactory2(0, IID_GRAPHICS_PPV_ARGS(&pDxgiFactory2)));
 
 		RECT clientRect;
 		if (!GetClientRect(hwnd, &clientRect)) HANDLE_FAILURE();
