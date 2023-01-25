@@ -999,7 +999,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			std::string pbrtImportLengthMessage = "PBRT import time: " + std::to_string(0.001f * (float)duration.count()) + " seconds";
 			OutputDebugString(pbrtImportLengthMessage.c_str());
 
-			bool bCachePBF = true;
+			bool bCachePBF = false;
 			if (bCachePBF)
 			{
 				std::string pbfFileName = sceneFileName.substr(0, sceneFileName.size() - 4) + "pbf";
@@ -1159,7 +1159,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			pbrt::vec3f emissive(0.0f);
 			if (pTriangleMesh->areaLight)
 			{
-				//emissive = GetAreaLightColor(pTriangleMesh->areaLight);
+				emissive = GetAreaLightColor(pTriangleMesh->areaLight);
 			}
 
 			UINT materialIndex = 0;
