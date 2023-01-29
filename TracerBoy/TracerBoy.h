@@ -327,6 +327,7 @@ private:
 
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	pbrt::math::mat3f m_EnvironmentMapTransform;
+	pbrt::math::vec3f m_EnvironmentMapColorScale;
 
 	UINT m_MinWaveAmount;
 

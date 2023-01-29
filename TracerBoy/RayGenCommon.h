@@ -40,7 +40,7 @@ float3 SampleEnvironmentMap(float3 v)
 #endif
 	) / (3.14);
 
-	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb;
+	return EnvironmentMap.SampleLevel(BilinearSampler, uv, 0).rgb * configConstants.EnvironmentMapColorScale;
 }
 
 float rand();

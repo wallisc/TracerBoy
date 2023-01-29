@@ -1364,10 +1364,10 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
 			if (pInfiniteLightSource)
 			{
-				std::wstring textureName(L"C:\\Users\\chwallis\\Downloads\\island\\textures\\islandsunVIS.png");
-				//std::wstring textureName(L"C:\\Users\\chwallis\\Documents\\GitHub\\TracerBoy\\Scenes\\bistro\\san_giuseppe_bridge_4k.hdr");
-				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer, true);
+				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end()); 
+				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
 				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
+				m_EnvironmentMapColorScale = pInfiniteLightSource->scale;
 			}
 		}
 
@@ -1385,6 +1385,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			m_pDevice->CreateShaderResourceView(m_pEnvironmentMap.Get(), nullptr, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::EnvironmentMapSRVSlot));
 			m_EnvironmentMapTransform = pbrt::math::affine3f::identity().l;
+			m_EnvironmentMapColorScale = pbrt::math::vec3f(1, 1, 1);
 		}
 
 		resourcesToDelete.push_back(pEnvironmentMapScratchBuffer);
@@ -2349,6 +2350,7 @@ void TracerBoy::UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeigh
 	configConstants.EnvironmentMapTransform.vx = ConvertFloat4(m_EnvironmentMapTransform.vx, 0.0);
 	configConstants.EnvironmentMapTransform.vy = ConvertFloat4(m_EnvironmentMapTransform.vy, 0.0);
 	configConstants.EnvironmentMapTransform.vz = ConvertFloat4(m_EnvironmentMapTransform.vz, 0.0);
+	configConstants.EnvironmentMapColorScale = ConvertFloat3(m_EnvironmentMapColorScale);
 
 	AllocateBufferWithData(&configConstants, sizeof(configConstants), m_pConfigConstants);
 }

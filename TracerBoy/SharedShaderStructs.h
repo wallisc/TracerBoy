@@ -74,6 +74,7 @@ struct ConfigConstants
 	float2 Padding;
 
 	float4x3 EnvironmentMapTransform;
+	float3 EnvironmentMapColorScale;
 };
 
 struct Vertex
