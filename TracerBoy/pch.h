@@ -85,6 +85,7 @@ using namespace DirectX;
 #include "UIController.h"
 #include "DeviceWrapper.h"
 #include "D3D12App.h"
+#include "Curves.h"
 
 #if ENABLE_UI
 #include "imgui.h"

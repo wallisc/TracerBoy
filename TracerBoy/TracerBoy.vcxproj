@@ -168,6 +168,7 @@ xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AssimpImporter.cpp" />
+    <ClCompile Include="Curves.cpp" />
     <ClCompile Include="D3D12App.cpp" />
     <ClCompile Include="DenoiserPass.cpp" />
     <ClCompile Include="FidelityFXSuperResolution.cpp" />
@@ -180,6 +181,7 @@ xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
     <ClInclude Include="AssimpImporter.h" />
     <ClInclude Include="CompositeAlbedoSharedShaderStructs.h" />
     <ClInclude Include="ComputeShaderUtil.h" />
+    <ClInclude Include="Curves.h" />
     <ClInclude Include="D3D12App.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DenoiserPass.h" />

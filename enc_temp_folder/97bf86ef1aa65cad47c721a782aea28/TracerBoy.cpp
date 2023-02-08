@@ -1119,7 +1119,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 		std::vector<InstanceEntry> instanceList;
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
-		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
+		instanceCount = std::min(instanceCount, 200000);
 		instanceList.reserve(instanceCount);
 
 		for (UINT i = 0; i < instanceCount; i++)
