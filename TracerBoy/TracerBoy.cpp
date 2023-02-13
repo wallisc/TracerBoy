@@ -881,6 +881,13 @@ private:
 	std::vector<ComPtr<ID3D12Resource>> ResourceList;
 };
 
+bool IsShapeSupported(pbrt::Shape::SP& pGeometry)
+{
+	pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
+	pbrt::Curve::SP pCurve = std::dynamic_pointer_cast<pbrt::Curve>(pGeometry);
+	return pTriangleMesh || pCurve;
+}
+
 
 void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::string& sceneFileName, std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete)
 {
@@ -1098,11 +1105,17 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		UINT geometryCount = 0;
 		UINT triangleCount = 0;
 
-		struct ShapeCacheEntry
+
+		struct GeometryEntry
 		{
 			D3D12_RAYTRACING_GEOMETRY_DESC GeometryDesc;
 			UINT VertexBufferIndex;
 			UINT IndexBufferIndex;
+		};
+
+		struct ShapeCacheEntry
+		{
+			std::vector<GeometryEntry> Geometries;
 			D3D12_GPU_VIRTUAL_ADDRESS BLAS;
 
 			UINT NumInstances;
@@ -1121,6 +1134,38 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
 		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 		instanceList.reserve(instanceCount);
+
+		bool bInsertInstancesIntoBLAS = false;
+		UINT NumObjectsToInsertInGlobalBLAS = 0;
+		for (UINT i = 0; i < instanceCount; i++)
+		{
+			pbrt::Shape::SP pGeometry;
+			if (i < pScene->world->shapes.size())
+			{
+				UINT geometryIndex = i;
+				pGeometry = pScene->world->shapes[geometryIndex];
+			}
+			else
+			{
+				if (!bInsertInstancesIntoBLAS)
+				{
+					// TODO: Someday I'd like some heuristics that determine
+					// whether an instance really should be instanced or not
+					// For now just call it quit and only support shapes
+					break;
+
+				}
+				
+				UINT instanceIndex = i - pScene->world->shapes.size();
+				auto& pInstance = pScene->world->instances[instanceIndex];
+				pGeometry = pInstance->object->shapes[0];
+			}
+
+			if (IsShapeSupported(pGeometry))
+			{
+				NumObjectsToInsertInGlobalBLAS++;
+			}
+		}
 
 		for (UINT i = 0; i < instanceCount; i++)
 		{
@@ -1253,6 +1298,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 			if (!bShapeAlreadyCreated)
 			{
+				shapeCacheEntry.Geometries.push_back({});
+				auto& geometryEntry = shapeCacheEntry.Geometries[0];
+
 				ComPtr<ID3D12Resource> pVertexBuffer;
 				ComPtr<ID3D12Resource> pUploadVertexBuffer;
 				UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
@@ -1372,16 +1420,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				m_pBuffers.push_back(pIndexBuffer);
 				m_pBuffers.push_back(pVertexBuffer);
 
-				shapeCacheEntry.GeometryDesc = geometryDesc;
-				shapeCacheEntry.VertexBufferIndex = VertexBufferIndex;
-				shapeCacheEntry.IndexBufferIndex = IndexBufferIndex;
+				geometryEntry.GeometryDesc = geometryDesc;
+				geometryEntry.VertexBufferIndex = VertexBufferIndex;
+				geometryEntry.IndexBufferIndex = IndexBufferIndex;
 			}
 
 			HitGroupShaderRecord shaderRecord = {};
 			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.MaterialIndex = materialIndex;
-			shaderRecord.VertexBufferIndex = shapeCacheEntry.VertexBufferIndex;
-			shaderRecord.IndexBufferIndex = shapeCacheEntry.IndexBufferIndex;
+			shaderRecord.VertexBufferIndex = shapeCacheEntry.Geometries[0].VertexBufferIndex;
+			shaderRecord.IndexBufferIndex = shapeCacheEntry.Geometries[0].IndexBufferIndex;
 
 			if (m_bSupportsHardwareRaytracing)
 			{
@@ -1480,7 +1528,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		for (auto& iter : shapeCache)
 		{
 			ShapeCacheEntry& shapeCacheEntry = iter.second;
-			UINT primitiveCount = shapeCacheEntry.GeometryDesc.Triangles.IndexCount / 3;
+			UINT primitiveCount = shapeCacheEntry.Geometries[0].GeometryDesc.Triangles.IndexCount / 3;
 			if (true)
 			{
 				shapeCacheEntry.bIncludeInGlobalBLAS = true;
@@ -1505,7 +1553,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			buildBottomLevelDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
 			buildBottomLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 			buildBottomLevelDesc.Inputs.NumDescs = 1;
-			buildBottomLevelDesc.Inputs.pGeometryDescs = &shapeCacheEntry.GeometryDesc;
+			buildBottomLevelDesc.Inputs.pGeometryDescs = &shapeCacheEntry.Geometries[0].GeometryDesc;
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
 #if SUPPORT_SW_RAYTRACING
