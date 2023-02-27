@@ -144,14 +144,5 @@ struct TextureData
 
 };
 
-struct AreaLightData
-{
-	float3 Emissive;
-	float3 TopLeft;
-	float3 TopRight;
-	float3 BottomLeft;
-	float3 BottomRight;
-};
-
 #define RAYTRACE_THREAD_GROUP_HEIGHT 8
 #define RAYTRACE_THREAD_GROUP_WIDTH 8
