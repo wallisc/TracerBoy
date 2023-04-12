@@ -1,5 +1,6 @@
 #include "pch.h"
 
+#if USE_ASSIMP
 void ConvertToPBRTTexture(aiMaterial &AiMaterial, const char *key, UINT type, UINT idx, pbrt::Texture::SP &pTexture)
 {
 	aiString textureName;
@@ -137,3 +138,4 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 
 	return pScene;
 }
+#endif

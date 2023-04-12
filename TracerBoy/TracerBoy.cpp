@@ -8,7 +8,9 @@
 #include "AnyHit.h"
 #include "Miss.h"
 #include "RaytraceCS.h"
+#if SUPPORT_SW_RAYTRACING
 #include "SoftwareRaytraceCS.h"
+#endif
 #include "RaytracePS.h"
 #include "VarianceStencilMaskPS.h"
 #include "FullscreenVS.h"
@@ -479,8 +481,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(options)));
 
-#if SUPPORT_SW_RAYTRACING
 	m_bSupportsHardwareRaytracing = options.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0;
+#if SUPPORT_SW_RAYTRACING
 	if (EmulateRaytracing())
 	{
 		D3D12CreateRaytracingFallbackDevice(m_pDevice.Get(), CreateRaytracingFallbackDeviceFlags::ForceComputeFallback, 0, IID_PPV_ARGS(&m_fallbackDevice));
@@ -1127,6 +1129,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			UINT NumInstances;
 			bool bIncludeInGlobalBLAS;
 		};
+
+		struct Light
+		{
+			pbrt::vec3f LightColor;
+			pbrt::vec3f P0, P1, P2;
+		}
 
 		std::map<pbrt::Shape*, ShapeCacheEntry> shapeCache;
 		pbrt::Shape* GlobalBLASKey = nullptr;
