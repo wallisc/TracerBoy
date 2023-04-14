@@ -325,6 +325,10 @@ private:
 	ComPtr<ID3D12Resource> m_pTopLevelAS;
 	ComPtr<ID3D12Resource> m_pConfigConstants;
 
+
+	ComPtr<ID3D12Resource> m_pLightList;
+	UINT m_LightCount;
+
 	ComPtr<ID3D12Resource> m_pEnvironmentMap;
 	pbrt::math::mat3f m_EnvironmentMapTransform;
 	pbrt::math::vec3f m_EnvironmentMapColorScale;
@@ -367,6 +371,7 @@ private:
 #if SUPPORT_VOLUMES
 		VolumeSRVParam,
 #endif
+		LightList,
 		ShaderTable,
 		StatsBuffer,
 		PreviousFrameOutput,

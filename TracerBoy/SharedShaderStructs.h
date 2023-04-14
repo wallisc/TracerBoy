@@ -54,6 +54,7 @@ struct PerFrameConstants
 
 	uint GlobalFrameCount;
 	float MinConvergence;
+	uint LightCount;
 
 	uint UseBlueNoise;
 	uint IsRealTime;
@@ -84,6 +85,14 @@ struct Vertex
 	float2 UV;
 	float3 Tangent;
 	float Padding;
+};
+
+struct Light
+{
+	float3 LightColor;
+	float SurfaceArea;
+	float3 P0, P1, P2;
+	float3 N0, N1, N2;
 };
 
 #define DEFAULT_MATERIAL_FLAG 0x0

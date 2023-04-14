@@ -38,6 +38,8 @@ Texture2D BlueNoise1Texture : register(t15);
 Texture2D EnvironmentMap : register(t20);
 StructuredBuffer<Material> MaterialBuffer : register(t21);
 StructuredBuffer<TextureData> TextureDataBuffer : register(t22);
+StructuredBuffer<Light> LightList : register(t23);
+
 
 Texture3D Volume : register(t9);
 Texture2D<float4> ImageTextures[] : register(t0, space1);

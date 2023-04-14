@@ -533,6 +533,8 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 		Parameters[RayTracingRootSignatureParameters::AccelerationStructureRootSRV].InitAsShaderResourceView(1);
 
+		Parameters[RayTracingRootSignatureParameters::LightList].InitAsShaderResourceView(23);
+
 		CD3DX12_DESCRIPTOR_RANGE1 SystemTexturesDescriptor;
 		SystemTexturesDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NumSystemTextures, 14);
 		Parameters[RayTracingRootSignatureParameters::SystemTexturesDescriptorTable].InitAsDescriptorTable(1, &SystemTexturesDescriptor);
@@ -1130,11 +1132,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			bool bIncludeInGlobalBLAS;
 		};
 
-		struct Light
-		{
-			pbrt::vec3f LightColor;
-			pbrt::vec3f P0, P1, P2;
-		}
+		std::vector<Light> lightList;
 
 		std::map<pbrt::Shape*, ShapeCacheEntry> shapeCache;
 		pbrt::Shape* GlobalBLASKey = nullptr;
@@ -1278,6 +1276,42 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			if (pTriangleMesh->areaLight)
 			{
 				emissive = GetAreaLightColor(pTriangleMesh->areaLight);
+
+				UINT numTriangles = pTriangleMesh->index.size();
+				for (UINT i = 0; i < numTriangles; i++)
+				{
+					Light light = {};
+					light.LightColor = ConvertFloat3(emissive);
+
+					pbrt::math::vec3f p0 = pTriangleMesh->vertex[pTriangleMesh->index[i].x];
+					pbrt::math::vec3f p1 = pTriangleMesh->vertex[pTriangleMesh->index[i].y];
+					pbrt::math::vec3f p2 = pTriangleMesh->vertex[pTriangleMesh->index[i].z];
+
+					// Calculate Surface Area of a Triangle
+					{
+						pbrt::math::vec3f v0 = p1 - p0;
+						pbrt::math::vec3f v1 = p2 - p0;
+
+						float v0Length = sqrtf(pbrt::math::dot(v0, v0));
+						float v1Length = sqrtf(pbrt::math::dot(v1, v1));
+
+						float angle = acos(pbrt::math::dot(v0, v1) / (v0Length * v1Length));
+
+						light.SurfaceArea = v0Length * v1Length * sin(angle) / 2.0;
+					}
+
+					light.P0 = ConvertFloat3(p0);
+					light.P1 = ConvertFloat3(p1);
+					light.P2 = ConvertFloat3(p2);
+
+
+
+					light.N0 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].x]);
+					light.N1 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].y]);
+					light.N2 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].z]);
+
+					lightList.push_back(light);
+				}
 			}
 
 			UINT materialIndex = 0;
@@ -1464,6 +1498,14 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		materialListSRV.Buffer.StructureByteStride = sizeof(Material);
 		m_pDevice->CreateShaderResourceView(m_pMaterialList.Get(), &materialListSRV, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MaterialListSRV));
 		
+		m_LightCount = lightList.size();
+		if (m_LightCount > 0)
+		{
+			ComPtr<ID3D12Resource> pUploadLightList;
+			AllocateBufferWithData(commandList, lightList.data(), lightList.size() * sizeof(Light), m_pLightList, pUploadLightList);
+			resourcesToDelete.push_back(pUploadLightList);
+		}
+
 		resourcesToDelete.push_back(pUploadMaterialList);
 
 		if (textureAllocator.GetTextureData().size() > 0)
@@ -2120,6 +2162,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
 	constants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
 	constants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
+	constants.LightCount = m_LightCount;
 
 	constants.Time = static_cast<float>(time.wMilliseconds) / 1000.0f;
 	constants.EnableNormalMaps = outputSettings.m_EnableNormalMaps;
@@ -2166,8 +2209,13 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		SetRootShaderResourceView(bIsGraphics, commandList, RayTracingRootSignatureParameters::AccelerationStructureRootSRV, m_pTopLevelAS->GetGPUVirtualAddress());
 	}
-	
+
 	SetRootDescriptorTable(bIsGraphics, commandList, RayTracingRootSignatureParameters::SystemTexturesDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::SystemTexturesBaseSlot));
+
+	if (m_LightCount > 0)
+	{
+		SetRootShaderResourceView(bIsGraphics, commandList, RayTracingRootSignatureParameters::LightList, m_pLightList->GetGPUVirtualAddress());
+	}
 #if SUPPORT_VOLUMES
 	if (m_pVolume)
 	{

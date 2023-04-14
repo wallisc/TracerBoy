@@ -121,18 +121,39 @@ BlueNoiseData GetBlueNoise()
 	return data;
 }
 
+float3 GetRandomBarycentric()
+{
+	float u = rand();
+	float v = rand();
+
+	if (u + v > 1.0)
+	{
+		u = 1.0 - u;
+		v = 1.0 - v;
+	}
+	return float3(u, v, 1.0 - u - v);
+}
+
 void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue, out float3 LightNormal)
 {
-	LightPosition = float3(-0.05, 1.98, -0.03);
-	float2 LightHalfDimension = float2(0.235, 0.19);
-	BlueNoiseData BlueNoise = GetBlueNoise();
-	LightPosition.xz += float2(BlueNoise.AreaLightJitter.x * 2.0 - 1.0, BlueNoise.AreaLightJitter.y * 2.0 - 1.0) * LightHalfDimension;
-	LightNormal = float3(0, -1, 0);
+	// Initialize
+	LightPosition = LightColor = LightNormal = float3(0, 0, 0);
+	PDFValue = 0.0f;
 
-	float LightSurfaceArea = LightHalfDimension.x * 2 * LightHalfDimension.y * 2;
+	const uint lightCount = perFrameConstants.LightCount;
+	if (lightCount > 0)
+	{
+		uint lightIndex = uint(rand() * float(lightCount));
+		Light light = LightList[lightIndex];
+		BlueNoiseData BlueNoise = GetBlueNoise();
+		float3 barycentric = GetRandomBarycentric();
 
-	LightColor = float3(17.0, 12.0, 4.0);
-	PDFValue = 0.0 / LightSurfaceArea;
+		LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+		LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
+		LightColor = light.LightColor;
+
+		PDFValue = 1.0 / (light.SurfaceArea * lightCount);
+	}
 }
 
 
