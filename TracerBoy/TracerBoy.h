@@ -152,6 +152,9 @@ public:
 		bool m_bEnableToneMapping;
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
+#if USE_XESS
+		bool m_bEnableXeSS;
+#endif
 	};
 
 	struct PerformanceSettings
@@ -206,6 +209,9 @@ public:
 		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
+#if USE_XESS
+		postProcessSettings.m_bEnableXeSS = false;
+#endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
@@ -311,6 +317,10 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_pNonShaderVisibleDescriptorHeap;
 #if SUPPORT_SW_RAYTRACING
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
+#endif
+
+#if USE_XESS
+	xess_context_handle_t m_xessContext = nullptr;
 #endif
 
 	bool EmulateRaytracing() 
@@ -419,6 +429,7 @@ private:
 	bool m_bInvalidateHistory;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
+	ComPtr<ID3D12Resource> m_pMotionVectors;
 	PassResource m_pUpscaleOutput;
 	PassResource m_pUpscaleItermediateOutput;
 	PassResource m_pDenoiserBuffers[2];
@@ -498,6 +509,8 @@ private:
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
 		StatsBufferUAV,
+		MotionVectorsSRV,
+		MotionVectorsUAV,
 #if SUPPORT_SW_RAYTRACING
 		TopLevelAccelerationStructureUAV,
 #endif

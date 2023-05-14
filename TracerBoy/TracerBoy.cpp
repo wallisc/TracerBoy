@@ -472,6 +472,14 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 {
 	m_pCommandQueue->GetDevice(IID_GRAPHICS_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf()));
 
+#if USE_XESS
+	auto status = xessD3D12CreateContext(m_pDevice.Get(), &m_xessContext);
+	if (status != XESS_RESULT_SUCCESS)
+	{
+		HANDLE_FAILURE();
+	}
+#endif
+
 	D3D12_FEATURE_DATA_D3D12_OPTIONS1 option1;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &option1, sizeof(option1)));
 
@@ -2464,6 +2472,36 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pUpscaleOutput.m_pResource;
 	}
 
+#if USE_XESS 
+	if(outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	{
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"XeSS");
+
+		ScopedResourceBarrier colorTextureBarrier(commandList, FinalBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		ScopedResourceBarrier outputBarrier(commandList, m_pUpscaleOutput.m_pResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		auto inputDesc = m_pPostProcessOutput->GetDesc();
+
+		xess_d3d12_execute_params_t exec_params{};
+		exec_params.inputWidth = inputDesc.Width;		exec_params.inputHeight = inputDesc.Height;
+		exec_params.jitterOffsetX = 0.0f;
+		exec_params.jitterOffsetY = 0.0f;
+		exec_params.exposureScale = 1.0f;
+		exec_params.pColorTexture = FinalBuffer.Get();
+		exec_params.pVelocityTexture = m_pMotionVectors.Get();
+		exec_params.pOutputTexture = m_pUpscaleOutput.m_pResource.Get();
+		exec_params.pDepthTexture = nullptr;
+		exec_params.pExposureScaleTexture = 0;
+		auto status = xessD3D12Execute(m_xessContext, &commandList, &exec_params);
+		if (status != XESS_RESULT_SUCCESS)
+		{
+			HANDLE_FAILURE();
+		}
+
+		FinalBuffer = m_pUpscaleOutput.m_pResource;
+	}
+#endif
+
+
 	{
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
 		{
@@ -2761,6 +2799,15 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 	const D3D12_HEAP_PROPERTIES defaultHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	if (bResizeNeeded)
 	{
+#if USE_XESS
+		xess_d3d12_init_params_t initParams = {};
+		initParams.outputResolution.x = upscaledBackBufferDesc.Width;
+		initParams.outputResolution.y = upscaledBackBufferDesc.Height;
+		initParams.qualitySetting = XESS_QUALITY_SETTING_QUALITY;
+		initParams.initFlags = XESS_INIT_FLAG_HIGH_RES_MV;
+		xessD3D12Init(m_xessContext, &initParams);
+#endif
+
 		UpdateConfigConstants((UINT)backBufferDesc.Width, (UINT)backBufferDesc.Height);
 
 		D3D12_RESOURCE_DESC pathTracerOutput = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -2910,6 +2957,19 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				postProcessOutput,
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV),
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV));
+
+			D3D12_RESOURCE_DESC motionVectorsDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R16G16_FLOAT,
+				upscaledBackBufferDesc.Width,
+				upscaledBackBufferDesc.Height,
+				1, 1, 1, 0,
+				D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+			m_pMotionVectors = CreateUAVandSRV(
+				L"Motion Vectors",
+				motionVectorsDesc,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MotionVectorsUAV),
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MotionVectorsSRV));
 
 			{
 				D3D12_RESOURCE_DESC upscaleDesc = postProcessOutput;

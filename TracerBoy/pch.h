@@ -4,6 +4,7 @@
 #define USE_ASSIMP 1
 #define USE_OPENVDB 0
 #define SUPPORT_SW_RAYTRACING 1
+#define USE_XESS 1
 
 #include <memory>
 #include <deque>
@@ -76,6 +77,11 @@ using namespace DirectX;
 #if SUPPORT_SW_RAYTRACING
 #include "D3D12RaytracingFallback.h"
 #endif
+
+#if USE_XESS
+#include "xess/xess_d3d12.h"
+#include "xess/xess_debug.h"
+#endif 
 
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"

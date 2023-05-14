@@ -137,6 +137,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::Checkbox("Enable Tonemapping", &postProcessSettings.m_bEnableToneMapping);
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
 		ImGui::Checkbox("Enable FidelityFX Super Resolution", &postProcessSettings.m_bEnableFSR);
+#if USE_XESS
+		ImGui::Checkbox("Enable XeSS", &postProcessSettings.m_bEnableXeSS);
+#endif
 		ImGui::TreePop();
 	}
 
