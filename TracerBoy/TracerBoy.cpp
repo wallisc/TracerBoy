@@ -2459,19 +2459,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pPostProcessOutput;
 	}
 
-	if(outputSettings.m_postProcessSettings.m_bEnableFSR)
-	{
-		auto inputDesc = m_pPostProcessOutput->GetDesc();
-		m_pFidelityFXSuperResolutionPass->Run(
-			commandList,
-			m_pUpscaleOutput,
-			m_pUpscaleItermediateOutput,
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
-			inputDesc.Width,
-			inputDesc.Height);
-		FinalBuffer = m_pUpscaleOutput.m_pResource;
-	}
-
 #if USE_XESS 
 	if(outputSettings.m_postProcessSettings.m_bEnableXeSS)
 	{
@@ -2500,6 +2487,21 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pUpscaleOutput.m_pResource;
 	}
 #endif
+
+	// Haven't added any upscale code so force FSR on if we need to upscale even if it's disabled
+	bool bNeedsUpscale = m_downscaleFactor < 1.0 && !outputSettings.m_postProcessSettings.m_bEnableXeSS;
+	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
+	{
+		auto inputDesc = m_pPostProcessOutput->GetDesc();
+		m_pFidelityFXSuperResolutionPass->Run(
+			commandList,
+			m_pUpscaleOutput,
+			m_pUpscaleItermediateOutput,
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
+			inputDesc.Width,
+			inputDesc.Height);
+		FinalBuffer = m_pUpscaleOutput.m_pResource;
+	}
 
 
 	{
@@ -2777,14 +2779,20 @@ UINT TracerBoy::GetPreviousFrameWorldPositionSRV()
 	return ViewDescriptorHeapSlots::AOVWorldPosition0SRV + GetPreviousFramePathTracerOutputIndex();
 }
 
+#if USE_XESS
+void xessCallback(const char* message, xess_logging_level_t loggingLevel)
+{
+	OutputDebugString(message);
+}
+#endif
+
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 {
-	float downscaleFactor = 1.0;
-
 	D3D12_RESOURCE_DESC upscaledBackBufferDesc = pBackBuffer->GetDesc();
 	D3D12_RESOURCE_DESC backBufferDesc = upscaledBackBufferDesc;
-	backBufferDesc.Width *= downscaleFactor;
-	backBufferDesc.Height *= downscaleFactor;
+
+	backBufferDesc.Width *= m_downscaleFactor;
+	backBufferDesc.Height *= m_downscaleFactor;
 	VERIFY(backBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
 
 	bool bResizeNeeded = true;
@@ -2803,9 +2811,17 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 		xess_d3d12_init_params_t initParams = {};
 		initParams.outputResolution.x = upscaledBackBufferDesc.Width;
 		initParams.outputResolution.y = upscaledBackBufferDesc.Height;
-		initParams.qualitySetting = XESS_QUALITY_SETTING_QUALITY;
+		initParams.qualitySetting = XESS_QUALITY_SETTING_ULTRA_QUALITY;
 		initParams.initFlags = XESS_INIT_FLAG_HIGH_RES_MV;
 		xessD3D12Init(m_xessContext, &initParams);
+
+		_xess_2d_t outputResolution = { upscaledBackBufferDesc.Width, upscaledBackBufferDesc.Height };
+		_xess_2d_t renderResolution;
+		xessGetInputResolution(m_xessContext, &outputResolution, initParams.qualitySetting, &renderResolution);
+
+		m_downscaleFactor = (float)renderResolution.x / (float)outputResolution.x;
+		backBufferDesc.Width *= m_downscaleFactor;
+		backBufferDesc.Height *= m_downscaleFactor;
 #endif
 
 		UpdateConfigConstants((UINT)backBufferDesc.Width, (UINT)backBufferDesc.Height);

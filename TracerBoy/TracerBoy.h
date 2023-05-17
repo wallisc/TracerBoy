@@ -319,6 +319,8 @@ private:
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
 #endif
 
+	float m_downscaleFactor = 1.0;
+
 #if USE_XESS
 	xess_context_handle_t m_xessContext = nullptr;
 #endif
