@@ -893,7 +893,7 @@ Material GetCustomScatteringMaterial(uint PrimitiveID)
     return SubsurfaceScatterMaterial(vec3(1.0, 0.6, 0.6), 0.0, 1.05, absorption, scattering);
 }
 
-Material GetMaterial(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 uv, bool IsBacksideOfGeometry)
+Material GetMaterialInternal(int MaterialID, uint PrimitiveID, vec3 WorldPosition, vec2 uv, bool IsBacksideOfGeometry)
 {
     if(MaterialID == FLOOR_MATERIAL_ID)
     {
@@ -952,12 +952,12 @@ Material GetMaterialWithTextures(int MaterialID, uint PrimitiveID, vec3 WorldPos
         return GetGlassPebbleMaterial(PrimitiveID, WorldPosition);
     }
     
-    return GetMaterial(MaterialID, PrimitiveID, WorldPosition, uv, false);
+    return GetMaterialInternal(MaterialID, PrimitiveID, WorldPosition, uv, false);
 } 
 
 Material GetAreaLightMaterial()
 {
-    return GetMaterial(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0), false);
+    return GetMaterialInternal(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0), false);
 }
 
 void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue, out vec3 LightNormal)
@@ -1218,6 +1218,25 @@ vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFa
         pdfValue = BSDF_PDF(cosTheta, scatteringDirectionFactor);
         return sinTheta * sin(phi) * up + sinTheta * cos(phi) * right + cosTheta * RayDirection;
     }
+}
+
+vec3 ArtistFriendlyAlbdeoToAbsorption(vec3 color)
+{
+    // Practical and Controllable Subsurface Scattering for Production Path Tracing by Burley
+    return 1.0f - exp(-5.09406*color + 2.61188*color*color - 4.31805*color*color*color);
+}
+
+Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv, bool IsBacksideOfGeometry)
+{
+    Material material = GetMaterialInternal(MaterialID, PrimitiveID, WorldPosition, uv, IsBacksideOfGeometry);
+    if(IsSubsurfaceScattering(material) && any(material.albedo) > 0.0f)
+    {
+        // Subsurface scattering media doesn't technically have an "albedo" but some materials
+        // use this as an artist friendly way of specifying absorption so handle the conversion here
+        material.absorption = ArtistFriendlyAlbdeoToAbsorption(material.albedo);
+        material.albedo = float3(0, 0, 0);
+    }
+    return material;
 }
 
 float BeerLambert(float absorption, float dist)
@@ -1518,12 +1537,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						   vec3 ExitPoint = GetRayPoint(shadowFeeler, shadowResult.x);
 						   float subsurfacePathLength = length(ExitPoint - shadowFeeler.origin);
                        
-						   if(material.absorption > EPSILON)
+						   if(any(material.absorption) > EPSILON)
 						   {
 							   vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
 							   ShadowMultiplier *= exp(-inverseAlbedo * subsurfacePathLength * material.absorption);
 						   }
-						   float ScatterChance = min(material.scattering * subsurfacePathLength, 1.0);
+						   float ScatterChance = min(material.scattering.r * subsurfacePathLength, 1.0);
                         
 						   ShadowMultiplier *= (1.0 - ScatterChance); // Ignoring possiblity of in scattering
 						   ShadowMultiplier *= max(0.0, 1.0 - FresnelFactor(
@@ -1576,6 +1595,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             {
                 if(IsSubsurfaceScattering(material))
                 {
+                    float3 scatter = material.scattering;
                     float nr = CurrentIOR / NewIOR;
                     float discriminant = 1.0 - nr * nr * (1.0 - RayDirectionDotN * RayDirectionDotN);
                     if (discriminant > EPSILON) 
@@ -1638,7 +1658,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
 			float lightPDF;
             vec3 lightPosition, lightColor, lightNormal;
             GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
-                
+            
+            #if 0
             if(IsSubsurfaceScattering(material) && !bSpecularRay)
             {
                 #define MAX_SSS_BOUNCES 5
@@ -1722,6 +1743,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 
             }
             else
+            #endif
             {
 			    
                 if(bFirstRay)

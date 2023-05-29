@@ -122,9 +122,10 @@ struct Material
 	uint specularMapIndex;
 
 	float IOR;
+	float3 absorption;
+
 	float roughness;
-	float absorption;
-	float scattering;
+	float3 scattering;
 
 	float3 emissive;
 	int Flags;

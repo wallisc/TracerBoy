@@ -254,6 +254,11 @@ pbrt::vec3f GetAreaLightColor(pbrt::AreaLight::SP pAreaLight)
 	return emissive;
 }
 
+pbrt::math::vec3f reciprocol(const pbrt::math::vec3f& v)
+{
+	return pbrt::math::vec3f(1.0f / v.x, 1.0f / v.y, 1.0f / v.z);
+}
+
 Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pAlphaTexture,  pbrt::vec3f emissive, MaterialTracker &materialTracker, TextureAllocator &textureAlloator)
 {
 	Material material = {};
@@ -306,8 +311,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		if (pDisneyMaterial->specTrans > 0.001)
 		{
 			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
-			material.absorption = 0.0;
-			material.roughness = 0.0;
+			material.absorption = {};
+			material.roughness = {};
 		}
 	}
 	else if (pUberMaterial)
@@ -339,7 +344,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		{
 			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 			material.IOR = pUberMaterial->index;
-			material.absorption = ChannelAverage(pUberMaterial->kt); // absorption != transmission but need oh well
+			material.absorption = ConvertFloat3(pUberMaterial->kt); // absorption != transmission but need oh well
 		}
 	}
 	else if (pMixMaterial)
@@ -386,7 +391,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		// TODO properly support transmission/absorption
 		//material.Flags = DEFAULT_MATERIAL_FLAG;
 		material.albedo = { };
-		material.absorption = ChannelAverage(pGlassMaterial->kt * 0.01);
+		material.absorption = ConvertFloat3(pGlassMaterial->kt * 0.01);
 		material.IOR = pGlassMaterial->index;
 		material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		//material.scattering = pGlassMaterial->kt.x;
@@ -433,9 +438,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 			}
 			material.IOR = pSubsurfaceMaterial->eta;
 			material.roughness = pSubsurfaceMaterial->uRoughness;
-			material.absorption = 0.1;
-			material.scattering = 1.0f / ChannelAverage(pSubsurfaceMaterial->mfp);
-			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.absorption = { 0.1, 0.1, 0.1 };
+			material.scattering = ConvertFloat3(reciprocol(pSubsurfaceMaterial->mfp));
+			//material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		}
 	}
 	else if (pTranslucentMaterial)
@@ -447,7 +452,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		else
 		{
 			material.albedo = { };
-			material.absorption = 0.001;
+			material.absorption = { 0.001, 0.001, 0.001 };
 			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		}
 	}
