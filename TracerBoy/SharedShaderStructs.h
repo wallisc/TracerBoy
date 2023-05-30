@@ -18,7 +18,6 @@ struct uint2 { uint x; uint y; };
 #endif
 
 #define IS_Y_AXIS_UP 1
-#define SUPPORT_VOLUMES 0
 
 struct RayPayload
 {
@@ -60,11 +59,6 @@ struct PerFrameConstants
 	uint IsRealTime;
 	float DebugValue;
 	uint morePadding;
-
-#if SUPPORT_VOLUMES
-	float3 VolumeMin;
-	float3 VolumeMax;
-#endif
 };
 
 struct ConfigConstants

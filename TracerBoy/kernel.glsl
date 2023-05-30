@@ -14,11 +14,6 @@
 #define IS_SHADER_TOY 1
 #endif
 
-#ifndef SUPPORT_VOLUMES
-#define SUPPORT_VOLUMES 0
-#endif
-
-
 #if IS_SHADER_TOY
 #define SCENE_TRACERBOY_BENCHMARK 0
 #define SCENE_CORNELL_BOX 1
@@ -1318,93 +1313,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
             break;
         }
 
-#if SUPPORT_VOLUMES
-        vec3 VolumeDimensions = perFrameConstants.VolumeMax - perFrameConstants.VolumeMin;
-        float entryT, exitT;
-        if(RayAABIntersect(
-            entryT, 
-            exitT,
-            int(result.y) == INVALID_MATERIAL_ID ? LARGE_NUMBER : result.x,
-            ray,
-            (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
-            VolumeDimensions / 2.0f))
-        {
-            float marchSize = MARCH_SIZE;
-            float currentT = entryT + marchSize;
-            for(uint i = 0; i < 400 && currentT < exitT; i++)
-            {
-                vec3 RayPoint = GetRayPoint(ray, currentT);
-                vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
-                float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
-                vec3 prevAccumulatedLightMultiplier = accumulatedIndirectLightMultiplier;
-                accumulatedIndirectLightMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
-                vec3 amountAbsorbed = prevAccumulatedLightMultiplier - accumulatedIndirectLightMultiplier;
-
-                if(lightPDF > 0.0 && (amountAbsorbed.r > EPSILON || amountAbsorbed.g > EPSILON || amountAbsorbed.b > EPSILON))
-                {
-                    float lightStartT;
-                    float lightEndT;
-                    float lightMultiplier = 1.0f;
-                    Ray shadowRay;
-                    shadowRay.origin = RayPoint;
-                    shadowRay.direction = normalize(lightPosition - RayPoint);
-                    if(RayAABIntersect(
-                        lightStartT, 
-                        lightEndT,
-                        LARGE_NUMBER,
-                        shadowRay,
-                        (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
-                        VolumeDimensions / 2.0f))
-                    {
-                        float currentT = lightStartT + marchSize;
-                        for(uint i = 0; i < 400 && currentT < lightEndT; i++)
-                        {       
-                            vec3 RayPoint = GetRayPoint(shadowRay, currentT);
-                            vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
-                            float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
-                            lightMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
-                            currentT += marchSize;
-                        }
-                    }
-                    accumulatedColor += amountAbsorbed * lightMultiplier * accumulatedIndirectLightMultiplier * lightColor / lightPDF;
-                }
-
-                if((amountAbsorbed.r > EPSILON || amountAbsorbed.g > EPSILON || amountAbsorbed.b > EPSILON))
-                {
-                    float lightStartT;
-                    float lightEndT;
-                    float lightMultiplier = 1.0f;
-                    Ray shadowRay;
-                    shadowRay.origin = RayPoint;
-                    shadowRay.direction = GenerateRandomDirection(vec3(0, 1, 0));
-                    vec3 lightColor = SampleEnvironmentMap(shadowRay.direction) * 1.0f;
-                    if(RayAABIntersect(
-                        lightStartT, 
-                        lightEndT,
-                        LARGE_NUMBER,
-                        shadowRay,
-                        (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
-                        VolumeDimensions / 2.0f))
-                    {
-                        float currentT = lightStartT + marchSize;
-                        for(uint i = 0; i < 400 && currentT < lightEndT; i++)
-                        {       
-                            vec3 RayPoint = GetRayPoint(shadowRay, marchSize);
-                            vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
-                            float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
-                            lightMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
-                            currentT += marchSize;
-                        }
-                    }
-                    accumulatedColor += amountAbsorbed * lightMultiplier * accumulatedIndirectLightMultiplier * lightColor / lightPDF;
-                }
-
-                currentT += marchSize;
-            }
-
-        }
-#endif
-
         if(int(result.y) == INVALID_MATERIAL_ID)
         {
             accumulatedColor += accumulatedIndirectLightMultiplier * SampleEnvironmentMap(ray.direction);
@@ -1491,28 +1399,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						// TODO: This shouldn't really be possible unless we're talking a directional light...
 						if(materialID == INVALID_MATERIAL_ID)
 						{
-#if SUPPORT_VOLUMES
-                            float lightStartT, lightEndT;
-                            if(RayAABIntersect(
-                                lightStartT, 
-                                lightEndT,
-                                LARGE_NUMBER,
-                                shadowFeeler,
-                                (perFrameConstants.VolumeMin + perFrameConstants.VolumeMax) / 2.0f,
-                                VolumeDimensions / 2.0f))
-                            {
-                                float marchSize = MARCH_SIZE;
-                                float currentT = lightStartT + marchSize;
-                                for(uint i = 0; i < 400 && currentT < lightEndT; i++)
-                                {       
-                                    vec3 RayPoint = GetRayPoint(shadowFeeler, currentT);
-                                    vec3 volumeUV = (RayPoint - perFrameConstants.VolumeMin) / VolumeDimensions;
-                                    float density =  Volume.SampleLevel(BilinearSamplerClamp, volumeUV, 0).r;
-                                    ShadowMultiplier *= BeerLambert(density * perFrameConstants.fogScatterDistance, marchSize);
-                                    currentT += marchSize;
-                                }
-                            }
-#endif
 							break;
 						}
 

@@ -2199,11 +2199,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		constants.MinConvergence += m_ConvergencePercentPad;
 	}
 
-#if SUPPORT_VOLUMES
-	constants.VolumeMin = { m_volumeMin.x / 2.0f - constants.fogScatterDirection, m_volumeMin.y / 2.0f, m_volumeMin.z / 2.0f - constants.fogScatterDirection };
-	constants.VolumeMax = { m_volumeMax.x / 2.0f - constants.fogScatterDirection, m_volumeMax.y / 2.0f, m_volumeMax.z / 2.0f - constants.fogScatterDirection };
-#endif
-
 	SetRoot32BitConstants(bIsGraphics, commandList, RayTracingRootSignatureParameters::PerFrameConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 	SetRootConstantBufferView(bIsGraphics, commandList, RayTracingRootSignatureParameters::ConfigConstantsParam, m_pConfigConstants->GetGPUVirtualAddress());
 
@@ -2233,12 +2228,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		SetRootShaderResourceView(bIsGraphics, commandList, RayTracingRootSignatureParameters::LightList, m_pLightList->GetGPUVirtualAddress());
 	}
-#if SUPPORT_VOLUMES
-	if (m_pVolume)
-	{
-		commandList.SetComputeRootDescriptorTable(RayTracingRootSignatureParameters::VolumeSRVParam, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::VolumeSRVSlot));
-	}
-#endif
 
 	D3D12_RESOURCE_BARRIER preDispatchRaysBarrier[] =
 	{
