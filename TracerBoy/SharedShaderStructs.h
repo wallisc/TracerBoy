@@ -58,7 +58,7 @@ struct PerFrameConstants
 
 	uint UseBlueNoise;
 	uint IsRealTime;
-	uint padding;
+	float DebugValue;
 	uint morePadding;
 
 #if SUPPORT_VOLUMES

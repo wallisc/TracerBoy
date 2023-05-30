@@ -175,6 +175,7 @@ public:
 		int m_SampleLimit;
 		float m_TimeLimitInSeconds;
 		float m_VarianceMultiplier;
+		float m_DebugValue;
 	};
 
 
@@ -203,6 +204,7 @@ public:
 		debugSettings.m_VarianceMultiplier = 1.0f;
 		debugSettings.m_SampleLimit = 0;
 		debugSettings.m_TimeLimitInSeconds = 0.0f;
+		debugSettings.m_DebugValue = 1.0f;
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
