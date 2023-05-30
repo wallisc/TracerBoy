@@ -1595,7 +1595,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
             {
                 if(IsSubsurfaceScattering(material))
                 {
-                    float3 scatter = material.scattering;
                     float nr = CurrentIOR / NewIOR;
                     float discriminant = 1.0 - nr * nr * (1.0 - RayDirectionDotN * RayDirectionDotN);
                     if (discriminant > EPSILON) 
@@ -1628,6 +1627,51 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     {
                         ray.direction = reflect(ray.direction, normal);
                     }
+
+                    #define MAX_SSS_BOUNCES 100
+                    
+                    bool noScatter = material.scattering < EPSILON;
+                    // TODO: may want to consider the reciprocal be defined in the material to
+                    // avoid a divide
+                    float DistancePerScatter =  1.0 / material.scattering; 
+                    float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
+                    bool exittingPrimitive = false;
+                    
+                    for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
+                    {
+                        float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
+
+                        uint unusedPrimitiveID;
+                        // TODO: Pass in max trace distance
+                        result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
+                        
+                        result.x = min(travelDistance, result.x);
+                        float distanceTravelledBeforeScatter = result.x;
+                        
+                        exittingPrimitive = result.x < travelDistance || noScatter;
+
+                        bool lastRay = (i == MAX_SSS_BOUNCES - 1);
+                        if(lastRay && !exittingPrimitive)
+                        {
+                            // Couldn't find an exit point
+                            accumulatedColor = vec3(0.0, 0.0, 0.0);
+                            accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
+                        }
+
+                        RayPoint = GetRayPoint(ray, result.x);
+                        accumulatedIndirectLightMultiplier *= exp(-distanceTravelledBeforeScatter * material.absorption);
+                        if(exittingPrimitive)
+                        {
+                            previousDirection = ray.direction;
+                        }
+                        else
+                        {
+                            float pdfValue;
+                            ray.direction = GenerateNewDirectionFromBSDF(ray.direction, 0.0, pdfValue); 
+                            accumulatedIndirectLightMultiplier /= pdfValue;
+                        }
+                    }
+
                     // This is certain wrong but...
                     continue;
                 } 

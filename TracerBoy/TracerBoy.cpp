@@ -438,9 +438,12 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 			}
 			material.IOR = pSubsurfaceMaterial->eta;
 			material.roughness = pSubsurfaceMaterial->uRoughness;
-			material.absorption = { 0.1, 0.1, 0.1 };
+
+			// Absorption is derived off the more artist-friendly albedo value
+			material.absorption = {};
+			
 			material.scattering = ConvertFloat3(reciprocol(pSubsurfaceMaterial->mfp));
-			//material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
 		}
 	}
 	else if (pTranslucentMaterial)
