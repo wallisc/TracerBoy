@@ -1229,6 +1229,7 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
         // Subsurface scattering media doesn't technically have an "albedo" but some materials
         // use this as an artist friendly way of specifying absorption so handle the conversion here
         material.absorption = ArtistFriendlyAlbdeoToAbsorption(material.albedo);
+        material.scattering *= perFrameConstants.DebugValue;
         material.albedo = float3(0, 0, 0);
     }
     return material;
@@ -1517,9 +1518,34 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     #define MAX_SSS_BOUNCES 100
                     
                     bool noScatter = material.scattering < EPSILON;
+
+                    #define PER_CHANNEL_SCATTER 0
+
+                    #if PER_CHANNEL_SCATTER
                     // TODO: may want to consider the reciprocal be defined in the material to
                     // avoid a divide
-                    float DistancePerScatter =  1.0 / material.scattering; 
+                    float channelSelectRand = rand();
+                    uint selectedChannel = channelSelectRand < 0.33 ? 0 : (channelSelectRand < 0.66 ? 1 : 2);
+                    float DistancePerScatter; 
+                    switch(selectedChannel)
+                    {
+                        default:
+                        case 0:
+                            DistancePerScatter =  1.0 / material.scattering.r;
+                            accumulatedIndirectLightMultiplier *= float3(1, 0, 0);
+                            break;
+                        case 1:
+                            DistancePerScatter =  1.0 / material.scattering.g;
+                            accumulatedIndirectLightMultiplier *= float3(0, 1, 0);
+                            break;
+                        case 2:
+                            DistancePerScatter =  1.0 / material.scattering.b;
+                            accumulatedIndirectLightMultiplier *= float3(0, 0, 1);
+                            break;
+                    }
+                    #else
+                    float DistancePerScatter =  1.0 / ((material.scattering.r + material.scattering.g + material.scattering.b) / 3.0);
+                    #endif
                     float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
                     bool exittingPrimitive = false;
                     
@@ -1531,6 +1557,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         // TODO: Pass in max trace distance
                         result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
                         
+                        bool bHitFound = int(result.y) == INVALID_MATERIAL_ID;
                         result.x = min(travelDistance, result.x);
                         float distanceTravelledBeforeScatter = result.x;
                         
