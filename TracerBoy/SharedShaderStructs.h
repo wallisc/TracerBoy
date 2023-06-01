@@ -58,7 +58,7 @@ struct PerFrameConstants
 	uint UseBlueNoise;
 	uint IsRealTime;
 	float DebugValue;
-	uint morePadding;
+	float DebugValue2;
 };
 
 struct ConfigConstants

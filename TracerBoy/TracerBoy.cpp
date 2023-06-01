@@ -2193,6 +2193,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 	constants.DebugValue = outputSettings.m_debugSettings.m_DebugValue;
+	constants.DebugValue2 = outputSettings.m_debugSettings.m_DebugValue2;
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{

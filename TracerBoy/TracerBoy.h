@@ -152,9 +152,7 @@ public:
 		bool m_bEnableToneMapping;
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
-#if USE_XESS
 		bool m_bEnableXeSS;
-#endif
 	};
 
 	struct PerformanceSettings
@@ -176,6 +174,7 @@ public:
 		float m_TimeLimitInSeconds;
 		float m_VarianceMultiplier;
 		float m_DebugValue;
+		float m_DebugValue2;
 	};
 
 
@@ -205,15 +204,14 @@ public:
 		debugSettings.m_SampleLimit = 0;
 		debugSettings.m_TimeLimitInSeconds = 0.0f;
 		debugSettings.m_DebugValue = 1.0f;
+		debugSettings.m_DebugValue2 = 1.0f;
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
 		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
-#if USE_XESS
 		postProcessSettings.m_bEnableXeSS = false;
-#endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
@@ -321,7 +319,7 @@ private:
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
 #endif
 
-	float m_downscaleFactor = 1.0;
+	float m_downscaleFactor = 0.5;
 
 #if USE_XESS
 	xess_context_handle_t m_xessContext = nullptr;

@@ -165,6 +165,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputInt("Max Samples to render", &debugSettings.m_SampleLimit, 1, 16);
 		ImGui::InputFloat("Max time to render (seconds)", &debugSettings.m_TimeLimitInSeconds, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Debug Value", &debugSettings.m_DebugValue, 0.1f, 1.0f, "%.2f");
+		ImGui::InputFloat("Debug Value 2", &debugSettings.m_DebugValue2, 0.1f, 1.0f, "%.2f");
 		ImGui::TreePop();
 	}
 
