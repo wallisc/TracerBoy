@@ -169,7 +169,6 @@ struct CameraDescription
 
 bool AllowsSpecular(Material material)
 {
-    return false;
     return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
 }
     
@@ -1631,92 +1630,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
 			float lightPDF;
             vec3 lightPosition, lightColor, lightNormal;
             GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
-            
-            #if 0
-            if(IsSubsurfaceScattering(material) && !bSpecularRay)
-            {
-                #define MAX_SSS_BOUNCES 5
-                bool noScatter = material.scattering < EPSILON;
-                // TODO: may want to consider the reciprocal be defined in the material to
-                // avoid a divide
-                float DistancePerScatter =  1.0 / material.scattering; 
-                float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
-                bool exittingPrimitive = false;
-                    
-                vec3 AccumulatedSSLightSamples = vec3(0.0, 0.0, 0.0);;
-                int NumLightSamples = 0;
-                for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
-                {
-                    if(i != 0 && lightPDF > EPSILON)
-                    {
-                        vec3 lightDirection = normalize(lightPosition - ray.origin);
-                        
-                        Ray lightRay;
-                        lightRay.origin = ray.origin;
-                        lightRay.direction = lightDirection;
-                        vec3 unused;
-						vec2 unusedUV;
-                        uint unusedUint;
-                        vec2 lightResult = Intersect(lightRay, unused, unused, unusedUV, unusedUint);
-                        vec3 lightEntryPoint = GetRayPoint(lightRay, lightResult.x);
-                        float lightDistance = length(lightEntryPoint - ray.origin);
-
-                        float extinctionChancePerUnitLength = material.absorption + material.scattering;
-                        float distancePerExtinction = 1.0 / extinctionChancePerUnitLength;
-                        if(lightDistance < distancePerExtinction)
-                        {
-                            vec3 remainingLightColor = lightColor * (1.0 - lightDistance / distancePerExtinction);
-                            AccumulatedSSLightSamples += remainingLightColor * accumulatedIndirectLightMultiplier;
-                            NumLightSamples++;
-                        }
-                    }
-                        
-                    float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
-
-                    uint unusedPrimitiveID;
-                    result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
-                        
-                    result.x = min(travelDistance, result.x);
-                    float distanceTravelledBeforeScatter = result.x;
-                        
-                    exittingPrimitive = result.x < travelDistance || noScatter;
-
-                    bool lastRay = (i == MAX_SSS_BOUNCES - 1);
-                    if(lastRay && !exittingPrimitive)
-                    {
-                        // Couldn't find an exit point
-                        accumulatedColor = vec3(0.0, 0.0, 0.0);
-                        accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
-                    }
-
-                    RayPoint = GetRayPoint(ray, result.x);
-
-                    vec3 inverseAlbedo = vec3(1.0, 1.0, 1.0) - material.albedo;
-                    accumulatedIndirectLightMultiplier *= exp(-inverseAlbedo * distanceTravelledBeforeScatter * material.absorption);
-                    if(exittingPrimitive)
-                    {
-                        previousDirection = ray.direction;
-                    }
-                    else
-                    {
-                        float pdfValue;
-                        ray.direction = GenerateNewDirectionFromBSDF(ray.direction, 0.0, pdfValue); 
-                        // TODO: Divide by pdfValue
-                    }
-
-                }
-                if(NumLightSamples > 0)
-                {
-                    accumulatedColor += AccumulatedSSLightSamples / float(NumLightSamples);
-                }
-
-                    
-                // TODO: We know the exact primitive it will hit, should just intersect against
-                // that specific primitive
-
-            }
-            else
-            #endif
             {
 			    
                 if(bFirstRay)
