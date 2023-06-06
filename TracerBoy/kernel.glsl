@@ -1305,7 +1305,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
         vec2 uv;
         uint PrimitiveID;
 
-	    vec2 result = IntersectWithMaxDistance(ray, 999999.0f, normal, tangent, uv, PrimitiveID);
+	    vec2 result = Intersect(ray, normal, tangent, uv, PrimitiveID);
 
         if(i == 0)
         {
