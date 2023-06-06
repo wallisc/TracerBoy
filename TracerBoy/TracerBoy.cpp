@@ -1784,7 +1784,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 {
-	if (m_CachedOutputSettings.m_EnableNormalMaps != outputSettings.m_EnableNormalMaps ||
+	bool bInvalidateIfDebugValuesChange = true;
+	bool bDebugValuesChanged =
+		m_CachedOutputSettings.m_debugSettings.m_DebugValue != outputSettings.m_debugSettings.m_DebugValue ||
+		m_CachedOutputSettings.m_debugSettings.m_DebugValue2 != outputSettings.m_debugSettings.m_DebugValue2;
+
+	if ((bInvalidateIfDebugValuesChange && bDebugValuesChanged) ||
+		m_CachedOutputSettings.m_EnableNormalMaps != outputSettings.m_EnableNormalMaps ||
 		m_CachedOutputSettings.m_renderMode != outputSettings.m_renderMode ||
 		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||

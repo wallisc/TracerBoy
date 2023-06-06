@@ -4,7 +4,7 @@
 #define USE_ASSIMP 1
 #define USE_OPENVDB 0
 #define SUPPORT_SW_RAYTRACING 1
-#define USE_XESS 1
+#define USE_XESS 0
 
 #include <memory>
 #include <deque>

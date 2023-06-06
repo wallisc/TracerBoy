@@ -169,6 +169,7 @@ struct CameraDescription
 
 bool AllowsSpecular(Material material)
 {
+    return false;
     return (material.Flags & NO_SPECULAR_MATERIAL_FLAG) == 0;
 }
     
@@ -1215,10 +1216,15 @@ vec3 GenerateNewDirectionFromBSDF(vec3 RayDirection, float scatteringDirectionFa
     }
 }
 
-vec3 ArtistFriendlyAlbdeoToAbsorption(vec3 color)
+void ArtistFriendlyAlbdeoToAbsorption(vec3 color, vec3 mfp, out vec3 absorption, out vec3 scattering)
 {
+    //return 1.0 / color;
     // Practical and Controllable Subsurface Scattering for Production Path Tracing by Burley
-    return 1.0f - exp(-5.09406*color + 2.61188*color*color - 4.31805*color*color*color);
+    vec3 alpha = 1.0f - exp(-5.09406*color + 2.61188*color*color - 4.31805*color*color*color);
+    vec3 s = 1.9 - color + 3.5 * (color - 0.8) * (color - 0.8);
+    vec3 transmission = 1.0 / (s * mfp);
+    scattering = transmission * alpha;
+    absorption = transmission - scattering;
 }
 
 Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, float2 uv, bool IsBacksideOfGeometry)
@@ -1228,7 +1234,8 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
     {
         // Subsurface scattering media doesn't technically have an "albedo" but some materials
         // use this as an artist friendly way of specifying absorption so handle the conversion here
-        material.absorption = ArtistFriendlyAlbdeoToAbsorption(material.albedo);
+        ArtistFriendlyAlbdeoToAbsorption(material.albedo, 1.0 / material.scattering, material.absorption, material.scattering);
+        material.absorption *= perFrameConstants.DebugValue2;
         material.scattering *= perFrameConstants.DebugValue;
         material.albedo = float3(0, 0, 0);
     }
@@ -1532,15 +1539,15 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         default:
                         case 0:
                             DistancePerScatter =  1.0 / material.scattering.r;
-                            accumulatedIndirectLightMultiplier *= float3(1, 0, 0);
+                            accumulatedIndirectLightMultiplier *= float3(3, 0, 0);
                             break;
                         case 1:
                             DistancePerScatter =  1.0 / material.scattering.g;
-                            accumulatedIndirectLightMultiplier *= float3(0, 1, 0);
+                            accumulatedIndirectLightMultiplier *= float3(0, 3, 0);
                             break;
                         case 2:
                             DistancePerScatter =  1.0 / material.scattering.b;
-                            accumulatedIndirectLightMultiplier *= float3(0, 0, 1);
+                            accumulatedIndirectLightMultiplier *= float3(0, 0, 3);
                             break;
                     }
                     #else
@@ -1548,7 +1555,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     #endif
                     float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
                     bool exittingPrimitive = false;
-                    
+
                     for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
                     {
                         float travelDistance = max(-log(rand()), 0.1) * maxTravelDistance;
@@ -1557,7 +1564,14 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         // TODO: Pass in max trace distance
                         result = Intersect(ray, normal, tangent, uv, unusedPrimitiveID);
                         
-                        bool bHitFound = int(result.y) == INVALID_MATERIAL_ID;
+                        bool bHitFound = int(result.y) != INVALID_MATERIAL_ID;
+                        if(!bHitFound)
+                        {
+                            // Uh...this should never happen
+                            accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
+                            break;
+                        }
+
                         result.x = min(travelDistance, result.x);
                         float distanceTravelledBeforeScatter = result.x;
                         
@@ -1567,12 +1581,14 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         if(lastRay && !exittingPrimitive)
                         {
                             // Couldn't find an exit point
-                            accumulatedColor = vec3(0.0, 0.0, 0.0);
                             accumulatedIndirectLightMultiplier = vec3(0.0, 0.0, 0.0);
                         }
 
                         RayPoint = GetRayPoint(ray, result.x);
-                        accumulatedIndirectLightMultiplier *= exp(-distanceTravelledBeforeScatter * material.absorption);
+                        ray.origin = RayPoint + normal * EPSILON;
+
+                        float3 beerLambert = exp(-distanceTravelledBeforeScatter * material.absorption);
+                        accumulatedIndirectLightMultiplier *= beerLambert;
                         if(exittingPrimitive)
                         {
                             previousDirection = ray.direction;
