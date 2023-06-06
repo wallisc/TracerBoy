@@ -443,7 +443,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 			material.absorption = {};
 			
 			material.scattering = ConvertFloat3(reciprocol(pSubsurfaceMaterial->mfp));
-			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			// Disabling specular because it currently over-darkens
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG | NO_SPECULAR_MATERIAL_FLAG;
 		}
 	}
 	else if (pTranslucentMaterial)
