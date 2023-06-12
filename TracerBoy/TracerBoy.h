@@ -287,7 +287,8 @@ private:
 		ComPtr<ID3D12Resource>& pResource,
 		UINT SRVSlot,
 		ComPtr<ID3D12Resource>& pUploadResource,
-		bool bIsInternalAsset = false);
+		bool bIsInternalAsset = false,
+		bool *bHasAlpha = nullptr);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(UINT slot);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(UINT slot);
@@ -319,7 +320,7 @@ private:
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
 #endif
 
-	float m_downscaleFactor = 0.5;
+	float m_downscaleFactor = 1.0;
 
 #if USE_XESS
 	xess_context_handle_t m_xessContext = nullptr;
@@ -558,7 +559,7 @@ public:
 		m_pCommandList(&CommandList)
 	{}
 
-	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect = false);
+	UINT CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect = false, bool *bHasAlpha = nullptr);
 	const std::vector<TextureData>& GetTextureData() const { return m_textureData; }
 
 	void ExtractScratchResources(std::vector<ComPtr<ID3D12Resource>>& scratchResources)

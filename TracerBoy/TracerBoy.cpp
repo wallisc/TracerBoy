@@ -193,7 +193,7 @@ bool IsNormalizedFormat(DXGI_FORMAT format)
 	}
 }
 
-UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect)
+UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect, bool* bHasAlpha)
 {
 	TextureData texture;
 	pbrt::ImageTexture::SP pImageTexture = std::dynamic_pointer_cast<pbrt::ImageTexture>(pPbrtTexture);
@@ -211,7 +211,9 @@ UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGamm
 			*m_pCommandList.Get(),
 			pTexture,
 			texture.DescriptorHeapIndex,
-			pUpload);
+			pUpload,
+			false,
+			bHasAlpha);
 
 		texture.TextureFlags = DEFAULT_TEXTURE_FLAG;
 		if (bGammaCorrect && IsNormalizedFormat(pTexture->GetDesc().Format))
@@ -271,9 +273,11 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	material.emissive = ConvertFloat3(emissive);
 	material.Flags = ChannelAverage(emissive) > 0.0 ? LIGHT_MATERIAL_FLAG : DEFAULT_MATERIAL_FLAG;
 
+	bool bHasAlpha = false;
 	if (pAlphaTexture)
 	{
 		material.alphaIndex = textureAlloator.CreateTexture(*pAlphaTexture);
+		bHasAlpha = true;
 	}
 
 	pbrt::SubstrateMaterial::SP pSubstrateMaterial = std::dynamic_pointer_cast<pbrt::SubstrateMaterial>(pPbrtMaterial);
@@ -319,7 +323,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	{
 		if (pUberMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd, true);
+			bool bAlbedoMapHasAlpha;
+			material.albedoIndex = textureAlloator.CreateTexture(pUberMaterial->map_kd, true, &bAlbedoMapHasAlpha);
+			bHasAlpha |= bAlbedoMapHasAlpha;
 		}
 		if (pUberMaterial->map_normal)
 		{
@@ -376,7 +382,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	{
 		if (pSubstrateMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pSubstrateMaterial->map_kd);
+			bool bAlbedoMapHasAlpha;
+			material.albedoIndex = textureAlloator.CreateTexture(pSubstrateMaterial->map_kd, false, &bAlbedoMapHasAlpha);
+			bHasAlpha |= bAlbedoMapHasAlpha;
 		}
 		material.albedo = ConvertFloat3(pSubstrateMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pSubstrateMaterial->ks));
@@ -407,7 +415,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		material.roughness = pMatteMaterial->sigma;
 		if (pMatteMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pMatteMaterial->map_kd);
+			bool bAlbedoMapHasAlpha;
+			material.albedoIndex = textureAlloator.CreateTexture(pMatteMaterial->map_kd, false, &bAlbedoMapHasAlpha);
+			bHasAlpha |= bAlbedoMapHasAlpha;
 		}
 
 		material.albedo = ConvertFloat3(pMatteMaterial->kd);
@@ -418,7 +428,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		material.roughness = pPlasticMaterial->roughness;
 		if (pPlasticMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pPlasticMaterial->map_kd);
+			bool bAlbedoMapHasAlpha;
+			material.albedoIndex = textureAlloator.CreateTexture(pPlasticMaterial->map_kd, false, &bAlbedoMapHasAlpha);
+			bHasAlpha |= bAlbedoMapHasAlpha;
 		}
 		material.albedo = ConvertFloat3(pPlasticMaterial->kd);
 		material.IOR = ConvertSpecularToIOR(ChannelAverage(pPlasticMaterial->ks));
@@ -434,7 +446,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 		{
 			if (pSubsurfaceMaterial->map_kd)
 			{
-				material.albedoIndex = textureAlloator.CreateTexture(pSubsurfaceMaterial->map_kd, true);
+				bool bAlbedoMapHasAlpha;
+				material.albedoIndex = textureAlloator.CreateTexture(pSubsurfaceMaterial->map_kd, true, &bAlbedoMapHasAlpha);
+				bHasAlpha |= bAlbedoMapHasAlpha;
 			}
 			material.IOR = pSubsurfaceMaterial->eta;
 			material.roughness = pSubsurfaceMaterial->uRoughness;
@@ -451,7 +465,9 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	{
 		if (pTranslucentMaterial->map_kd)
 		{
-			material.albedoIndex = textureAlloator.CreateTexture(pTranslucentMaterial->map_kd);
+			bool bAlbedoMapHasAlpha;
+			material.albedoIndex = textureAlloator.CreateTexture(pTranslucentMaterial->map_kd, false, &bAlbedoMapHasAlpha);
+			bHasAlpha |= bAlbedoMapHasAlpha;
 		}
 		else
 		{
@@ -463,6 +479,11 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	else
 	{
 		//VERIFY(false);
+	}
+
+	if (!bHasAlpha)
+	{
+		material.Flags |= NO_ALPHA_MATERIAL_FLAG;
 	}
 
 	return material;
@@ -1450,6 +1471,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				}
 				triangleCount += pTriangleMesh->index.size() / 3;
 
+#if USE_ANYHIT
+				D3D12_RAYTRACING_GEOMETRY_FLAGS GeometryFlag = (materialTracker.MaterialList[materialIndex].Flags & NO_ALPHA_MATERIAL_FLAG) ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+#else
+				D3D12_RAYTRACING_GEOMETRY_FLAGS GeometryFlag = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+#endif
+
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Triangles.IndexBuffer = pIndexBuffer->GetGPUVirtualAddress();
 				geometryDesc.Triangles.IndexCount = static_cast<UINT>(pIndexBuffer->GetDesc().Width) / (sizeof(UINT32));
@@ -1459,7 +1486,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				geometryDesc.Triangles.VertexCount = static_cast<UINT>(pVertexBuffer->GetDesc().Width) / vertexSize;
 				geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress();
 				geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
-				geometryDesc.Flags = USE_ANYHIT ? D3D12_RAYTRACING_GEOMETRY_FLAG_NONE : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+				geometryDesc.Flags = GeometryFlag;
 				geometryDescs.push_back(geometryDesc);
 
 				commandList.CopyBufferRegion(pVertexBuffer.Get(), 0, pUploadVertexBuffer.Get(), uploadVertexBufferOffset, vertexBufferSize);
@@ -1810,7 +1837,8 @@ void TracerBoy::InitializeTexture(
 	ComPtr<ID3D12Resource>& pResource,
 	UINT SRVSlot,
 	ComPtr<ID3D12Resource>& pUploadResource,
-	bool bIsInternalAsset )
+	bool bIsInternalAsset,
+	bool* bHasAlpha)
 {
 	std::wstring directory(m_sceneFileDirectory.begin(), m_sceneFileDirectory.end());
 	std::wstring fullTextureName = bIsInternalAsset ? textureName : directory + textureName;
@@ -1836,6 +1864,12 @@ void TracerBoy::InitializeTexture(
 	{
 		VERIFY_HRESULT(DirectX::LoadFromWICFile(fullTextureName.c_str(), WIC_FLAGS_NONE, &texMetaData, scratchImage));
 	}
+
+	if (bHasAlpha)
+	{
+		*bHasAlpha = !scratchImage.IsAlphaAllOpaque();
+	}
+
 	VERIFY_HRESULT(DirectX::CreateTextureEx(m_pDevice.Get(), texMetaData, D3D12_RESOURCE_FLAG_NONE, false, pResource.ReleaseAndGetAddressOf()));
 
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, GetCPUDescriptorHandle(SRVSlot));
