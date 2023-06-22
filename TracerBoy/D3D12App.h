@@ -30,6 +30,8 @@ public:
 	
 	void Render();
 private:
+	void LoadScene(const std::string &commandLine);
+
 	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair& pair);
 	UINT ExecuteAndFreeCommandListAllocatorPair(CommandListAllocatorPair& pair);
@@ -56,10 +58,14 @@ private:
 
 	UINT m_FrameFence[cNumBackBuffers] = {};
 	ComPtr<ID3D12Resource> m_pReadbackStatBuffers[cNumBackBuffers];
+
+	std::mutex CommandListAllocatorPairMutex;
 	ComPtr<ID3D12Fence> m_pFence;
 	UINT64 m_SignalValue;
 	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
 
+	std::thread m_asyncLoadSceneThread;
+	std::atomic<bool> bIsSceneLoadFinished;
 	bool m_bRenderUI;
 
 

@@ -15,6 +15,7 @@ public:
 		UINT32 NumberOfTotalPixels;
 	};
 
+	void RenderLoadingScreen(ID3D12GraphicsCommandList& commandList);
 	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats);
 
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }
@@ -23,6 +24,7 @@ public:
 	float GetCaptureFramesPerSecond() { return m_captureFramesPerSecond; }
 	float GetCaptureSamplesPerFrame() { return m_captureSamplesPerFrame; }
 private:
+	void SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool bClearRenderTarget);
 	void SetDefaultSettings();
 	TracerBoy::OutputSettings m_outputSettings;
 

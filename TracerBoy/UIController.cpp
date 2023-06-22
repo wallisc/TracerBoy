@@ -86,6 +86,39 @@ void UIController::SetDefaultSettings()
 	m_outputSettings = TracerBoy::GetDefaultOutputSettings();
 }
 
+void UIController::SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool bClearRenderTarget)
+{
+	ComPtr<ID3D12Resource> pBackBuffer;
+	UINT backBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+	m_pSwapchain->GetBuffer(backBufferIndex, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
+
+	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pImguiSRVDescriptorHeap.Get() };
+	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
+	commandList.OMSetRenderTargets(1, &m_RTVs[backBufferIndex], FALSE, NULL);
+
+	float black[4] = {};
+	commandList.ClearRenderTargetView(m_RTVs[backBufferIndex], black, 0, nullptr);
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), &commandList);
+	D3D12_RESOURCE_BARRIER postImguiBarriers[] =
+	{
+		CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,  D3D12_RESOURCE_STATE_PRESENT)
+	};
+	commandList.ResourceBarrier(ARRAYSIZE(postImguiBarriers), postImguiBarriers);
+}
+
+void UIController::RenderLoadingScreen(ID3D12GraphicsCommandList& commandList)
+{
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+	ImGui::Begin("Loading");
+
+	ImGui::End();
+	ImGui::Render();
+
+	SubmitDrawData(commandList, true);
+}
+
 void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats)
 {
 	ImGui_ImplDX12_NewFrame();
@@ -180,20 +213,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	ImGui::End();
 
 	ImGui::Render();
-
-	ComPtr<ID3D12Resource> pBackBuffer;
-	UINT backBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-	m_pSwapchain->GetBuffer(backBufferIndex, IID_GRAPHICS_PPV_ARGS(&pBackBuffer));
-	
-	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pImguiSRVDescriptorHeap.Get() };
-	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
-	commandList.OMSetRenderTargets(1, &m_RTVs[backBufferIndex], FALSE, NULL);
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), &commandList);
-	D3D12_RESOURCE_BARRIER postImguiBarriers[] =
-	{
-		CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,  D3D12_RESOURCE_STATE_PRESENT)
-	};
-	commandList.ResourceBarrier(ARRAYSIZE(postImguiBarriers), postImguiBarriers);
+	SubmitDrawData(commandList, false);
 }
 
 #endif
