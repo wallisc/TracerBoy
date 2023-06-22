@@ -96,8 +96,11 @@ void UIController::SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool b
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 	commandList.OMSetRenderTargets(1, &m_RTVs[backBufferIndex], FALSE, NULL);
 
-	float black[4] = {};
-	commandList.ClearRenderTargetView(m_RTVs[backBufferIndex], black, 0, nullptr);
+	if (bClearRenderTarget)
+	{
+		float black[4] = {};
+		commandList.ClearRenderTargetView(m_RTVs[backBufferIndex], black, 0, nullptr);
+	}
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), &commandList);
 	D3D12_RESOURCE_BARRIER postImguiBarriers[] =
 	{
