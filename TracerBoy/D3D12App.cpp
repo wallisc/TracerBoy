@@ -41,6 +41,7 @@ D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) :
 				CoInitialize(nullptr);  
 				this->LoadScene(commandLine); 
 		});
+		m_asyncLoadSceneThread.detach();
 	}
 	else
 	{
