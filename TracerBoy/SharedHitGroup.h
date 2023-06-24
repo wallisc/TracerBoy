@@ -30,9 +30,9 @@ struct GeometryInfo
 {
 	uint MaterialIndex;
 	uint IndexBufferIndex;
-	uint IndexBufferOffset;
+	uint IndexBufferFirstElement;
 	uint VertexBufferIndex;
-	uint VertexBufferOffset;
+	uint VertexBufferFirstElement;
 };
 
 Buffer<float> GetVertexBuffer(uint Index)
@@ -48,12 +48,16 @@ Buffer<uint> GetIndexBuffer(uint Index)
 GeometryInfo GetGeometryInfo(uint GeometryIndex)
 {
 	HitGroupShaderRecord ShaderRecord = ShaderTable[GeometryIndex];
+
+	const uint VertexBufferElementSize = 4;
+	const uint IndexBufferElementSize = 4;
+
 	GeometryInfo info;
 	info.MaterialIndex = ShaderRecord.MaterialIndex;
 	info.VertexBufferIndex = ShaderRecord.VertexBufferIndex;
-	info.VertexBufferOffset = ShaderRecord.VertexBufferOffset;
+	info.VertexBufferFirstElement = ShaderRecord.VertexBufferOffset / VertexBufferElementSize;
 	info.IndexBufferIndex = ShaderRecord.IndexBufferIndex;
-	info.IndexBufferOffset = ShaderRecord.IndexBufferOffset;
+	info.IndexBufferFirstElement = ShaderRecord.IndexBufferOffset / IndexBufferElementSize;
 	return info;
 }
 
@@ -68,26 +72,26 @@ float3 GetFloat3FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint d
 {
 	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
 	return float3(
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferOffset + dataOffset],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferOffset + dataOffset + 1],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferOffset + dataOffset + 2]);
+		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset],
+		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 1],
+		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 2]);
 }
 
 float2 GetFloat2FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint dataOffset)
 {
 	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
 	return float2(
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferOffset + dataOffset],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferOffset + dataOffset + 1]);
+		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset],
+		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 1]);
 }
 
 uint3 GetIndices(GeometryInfo Geometry, uint PrimitiveIndex)
 {
 	Buffer<uint> IndexBuffer = GetIndexBuffer(Geometry.IndexBufferIndex);
 	return uint3(
-		IndexBuffer[Geometry.IndexBufferOffset + PrimitiveIndex * 3],
-		IndexBuffer[Geometry.IndexBufferOffset + PrimitiveIndex * 3 + 1], 
-		IndexBuffer[Geometry.IndexBufferOffset + PrimitiveIndex * 3 + 2]);
+		IndexBuffer[Geometry.IndexBufferFirstElement + PrimitiveIndex * 3],
+		IndexBuffer[Geometry.IndexBufferFirstElement + PrimitiveIndex * 3 + 1], 
+		IndexBuffer[Geometry.IndexBufferFirstElement + PrimitiveIndex * 3 + 2]);
 }
 
 float2 GetUV(GeometryInfo Geometry, uint3 indices, float3 barycentrics)

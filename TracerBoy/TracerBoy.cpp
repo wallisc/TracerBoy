@@ -481,6 +481,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	}
 	else
 	{
+		material.albedo = { 153.0 / 255.0f, 102.0f / 255.0, 58.0f / 255.0f };
+		material.roughness = 0.2;
 		//VERIFY(false);
 	}
 
@@ -1156,7 +1158,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		{
 			D3D12_RAYTRACING_GEOMETRY_DESC GeometryDesc;
 			UINT VertexBufferIndex;
+			UINT VertexBufferOffset;
 			UINT IndexBufferIndex;
+			UINT IndexBufferOffset;
 		};
 
 		struct ShapeCacheEntry
@@ -1188,6 +1192,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
 		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 		instanceList.reserve(instanceCount);
+
+		std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, UINT32> ResourceToSRVIndex;
 
 		struct CopyJob
 		{
@@ -1231,13 +1237,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			// Handle curves by converting subdividing them into triangle meshes
 			if (pCurve)
 			{
-				const UINT verticesPerLoop = 6;
+				const UINT verticesPerLoop = 4;
 				const float rotatedRadiansPerVert = 3.14 * 2.0 / (float)(verticesPerLoop);
 				const UINT facesPerLoop = verticesPerLoop;
 				const UINT indicesPerTriangle = 3;
 				const UINT trianglesPerFace = 2;
 				const UINT indicesPerLoop = facesPerLoop * trianglesPerFace * indicesPerTriangle;
-				const UINT loopsPerCurve = 6;
+				const UINT loopsPerCurve = 3;
 				float curveIntepolantIncrementPerLoop = 1.0 / (float)loopsPerCurve;
 				pTriangleMesh = pbrt::TriangleMesh::SP(new pbrt::TriangleMesh());
 
@@ -1393,7 +1399,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 				ComPtr<ID3D12Resource> pVertexBuffer;
 				ComPtr<ID3D12Resource> pUploadVertexBuffer;
-				UINT VertexBufferIndex = AllocateDescriptorHeapSlot();
+				UINT VertexBufferIndex;
 				UINT vertexSize = sizeof(Vertex);
 				UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
 				UINT32 vertexBufferOffset;
@@ -1436,15 +1442,26 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 					BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
 
-					D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-					D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-					SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-					SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
-					SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-					SRVDesc.Buffer.NumElements = desc.Width / 4;
-					SRVDesc.Buffer.FirstElement = vertexBufferOffset / 4;
+					auto SRVIndexIter = ResourceToSRVIndex.find(pVertexBuffer->GetGPUVirtualAddress());
+					if (SRVIndexIter == ResourceToSRVIndex.end())
+					{
+						VertexBufferIndex = AllocateDescriptorHeapSlot();
+						ResourceToSRVIndex[pVertexBuffer->GetGPUVirtualAddress()] = VertexBufferIndex;
 
-					m_pDevice->CreateShaderResourceView(pVertexBuffer.Get(), &SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex));
+						D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+						D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+						SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+						SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
+						SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+						SRVDesc.Buffer.NumElements = pVertexBuffer->GetDesc().Width / 4;
+						SRVDesc.Buffer.FirstElement = 0;
+
+						m_pDevice->CreateShaderResourceView(pVertexBuffer.Get(), &SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex));
+					}
+					else
+					{
+						VertexBufferIndex = SRVIndexIter->second;
+					}
 				}
 
 				UINT indexSize = sizeof(UINT32);
@@ -1455,7 +1472,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				UINT32 indexBufferOffset;
 				UploadHeapAllocator.Allocate(indexBufferSize, &pUploadIndexBuffer, &uploadIndexBufferOffset);
 				BufferAllocator.Allocate(indexBufferSize, &pIndexBuffer, &indexBufferOffset);
-				UINT IndexBufferIndex = AllocateDescriptorHeapSlot();
+				UINT IndexBufferIndex;
 				{
 					BYTE* pIndexBufferByteData;
 					VERIFY_HRESULT(pUploadIndexBuffer->Map(0, nullptr, (void**)&pIndexBufferByteData));
@@ -1480,15 +1497,28 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 							pVertexBufferData[triangleIndices.z].Normal = { normal.x, normal.y, normal.z };
 						}
 					}
-					D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
-					D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-					SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-					SRVDesc.Format = DXGI_FORMAT_R32_UINT;
-					SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-					SRVDesc.Buffer.NumElements = desc.Width / 4;
-					SRVDesc.Buffer.FirstElement = indexBufferOffset / 4;
 
-					m_pDevice->CreateShaderResourceView(pIndexBuffer.Get(), &SRVDesc, GetCPUDescriptorHandle(IndexBufferIndex));
+					auto SRVIndexIter = ResourceToSRVIndex.find(pIndexBuffer->GetGPUVirtualAddress());
+					if (SRVIndexIter == ResourceToSRVIndex.end())
+					{
+						IndexBufferIndex = AllocateDescriptorHeapSlot();
+						ResourceToSRVIndex[pIndexBuffer->GetGPUVirtualAddress()] = IndexBufferIndex;
+
+						D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
+						D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+						SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+						SRVDesc.Format = DXGI_FORMAT_R32_UINT;
+						SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+						SRVDesc.Buffer.NumElements = pIndexBuffer->GetDesc().Width / 4;
+						SRVDesc.Buffer.FirstElement = 0;
+
+						m_pDevice->CreateShaderResourceView(pIndexBuffer.Get(), &SRVDesc, GetCPUDescriptorHandle(IndexBufferIndex));
+					}
+					else
+					{
+						IndexBufferIndex = SRVIndexIter->second;
+					}
+
 				}
 				triangleCount += pTriangleMesh->index.size() / 3;
 
@@ -1510,23 +1540,40 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 				geometryDesc.Flags = GeometryFlag;
 				geometryDescs.push_back(geometryDesc);
 
-				commandList.CopyBufferRegion(pVertexBuffer.Get(), vertexBufferOffset, pUploadVertexBuffer.Get(), uploadVertexBufferOffset, vertexBufferSize);
-				commandList.CopyBufferRegion(pIndexBuffer.Get(), indexBufferOffset, pUploadIndexBuffer.Get(), uploadIndexBufferOffset, indexBufferSize);
+				CopyJob vertexBufferUploadJob;
+				vertexBufferUploadJob.pDest = pVertexBuffer.Get();
+				vertexBufferUploadJob.DestOffset = vertexBufferOffset;
+				vertexBufferUploadJob.pSource = pUploadVertexBuffer.Get();
+				vertexBufferUploadJob.SourceOffset = uploadVertexBufferOffset;
+				vertexBufferUploadJob.CopySize = vertexBufferSize;
 
+				CopyJobs.push_back(vertexBufferUploadJob);
+
+				CopyJob indexBufferUploadJob;
+				indexBufferUploadJob.pDest = pIndexBuffer.Get();
+				indexBufferUploadJob.DestOffset = indexBufferOffset;
+				indexBufferUploadJob.pSource = pUploadIndexBuffer.Get();
+				indexBufferUploadJob.SourceOffset = uploadIndexBufferOffset;
+				indexBufferUploadJob.CopySize = indexBufferSize;
+
+				CopyJobs.push_back(indexBufferUploadJob);
+					
 				m_pBuffers.push_back(pIndexBuffer);
 				m_pBuffers.push_back(pVertexBuffer);
 
 				buffer.VertexBufferIndex = VertexBufferIndex;
+				buffer.VertexBufferOffset = vertexBufferOffset;
 				buffer.IndexBufferIndex = IndexBufferIndex;
+				buffer.IndexBufferOffset = indexBufferOffset;
 			}
 
 			HitGroupShaderRecord shaderRecord = {};
 			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.MaterialIndex = materialIndex;
 			shaderRecord.VertexBufferIndex = shapeCacheEntry.Buffers.back().VertexBufferIndex;
-			shaderRecord.VertexBufferOffset = 0;
+			shaderRecord.VertexBufferOffset = shapeCacheEntry.Buffers.back().VertexBufferOffset;
 			shaderRecord.IndexBufferIndex = shapeCacheEntry.Buffers.back().IndexBufferIndex;
-			shaderRecord.IndexBufferOffset = 0;
+			shaderRecord.IndexBufferOffset = shapeCacheEntry.Buffers.back().IndexBufferOffset;
 
 			if (m_bSupportsHardwareRaytracing)
 			{
@@ -1549,6 +1596,16 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		{
 			commandList.CopyBufferRegion(job.pDest, job.DestOffset, job.pSource, job.SourceOffset, job.CopySize);
 		}
+
+		std::vector<D3D12_RESOURCE_BARRIER> postCopyBarriers;
+		postCopyBarriers.reserve(BufferAllocator.GetAllocatedResources().size());
+		for (auto& resource : BufferAllocator.GetAllocatedResources())
+		{
+			D3D12_RESOURCE_BARRIER copyBarrier = CD3DX12_RESOURCE_BARRIER::Transition(resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			postCopyBarriers.push_back(copyBarrier);
+		}
+		commandList.ResourceBarrier(postCopyBarriers.size(), postCopyBarriers.data());
+
 
 		ComPtr<ID3D12Resource> pUploadHitGroupShaderTable;
 		AllocateBufferWithData(commandList, hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable, pUploadHitGroupShaderTable);
@@ -1868,6 +1925,13 @@ void TracerBoy::InitializeTexture(
 	DirectX::TexMetadata texMetaData = {};
 	DirectX::ScratchImage scratchImage = {};
 	std::wstring fileExt = textureName.substr(textureName.size() - 4, 4);
+
+	if (fileExt.compare(L".pfm") == 0)
+	{
+		fullTextureName = fullTextureName.substr(0, fullTextureName.size() - 4).append(L".hdr");
+		fileExt = L".hdr";
+
+	}
 
 	auto start = textureName.find_last_of('\\');
 	if (fileExt.compare(L".hdr") == 0)
