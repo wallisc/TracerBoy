@@ -98,6 +98,12 @@ void UIController::SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool b
 
 	if (bClearRenderTarget)
 	{
+		D3D12_RESOURCE_BARRIER preDrawBarriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(pBackBuffer.Get(),D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		};
+		commandList.ResourceBarrier(ARRAYSIZE(preDrawBarriers), preDrawBarriers);
+
 		float black[4] = {};
 		commandList.ClearRenderTargetView(m_RTVs[backBufferIndex], black, 0, nullptr);
 	}
