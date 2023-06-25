@@ -1558,9 +1558,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 				CopyJobs.push_back(indexBufferUploadJob);
 					
-				m_pBuffers.push_back(pIndexBuffer);
-				m_pBuffers.push_back(pVertexBuffer);
-
 				buffer.VertexBufferIndex = VertexBufferIndex;
 				buffer.VertexBufferOffset = vertexBufferOffset;
 				buffer.IndexBufferIndex = IndexBufferIndex;
@@ -1884,6 +1881,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 	auto& raytracingResourceList = RaytracingMemoryHeapAllocator.GetAllocatedResources();
 	for (auto& pResource : raytracingResourceList)
+	{
+		m_pBuffers.push_back(pResource);
+	}
+
+	for (auto& pResource : BufferAllocator.GetAllocatedResources())
 	{
 		m_pBuffers.push_back(pResource);
 	}

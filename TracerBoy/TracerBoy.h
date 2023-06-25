@@ -233,7 +233,7 @@ public:
 		performanceSettings.m_ConvergencePercentage = 0.001;
 		performanceSettings.m_bEnableBlueNoise = true;
 		performanceSettings.m_bEnableInlineRaytracing = true;
-		performanceSettings.m_bEnablePixelShaderRaytracing = true;
+		performanceSettings.m_bEnablePixelShaderRaytracing = false;
 		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
 
