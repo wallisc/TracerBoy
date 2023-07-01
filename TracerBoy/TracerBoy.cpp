@@ -1258,68 +1258,92 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			// Handle curves by converting subdividing them into triangle meshes
 			if (pCurve)
 			{
-				const UINT verticesPerLoop = 4;
-				const float rotatedRadiansPerVert = 3.14 * 2.0 / (float)(verticesPerLoop);
-				const UINT facesPerLoop = verticesPerLoop;
-				const UINT indicesPerTriangle = 3;
-				const UINT trianglesPerFace = 2;
-				const UINT indicesPerLoop = facesPerLoop * trianglesPerFace * indicesPerTriangle;
-				const UINT loopsPerCurve = 3;
-				float curveIntepolantIncrementPerLoop = 1.0 / (float)loopsPerCurve;
 				pTriangleMesh = pbrt::TriangleMesh::SP(new pbrt::TriangleMesh());
 
-				pTriangleMesh->material = pCurve->material;
-				pTriangleMesh->areaLight = pCurve->areaLight;
-
-				// Always assuming curves are a single cubic bezier curve
-				assert(pCurve->P.size() == 4);
-
-				pbrt::math::vec3f p0 = pCurve->P[0];
-				pbrt::math::vec3f p1 = pCurve->P[1];
-				pbrt::math::vec3f p2 = pCurve->P[2];
-				pbrt::math::vec3f p3 = pCurve->P[3];
-
-				// Skip the first point as we always form a ring extending back to the previous point 
-				// so nothing needs to be done for the initial point
-
-				for (UINT loopIndex = 0; loopIndex < loopsPerCurve; loopIndex++)
+				// If the next shape is also a curve with identical properties, slam it into the same vertex buffer
+				const UINT maxCurvesToMerge = 10;
+				for(int j = 0; j < maxCurvesToMerge; j++)
 				{
-					float curveInterpolant = loopIndex * curveIntepolantIncrementPerLoop;
-					float curveRadius = curveInterpolant * pCurve->width1 + (1.0 - curveInterpolant) * pCurve->width0;
-					pbrt::math::vec3f loopCenter = CalculatePointOnCubicBezier(p0, p1, p2, p3, curveInterpolant);
-					pbrt::math::vec3f curveForward, curveNormal0, curveNormal1;
-					CalculateObjectSpaceAxisOnCubicBezier(p0, p1, p2, p3, curveInterpolant, curveForward, curveNormal0, curveNormal1);
-
-					for (UINT vertIndex = 0; vertIndex < verticesPerLoop; vertIndex++)
+					if (j > 0)
 					{
-						float theta = vertIndex * rotatedRadiansPerVert;
-						pbrt::math::vec3f normal = cos(theta) * curveNormal0 + sin(theta) * curveNormal1;
-						pbrt::math::vec3f vertex = loopCenter + normal * curveRadius;
-						pTriangleMesh->vertex.push_back(vertex);
-						pTriangleMesh->normal.push_back(normal);
-						pTriangleMesh->tangents.push_back(curveForward);
-					}
-					
-					bool bFirstLoop = loopIndex == 0;
-					// Skip generating faces for the first loop since we don't have any other edge loops
-					// to create faces with
-					if (!bFirstLoop)
-					{
-						UINT loopStartIndex = verticesPerLoop * loopIndex;
-						UINT prevLoopStartIndex = verticesPerLoop * (loopIndex - 1);
-						for (UINT faceIndex = 0; faceIndex < facesPerLoop; faceIndex++)
+						int nextShapeIndex = i + 1;
+						if (nextShapeIndex < pScene->world->shapes.size())
 						{
-							UINT leftIndexOffsetFromStart = faceIndex;
-							UINT rightIndexOffsetFromStart = faceIndex == facesPerLoop - 1 ? 0 : faceIndex + 1;
-							UINT leftIndex = loopStartIndex + leftIndexOffsetFromStart;
-							UINT rightIndex = loopStartIndex + rightIndexOffsetFromStart;
-							UINT prevLoopLeftIndex = prevLoopStartIndex + leftIndexOffsetFromStart;
-							UINT prevLoopRightIndex = prevLoopStartIndex + rightIndexOffsetFromStart;
+							pbrt::Shape::SP pNextGeometry;
+							pNextGeometry = pScene->world->shapes[nextShapeIndex];
+							pbrt::Curve::SP pNextCurve = std::dynamic_pointer_cast<pbrt::Curve>(pNextGeometry);
+							if (pNextCurve && pNextCurve->material == pCurve->material && pNextCurve->areaLight == pCurve->areaLight)
+							{
+								pCurve = pNextCurve;
+								pGeometry = pNextGeometry;
+								i = nextShapeIndex;
+							}
+						}
+					}
 
-							pTriangleMesh->index.push_back(pbrt::vec3i(leftIndex, rightIndex, prevLoopLeftIndex));
-							pTriangleMesh->index.push_back(pbrt::vec3i(rightIndex, prevLoopLeftIndex, prevLoopRightIndex));
+					const UINT verticesPerLoop = 3;
+					const float rotatedRadiansPerVert = 3.14 * 2.0 / (float)(verticesPerLoop);
+					const UINT facesPerLoop = verticesPerLoop;
+					const UINT indicesPerTriangle = 3;
+					const UINT trianglesPerFace = 2;
+					const UINT indicesPerLoop = facesPerLoop * trianglesPerFace * indicesPerTriangle;
+					UINT vertexOffset = pTriangleMesh->vertex.size();
+					const UINT loopsPerCurve = 3;
+					float curveIntepolantIncrementPerLoop = 1.0 / (float)loopsPerCurve;
+
+					pTriangleMesh->material = pCurve->material;
+					pTriangleMesh->areaLight = pCurve->areaLight;
+
+					// Always assuming curves are a single cubic bezier curve
+					assert(pCurve->P.size() == 4);
+
+					pbrt::math::vec3f p0 = pCurve->P[0];
+					pbrt::math::vec3f p1 = pCurve->P[1];
+					pbrt::math::vec3f p2 = pCurve->P[2];
+					pbrt::math::vec3f p3 = pCurve->P[3];
+
+					// Skip the first point as we always form a ring extending back to the previous point 
+					// so nothing needs to be done for the initial point
+
+					for (UINT loopIndex = 0; loopIndex < loopsPerCurve; loopIndex++)
+					{
+						float curveInterpolant = loopIndex * curveIntepolantIncrementPerLoop;
+						float curveRadius = curveInterpolant * pCurve->width1 + (1.0 - curveInterpolant) * pCurve->width0;
+						pbrt::math::vec3f loopCenter = CalculatePointOnCubicBezier(p0, p1, p2, p3, curveInterpolant);
+						pbrt::math::vec3f curveForward, curveNormal0, curveNormal1;
+						CalculateObjectSpaceAxisOnCubicBezier(p0, p1, p2, p3, curveInterpolant, curveForward, curveNormal0, curveNormal1);
+
+						for (UINT vertIndex = 0; vertIndex < verticesPerLoop; vertIndex++)
+						{
+							float theta = vertIndex * rotatedRadiansPerVert;
+							pbrt::math::vec3f normal = cos(theta) * curveNormal0 + sin(theta) * curveNormal1;
+							pbrt::math::vec3f vertex = loopCenter + normal * curveRadius;
+							pTriangleMesh->vertex.push_back(vertex);
+							pTriangleMesh->normal.push_back(normal);
+							pTriangleMesh->tangents.push_back(curveForward);
 						}
 
+						bool bFirstLoop = loopIndex == 0;
+						// Skip generating faces for the first loop since we don't have any other edge loops
+						// to create faces with
+						if (!bFirstLoop)
+						{
+							UINT loopStartIndex = verticesPerLoop * loopIndex + vertexOffset;
+							UINT prevLoopStartIndex = verticesPerLoop * (loopIndex - 1) + vertexOffset;
+							for (UINT faceIndex = 0; faceIndex < facesPerLoop; faceIndex++)
+							{
+								UINT leftIndexOffsetFromStart = faceIndex;
+								UINT rightIndexOffsetFromStart = faceIndex == facesPerLoop - 1 ? 0 : faceIndex + 1;
+								UINT leftIndex = loopStartIndex + leftIndexOffsetFromStart;
+								UINT rightIndex = loopStartIndex + rightIndexOffsetFromStart;
+								UINT prevLoopLeftIndex = prevLoopStartIndex + leftIndexOffsetFromStart;
+								UINT prevLoopRightIndex = prevLoopStartIndex + rightIndexOffsetFromStart;
+
+								pTriangleMesh->index.push_back(pbrt::vec3i(leftIndex, rightIndex, prevLoopLeftIndex));
+								pTriangleMesh->index.push_back(pbrt::vec3i(rightIndex, prevLoopLeftIndex, prevLoopRightIndex));
+							}
+
+						}
 					}
 				}
 			}
