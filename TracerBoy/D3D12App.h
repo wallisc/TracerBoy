@@ -64,6 +64,8 @@ private:
 	UINT64 m_SignalValue;
 	std::deque<std::pair<CommandListAllocatorPair, UINT64>> FreedCommandListAllocatorPairs;
 
+	SceneLoadStatus m_sceneLoadStatus;
+	std::mutex m_sceneLoadStatusUpdateLock;
 	std::thread m_asyncLoadSceneThread;
 	std::atomic<bool> bIsSceneLoadFinished;
 	bool m_bRenderUI;

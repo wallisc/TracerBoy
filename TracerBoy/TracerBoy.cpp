@@ -936,10 +936,26 @@ bool IsShapeSupported(pbrt::Shape::SP& pGeometry)
 }
 
 
-void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::string& sceneFileName, std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete)
+void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, 
+	const std::string& sceneFileName, 
+	std::vector<ComPtr<ID3D12Resource>>& resourcesToDelete,
+	SceneLoadStatus& sharedSceneLoadStatus,
+	std::mutex& sceneLoadStatusUpdateLock)
 {
 	std::size_t lastDeliminator = sceneFileName.find_last_of("/\\");
 	m_sceneFileDirectory = sceneFileName.substr(0, lastDeliminator + 1);
+
+	// sceneLoadStatus can be touched at anytime, sharedSceneLoadStatus should never be referenced outside
+	// of UpdateSceneLoadStatus to avoid race conditions
+	SceneLoadStatus sceneLoadStatus = {};
+	auto UpdateSceneLoadStatus = [&]()
+	{
+		const std::lock_guard<std::mutex> lock(sceneLoadStatusUpdateLock);
+		sharedSceneLoadStatus = sceneLoadStatus;
+	};
+
+	sceneLoadStatus.State = LoadingPBRT;
+	UpdateSceneLoadStatus();
 
 	std::string sceneFileExtension = sceneFileName.substr(sceneFileName.find_last_of(".") + 1, sceneFileName.size());
 	
@@ -1087,6 +1103,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			VERIFY(false); // Unsupported file type
 #endif
 		}
+
+		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
+		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
+
+		sceneLoadStatus.State = LoadingD3D12OnCPU;
+		sceneLoadStatus.TotalInstances = instanceCount;
+		UpdateSceneLoadStatus();
 		
 		auto d3d12SceneLoadStart = std::chrono::high_resolution_clock::now();
 
@@ -1189,8 +1212,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 		};
 
 		std::vector<InstanceEntry> instanceList;
-		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
-		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 		instanceList.reserve(instanceCount);
 
 		std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, UINT32> ResourceToSRVIndex;
@@ -1587,7 +1608,13 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 
 				instanceList.push_back(instanceEntry);
 			}
+
+			sceneLoadStatus.InstancesLoaded++;
+			UpdateSceneLoadStatus();
 		}
+
+		sceneLoadStatus.State = RecordingCommandListWork;
+		UpdateSceneLoadStatus();
 
 		for (auto& job : CopyJobs)
 		{
@@ -1798,7 +1825,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 			buildTopLevelDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 			buildTopLevelDesc.Inputs.NumDescs = numInstances;
 			buildTopLevelDesc.Inputs.InstanceDescs = pInstanceDescBuffer->GetGPUVirtualAddress();
-
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
 
 #if SUPPORT_SW_RAYTRACING
@@ -1889,6 +1915,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList, const std::str
 	{
 		m_pBuffers.push_back(pResource);
 	}
+
+	sceneLoadStatus.State = WaitingOnGPU;
+	UpdateSceneLoadStatus();
 }
 
 void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)

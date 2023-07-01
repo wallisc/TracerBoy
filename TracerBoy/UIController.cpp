@@ -115,12 +115,27 @@ void UIController::SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool b
 	commandList.ResourceBarrier(ARRAYSIZE(postImguiBarriers), postImguiBarriers);
 }
 
-void UIController::RenderLoadingScreen(ID3D12GraphicsCommandList& commandList)
+void UIController::RenderLoadingScreen(ID3D12GraphicsCommandList& commandList, const SceneLoadStatus& loadSceneStatus)
 {
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 	ImGui::Begin("Loading");
+	switch (loadSceneStatus.State)
+	{
+	case LoadingPBRT:
+		ImGui::Text("Loading PBRT scene");
+		break;
+	case LoadingD3D12OnCPU:
+		ImGui::Text("Loading Instances. %d/%d loaded", loadSceneStatus.InstancesLoaded, loadSceneStatus.TotalInstances);
+		break;
+	case RecordingCommandListWork:
+		ImGui::Text("Recording Command List Work");
+		break;
+	case WaitingOnGPU:
+		ImGui::Text("Waiting on GPU");
+		break;
+	}
 
 	ImGui::End();
 	ImGui::Render();

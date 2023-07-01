@@ -15,7 +15,7 @@ public:
 		UINT32 NumberOfTotalPixels;
 	};
 
-	void RenderLoadingScreen(ID3D12GraphicsCommandList& commandList);
+	void RenderLoadingScreen(ID3D12GraphicsCommandList& commandList, const SceneLoadStatus &loadSceneStatus);
 	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats);
 
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }

@@ -110,6 +110,22 @@ class TextureAllocator;
 class DenoiserPass;
 class TemporalAccumulationPass;
 
+enum SceneLoadState
+{
+	LoadingPBRT,
+	LoadingD3D12OnCPU,
+	RecordingCommandListWork,
+	WaitingOnGPU,
+	Finished
+};
+
+struct SceneLoadStatus
+{
+	SceneLoadState State;
+	UINT InstancesLoaded;
+	UINT TotalInstances;
+};
+
 class TracerBoy
 {
 public:
@@ -119,7 +135,9 @@ public:
 	void LoadScene(
 		ID3D12GraphicsCommandList& commandList, 
 		const std::string& sceneFileName, 
-		std::vector<ComPtr<ID3D12Resource>> &resourcesToDelete);
+		std::vector<ComPtr<ID3D12Resource>> &resourcesToDelete,
+		SceneLoadStatus &sceneLoadStatus,
+		std::mutex &sceneLoadStatusUpdateLock);
 
 	enum class OutputType
 	{

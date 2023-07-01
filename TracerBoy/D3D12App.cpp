@@ -39,6 +39,7 @@ D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) :
 		m_asyncLoadSceneThread = std::thread([this, commandLine]
 		{ 
 				CoInitialize(nullptr);  
+				SetThreadDescription(GetCurrentThread(), L"LoadSceneThread");
 				this->LoadScene(commandLine); 
 		});
 		m_asyncLoadSceneThread.detach();
@@ -72,7 +73,7 @@ void D3D12App::LoadScene(const std::string& commandLine)
 	CommandListAllocatorPair commandListAllocatorPair;
 	AcquireCommandListAllocatorPair(commandListAllocatorPair);
 	ID3D12GraphicsCommandList& commandList = *commandListAllocatorPair.first.Get();
-	m_pTracerBoy->LoadScene(commandList, commandLine, scratchResources);
+	m_pTracerBoy->LoadScene(commandList, commandLine, scratchResources, m_sceneLoadStatus, m_sceneLoadStatusUpdateLock);
 	VERIFY_HRESULT(commandListAllocatorPair.first->Close());
 
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
@@ -255,7 +256,14 @@ void D3D12App::Render()
 	}
 	else
 	{
-		m_pUIController->RenderLoadingScreen(commandList);
+		SceneLoadStatus sceneLoadStatus;
+
+		// Make a copy of the scene load status so that we're not holding the lock any longer than neccessary
+		{
+			const std::lock_guard<std::mutex> lock(m_sceneLoadStatusUpdateLock);
+			sceneLoadStatus = m_sceneLoadStatus;
+		}
+		m_pUIController->RenderLoadingScreen(commandList, sceneLoadStatus);
 	}
 
 	commandList.Close();
