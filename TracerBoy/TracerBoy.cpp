@@ -1442,21 +1442,38 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				auto& geometryDesc = shapeCacheEntry.GeometryDescs.back();
 				auto& buffer = shapeCacheEntry.Buffers.back();
 
+				ComPtr<ID3D12Resource> pPositionBuffer;
+				ComPtr<ID3D12Resource> pUploadPositionBuffer;
 				ComPtr<ID3D12Resource> pVertexBuffer;
 				ComPtr<ID3D12Resource> pUploadVertexBuffer;
 				UINT VertexBufferIndex;
 				UINT vertexSize = sizeof(Vertex);
+				UINT positionSize = sizeof(float3);
 				UINT vertexBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * vertexSize);
+				UINT positionBufferSize = static_cast<UINT>(pTriangleMesh->vertex.size() * positionSize);
 				UINT32 vertexBufferOffset;
 				UINT32 uploadVertexBufferOffset;
+				UINT32 positionBufferOffset;
+				UINT32 uploadPositionBufferOffset;
 				UploadHeapAllocator.Allocate(vertexBufferSize, &pUploadVertexBuffer, &uploadVertexBufferOffset);				
+				UploadHeapAllocator.Allocate(positionBufferSize, &pUploadPositionBuffer, &uploadPositionBufferOffset);
+
+				BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
+				BufferAllocator.Allocate(positionBufferSize, &pPositionBuffer, &positionBufferOffset);
+
 				bool bNormalsProvided = pTriangleMesh->normal.size();
 				Vertex* pVertexBufferData;
+				float3* pPositionBufferData;
 				{
 					BYTE* pVertexBufferByteData;
 					VERIFY_HRESULT(pUploadVertexBuffer->Map(0, nullptr, (void**)&pVertexBufferByteData));
 					pVertexBufferByteData += uploadVertexBufferOffset;
 					pVertexBufferData = (Vertex*)pVertexBufferByteData;
+
+					BYTE* pPositionBufferByteData;
+					VERIFY_HRESULT(pUploadPositionBuffer->Map(0, nullptr, (void**)&pPositionBufferByteData));
+					pPositionBufferByteData += uploadPositionBufferOffset;
+					pPositionBufferData = (float3*)pPositionBufferByteData;
 
 					
 					for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
@@ -1483,9 +1500,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 						pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
 						pVertexBufferData[v].UV = { uv.x, uv.y };
 						pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
+						pPositionBufferData[v] = { parserVertex.x, parserVertex.y, parserVertex.z };
 					}
-
-					BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
 
 					auto SRVIndexIter = ResourceToSRVIndex.find(pVertexBuffer->GetGPUVirtualAddress());
 					if (SRVIndexIter == ResourceToSRVIndex.end())
@@ -1579,9 +1595,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				geometryDesc.Triangles.IndexFormat = indexSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
 				geometryDesc.Triangles.Transform3x4 = 0;
 				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-				geometryDesc.Triangles.VertexCount = vertexBufferSize / vertexSize;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGPUVirtualAddress() + vertexBufferOffset;
-				geometryDesc.Triangles.VertexBuffer.StrideInBytes = vertexSize;
+				geometryDesc.Triangles.VertexCount = positionBufferSize / positionSize;
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pPositionBuffer->GetGPUVirtualAddress() + positionBufferOffset;
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = positionSize;
 				geometryDesc.Flags = GeometryFlag;
 				geometryDescs.push_back(geometryDesc);
 
@@ -1591,8 +1607,15 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				vertexBufferUploadJob.pSource = pUploadVertexBuffer.Get();
 				vertexBufferUploadJob.SourceOffset = uploadVertexBufferOffset;
 				vertexBufferUploadJob.CopySize = vertexBufferSize;
-
 				CopyJobs.push_back(vertexBufferUploadJob);
+
+				CopyJob positionBufferUploadJob;
+				positionBufferUploadJob.pDest = pPositionBuffer.Get();
+				positionBufferUploadJob.DestOffset = positionBufferOffset;
+				positionBufferUploadJob.pSource = pUploadPositionBuffer.Get();
+				positionBufferUploadJob.SourceOffset = uploadPositionBufferOffset;
+				positionBufferUploadJob.CopySize = positionBufferSize;
+				CopyJobs.push_back(positionBufferUploadJob);
 
 				CopyJob indexBufferUploadJob;
 				indexBufferUploadJob.pDest = pIndexBuffer.Get();
@@ -1600,7 +1623,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				indexBufferUploadJob.pSource = pUploadIndexBuffer.Get();
 				indexBufferUploadJob.SourceOffset = uploadIndexBufferOffset;
 				indexBufferUploadJob.CopySize = indexBufferSize;
-
 				CopyJobs.push_back(indexBufferUploadJob);
 					
 				buffer.VertexBufferIndex = VertexBufferIndex;
