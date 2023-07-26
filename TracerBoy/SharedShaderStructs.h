@@ -74,11 +74,9 @@ struct ConfigConstants
 
 struct Vertex
 {
-	float3 Position;
 	float3 Normal;
 	float2 UV;
 	float3 Tangent;
-	float Padding;
 };
 
 struct Light

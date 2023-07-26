@@ -1496,7 +1496,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 						{
 							uv = pTriangleMesh->texcoord[v];
 						}
-						pVertexBufferData[v].Position = { parserVertex.x, parserVertex.y, parserVertex.z };
 						pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
 						pVertexBufferData[v].UV = { uv.x, uv.y };
 						pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
