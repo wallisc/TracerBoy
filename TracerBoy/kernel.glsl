@@ -1234,8 +1234,6 @@ Material GetMaterial(int MaterialID, uint PrimitiveID, float3 WorldPosition, flo
         // Subsurface scattering media doesn't technically have an "albedo" but some materials
         // use this as an artist friendly way of specifying absorption so handle the conversion here
         ArtistFriendlyAlbdeoToAbsorption(material.albedo, 1.0 / material.scattering, material.absorption, material.scattering);
-        material.absorption *= perFrameConstants.DebugValue2;
-        material.scattering *= perFrameConstants.DebugValue;
         material.albedo = float3(0, 0, 0);
     }
     return material;
@@ -1590,6 +1588,48 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         accumulatedIndirectLightMultiplier *= beerLambert;
                         if(exittingPrimitive)
                         {
+                            RayDirectionDotN = dot(normal, ray.direction);
+
+                            if(RayDirectionDotN >= 0.0)
+                            {
+                                normal = -normal;
+                                RayDirectionDotN = -RayDirectionDotN;
+                            }
+
+
+                            float nr = NewIOR / CurrentIOR;
+                            float discriminant = 1.0 - nr * nr * (1.0 - RayDirectionDotN * RayDirectionDotN);
+                            if (discriminant > EPSILON) 
+                            {
+                                vec3 refractionDirection = normalize( nr * (ray.direction - normal * RayDirectionDotN) - normal * sqrt(discriminant));
+                                if(UsePerfectSpecularOptimization(material.roughness))
+                                {
+                                    ray.direction = refractionDirection;
+                                }
+                                else
+                                {
+                                    float PDFValue;
+                                    ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
+                                    if(PDFValue < EPSILON)
+                                    {
+                                        // This ray is statistically not relevant, attempt to find a better ray
+                                        ray.direction = GenerateRandomImportanceSampledDirection(refractionDirection, material.roughness, PDFValue);
+                                        if(PDFValue < EPSILON)
+                                        {
+                                            // Still no luck, call it quits
+                                            break;
+                                        }
+                                    }
+                            
+                                    // TODO: Overly darkens rough refractions for some reason
+                                    // accumulatedIndirectLightMultiplier /= PDFValue;
+                                }
+                            }
+                            else
+                            {
+                                ray.direction = reflect(ray.direction, normal);
+                                exittingPrimitive = false;
+                            }
                             previousDirection = ray.direction;
                         }
                         else
