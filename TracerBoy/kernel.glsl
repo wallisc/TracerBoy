@@ -182,6 +182,11 @@ bool IsSubsurfaceScattering(Material material)
     return (material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
 }
 
+bool IsHairMaterial(Material material)
+{
+    return (material.Flags & HAIR_MATERIAL_FLAG) != 0;
+}
+
 bool IsLight(Material material)
 {
     return (material.Flags & LIGHT_MATERIAL_FLAG) != 0;
@@ -1466,7 +1471,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             bool bSpecularRay = false;
             if(AllowsSpecular(material))
             {
-                if(IsMetallic(material))
+                if(IsMetallic(material) || IsHairMaterial(material))
                 {
                     bSpecularRay = true;
                 }
