@@ -96,7 +96,7 @@ uint3 GetIndices(GeometryInfo Geometry, uint PrimitiveIndex)
 
 float2 GetUV(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint uvOffset = 6;
+	const uint uvOffset = 3;
 	float2 uv0 = GetFloat2FromVertexBuffer(Geometry, indices.x, uvOffset);
 	float2 uv1 = GetFloat2FromVertexBuffer(Geometry, indices.y, uvOffset);
 	float2 uv2 = GetFloat2FromVertexBuffer(Geometry, indices.z, uvOffset);
@@ -109,7 +109,7 @@ float2 GetUV(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 
 float3 GetNormal(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint normalOffset = 3;
+	const uint normalOffset = 0;
 	float3 n0 = GetFloat3FromVertexBuffer(Geometry, indices.x, normalOffset);
 	float3 n1 = GetFloat3FromVertexBuffer(Geometry, indices.y, normalOffset);
 	float3 n2 = GetFloat3FromVertexBuffer(Geometry, indices.z, normalOffset);
@@ -122,7 +122,7 @@ float3 GetNormal(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 
 float3 GetTangent(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint tangentOffset = 8;
+	const uint tangentOffset = 5;
 	float3 t0 = GetFloat3FromVertexBuffer(Geometry, indices.x, tangentOffset);
 	float3 t1 = GetFloat3FromVertexBuffer(Geometry, indices.y, tangentOffset);
 	float3 t2 = GetFloat3FromVertexBuffer(Geometry, indices.z, tangentOffset);
