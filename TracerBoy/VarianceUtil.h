@@ -7,7 +7,7 @@ bool ShouldSkipRay(
 	uint FrameCount)
 {
 	bool bSkipRay = false;
-	if(FrameCount > 16)
+	if(FrameCount > 1024)
 	{
 		float4 jitteredOutput = InputJitteredColor[Index];
 		float4 output = InputColor[Index];
@@ -19,7 +19,7 @@ bool ShouldSkipRay(
 		// Pure black pixel will cause divide by 0. If the pixel is still pure black after 1024 samples
 		// just consider it converged to black. This happens when a primary ray misses and there's 
 		// no environment map
-		bSkipRay = isBlack && FrameCount > 1024;
+		bSkipRay = isBlack;
 		if (!bSkipRay)
 		{
 			float error = (abs(jitteredColor.r - color.r) + abs(jitteredColor.g - color.g) + abs(jitteredColor.b - color.b)) / sqrt(color.r + color.g + color.b);
