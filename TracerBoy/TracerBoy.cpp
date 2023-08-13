@@ -2006,6 +2006,7 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
+		m_CachedOutputSettings.m_performanceSettings.m_bEnableNextEventEstimation != outputSettings.m_performanceSettings.m_bEnableNextEventEstimation ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableBlueNoise != outputSettings.m_performanceSettings.m_bEnableBlueNoise)
 	{
 		InvalidateHistory(m_CachedOutputSettings.m_renderMode != outputSettings.m_renderMode);
@@ -2421,6 +2422,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.GlobalFrameCount = m_SamplesRendered;
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
+	constants.EnableNextEventEstimation = outputSettings.m_performanceSettings.m_bEnableNextEventEstimation;
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 	constants.DebugValue = outputSettings.m_debugSettings.m_DebugValue;

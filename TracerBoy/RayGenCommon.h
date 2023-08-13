@@ -141,7 +141,7 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	PDFValue = 0.0f;
 
 	const uint lightCount = perFrameConstants.LightCount;
-	if (lightCount > 0)
+	if (lightCount > 0 && perFrameConstants.EnableNextEventEstimation)
 	{
 		uint lightIndex = uint(rand() * float(lightCount));
 		Light light = LightList[lightIndex];

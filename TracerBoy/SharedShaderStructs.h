@@ -57,7 +57,9 @@ struct PerFrameConstants
 
 	uint UseBlueNoise;
 	uint IsRealTime;
+	uint EnableNextEventEstimation;
 	float DebugValue;
+
 	float DebugValue2;
 };
 

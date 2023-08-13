@@ -1374,7 +1374,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
             // and adding the emissive contribution here would double it's contribution.
             // However, we DO take the emissive contribution if it's the first primary ray 
             // as a special case so that the light doesn't just appear black
-            if(bFirstRay || !IsLight(material))
+            if(bFirstRay || !IsLight(material) || !perFrameConstants.EnableNextEventEstimation)
             {
 			    accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
             }
