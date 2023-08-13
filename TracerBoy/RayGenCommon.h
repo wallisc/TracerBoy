@@ -145,7 +145,6 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	{
 		uint lightIndex = uint(rand() * float(lightCount));
 		Light light = LightList[lightIndex];
-		BlueNoiseData BlueNoise = GetBlueNoise();
 		float3 barycentric = GetRandomBarycentric();
 
 		LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
