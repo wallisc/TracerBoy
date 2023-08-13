@@ -198,9 +198,15 @@ bool IsNormalizedFormat(DXGI_FORMAT format)
 
 UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGammaCorrect, bool* bHasAlpha)
 {
+	if (!pPbrtTexture)
+	{
+		return UINT_MAX;
+	}
+
 	TextureData texture;
 	pbrt::ImageTexture::SP pImageTexture = std::dynamic_pointer_cast<pbrt::ImageTexture>(pPbrtTexture);
 	pbrt::CheckerTexture::SP pCheckerTexture = std::dynamic_pointer_cast<pbrt::CheckerTexture>(pPbrtTexture);
+	pbrt::ScaleTexture::SP pScaleTexture = std::dynamic_pointer_cast<pbrt::ScaleTexture>(pPbrtTexture);
 	if (pImageTexture)
 	{
 		ComPtr<ID3D12Resource> pTexture;
@@ -235,6 +241,28 @@ UINT TextureAllocator::CreateTexture(pbrt::Texture::SP& pPbrtTexture, bool bGamm
 		texture.VScale = pCheckerTexture->vScale;
 		texture.CheckerColor1 = ConvertFloat3(pCheckerTexture->tex1);
 		texture.CheckerColor2 = ConvertFloat3(pCheckerTexture->tex2);
+	}
+	else if (pScaleTexture)
+	{
+		bool bHasAlpha1 = false;
+		bool bHasAlpha2 = false;
+
+		{
+			pbrt::ScaleTexture::SP pScaleTexture1 = std::dynamic_pointer_cast<pbrt::ScaleTexture>(pScaleTexture->tex1);
+			pbrt::ScaleTexture::SP pScaleTextur2 = std::dynamic_pointer_cast<pbrt::ScaleTexture>(pScaleTexture->tex2);
+			// TODO: Can't currently handle scale textures pointing to another scale texture due to lack of support for recursive functions in hlsl
+			VERIFY(!pScaleTexture1 && !pScaleTextur2);
+		}
+		
+		texture.TextureType = SCALE_TEXTURE_TYPE;
+		texture.TextureIndex1 = CreateTexture(pScaleTexture->tex1, bGammaCorrect, &bHasAlpha1);
+		texture.TextureIndex2 = CreateTexture(pScaleTexture->tex2, bGammaCorrect, &bHasAlpha2);
+		texture.ScaleColor1 = ConvertFloat3(pScaleTexture->scale1);
+		texture.ScaleColor2 = ConvertFloat3(pScaleTexture->scale2);
+		if (bHasAlpha)
+		{
+			*bHasAlpha = bHasAlpha1 || bHasAlpha2;
+		}
 	}
 	else
 	{

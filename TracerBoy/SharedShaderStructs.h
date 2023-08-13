@@ -129,6 +129,7 @@ struct Material
 
 #define IMAGE_TEXTURE_TYPE 0
 #define CHECKER_TEXTURE_TYPE 1
+#define SCALE_TEXTURE_TYPE 2
 
 #define DEFAULT_TEXTURE_FLAG 0
 #define NEEDS_GAMMA_CORRECTION_TEXTURE_FLAG 0x1
@@ -139,6 +140,7 @@ struct TextureData
 	uint TextureFlags;
 	uint Padding;
 
+	// Checker Texture
 	// TODO: these shoudl be in some type of union
 	float3 CheckerColor1;
 	float UScale;
@@ -146,6 +148,12 @@ struct TextureData
 	float3 CheckerColor2;
 	float VScale;
 
+	// Scale Texture
+	uint TextureIndex1;
+	float3 ScaleColor1;
+
+	uint TextureIndex2;
+	float3 ScaleColor2;
 };
 
 #define RAYTRACE_THREAD_GROUP_HEIGHT 8

@@ -60,15 +60,28 @@ bool IsValidTexture(uint textureIndex)
 	return textureIndex != UINT_MAX;
 }
 
+float4 GetTextureData_Recursive(TextureData textureData, float2 uv);
+
 float4 GetTextureData(uint textureIndex, float2 uv)
 {
+	if (textureIndex == UINT_MAX)
+	{
+		return float4(0, 0, 0, 0);
+	}
+
 	if (configConstants.FlipTextureUVs)
 	{
 		uv = float2(0, 1) + uv * float2(1, -1);
 	}
 
-	float4 data = float4(0.0, 0.0, 0.0, 0.0);
 	TextureData textureData = TextureDataBuffer[textureIndex];
+	return GetTextureData_Recursive(textureData, uv);
+}
+
+
+float4 GetTextureData_NonRecursive(TextureData textureData, float2 uv)
+{
+	float4 data = float4(0.0, 0.0, 0.0, 0.0);
 	switch(textureData.TextureType)
 	{
 		case IMAGE_TEXTURE_TYPE:
@@ -95,5 +108,28 @@ float4 GetTextureData(uint textureIndex, float2 uv)
 		data.rgb = GammaToLinear(data.rgb);
 	}
 
+	return data;
+}
+
+float4 GetTextureData_Recursive(TextureData textureData, float2 uv)
+{
+	float4 data = float4(0.0, 0.0, 0.0, 0.0);
+	switch (textureData.TextureType)
+	{
+	case SCALE_TEXTURE_TYPE:
+	{
+		TextureData textureData1 = TextureDataBuffer[textureData.TextureIndex1];
+		TextureData textureData2 = TextureDataBuffer[textureData.TextureIndex2];
+
+		float4 color1 = GetTextureData_NonRecursive(textureData1, uv);
+		float4 color2 = GetTextureData_NonRecursive(textureData2, uv);
+
+		data = color1 * float4(textureData.ScaleColor1, 1.0f) + color2 * float4(textureData.ScaleColor2, 1.0f);
+		break;
+	}
+	default:
+		data = GetTextureData_NonRecursive(textureData, uv);
+		break;
+	}
 	return data;
 }
