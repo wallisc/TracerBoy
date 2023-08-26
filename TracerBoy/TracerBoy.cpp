@@ -2007,6 +2007,7 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableNextEventEstimation != outputSettings.m_performanceSettings.m_bEnableNextEventEstimation ||
+		m_CachedOutputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling != outputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableBlueNoise != outputSettings.m_performanceSettings.m_bEnableBlueNoise)
 	{
 		InvalidateHistory(m_CachedOutputSettings.m_renderMode != outputSettings.m_renderMode);
@@ -2423,6 +2424,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
 	constants.EnableNextEventEstimation = outputSettings.m_performanceSettings.m_bEnableNextEventEstimation;
+	constants.EnableSamplingImportanceResampling = outputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling;
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 	constants.DebugValue = outputSettings.m_debugSettings.m_DebugValue;
@@ -2822,8 +2824,9 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 	XMVECTOR LookAt = XMVectorSet(m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z, 1.0);
 	XMVECTOR ViewDir = LookAt - Position;
 
-	XMVECTOR GlobalUp = IS_Y_AXIS_UP ?  XMVectorSet(0.0, 1.0, 0.0, 1.0) : XMVectorSet(0.0, 0.0, 1.0, 1.0);
-	XMVECTOR XZAlignedRight = XMVector3Normalize(XMVectorSet(XMVectorGetX(RightAxis), XMVectorGetY(RightAxis), 0.0, 1.0f));
+	XMVECTOR GlobalUp = 1 ?  XMVectorSet(0.0, 1.0, 0.0, 1.0) : XMVectorSet(0.0, 0.0, 1.0, 1.0);
+	XMVECTOR XZAlignedRight = XMVector3Normalize(XMVectorSet(XMVectorGetX(RightAxis), 0.0, XMVectorGetZ(RightAxis), 1.0f));
+
 
 	XMMATRIX RotationMatrix = XMMatrixRotationAxis(GlobalUp, yaw) * XMMatrixRotationAxis(XZAlignedRight, pitch);
 	ViewDir = XMVector3Normalize(XMVector3Transform(ViewDir, RotationMatrix));

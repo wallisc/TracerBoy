@@ -17,8 +17,6 @@ struct uint2 { uint x; uint y; };
 
 #endif
 
-#define IS_Y_AXIS_UP 1
-
 struct RayPayload
 {
 	float2 uv;
@@ -58,8 +56,9 @@ struct PerFrameConstants
 	uint UseBlueNoise;
 	uint IsRealTime;
 	uint EnableNextEventEstimation;
+	uint EnableSamplingImportanceResampling;
+	
 	float DebugValue;
-
 	float DebugValue2;
 };
 

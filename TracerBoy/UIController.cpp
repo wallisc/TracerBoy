@@ -209,6 +209,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputFloat("Mininum convergence needed to terminate", &performanceSettings.m_ConvergencePercentage, 0.001f, 0.1f, "%.5f");
 		ImGui::Checkbox("Use Blue Noise", &performanceSettings.m_bEnableBlueNoise);
 		ImGui::Checkbox("Use Next Event Estimation", &performanceSettings.m_bEnableNextEventEstimation);
+		ImGui::Checkbox("Use Sampling Importance Resampling", &performanceSettings.m_bEnableSamplingImportanceResampling);
 		ImGui::Checkbox("Use Inline Raytracing", &performanceSettings.m_bEnableInlineRaytracing);
 		ImGui::Checkbox("Use Pixel Shader Raytracing", &performanceSettings.m_bEnablePixelShaderRaytracing);
 		ImGui::Checkbox("Use ExecuteIndirect", &performanceSettings.m_bEnableExecuteIndirect);

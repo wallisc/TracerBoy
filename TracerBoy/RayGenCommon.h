@@ -134,7 +134,37 @@ float3 GetRandomBarycentric()
 	return float3(u, v, 1.0 - u - v);
 }
 
-void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out float PDFValue, out float3 LightNormal)
+struct RestirReservoir
+{
+	uint SelectedIndex;
+	float WeightSum;
+	uint SampleCount;
+
+	void Init()
+	{
+		SelectedIndex = 0;
+		WeightSum = 0.0f;
+		SampleCount = 0;
+	}
+
+	void AddSample(uint Index, float Weight)
+	{
+		WeightSum += Weight;
+		SampleCount++;
+		if (rand() < Weight / WeightSum)
+		{
+			SelectedIndex = Index;
+		}
+	}
+};
+
+float GetLightTargetPDF(Light light, float3 PositionToLight)
+{
+	float DistanceToLight = length(light.P0 - PositionToLight);
+	return (light.SurfaceArea * ColorToLuma(light.LightColor)) / DistanceToLight * DistanceToLight;
+}
+
+void GetOneLightSample(in float3 PositionToLight, out float3 LightPosition, out float3 LightColor, out float PDFValue, out float3 LightNormal)
 {
 	// Initialize
 	LightPosition = LightColor = LightNormal = float3(0, 0, 0);
@@ -143,15 +173,46 @@ void GetOneLightSample(out float3 LightPosition, out float3 LightColor, out floa
 	const uint lightCount = perFrameConstants.LightCount;
 	if (lightCount > 0 && perFrameConstants.EnableNextEventEstimation)
 	{
-		uint lightIndex = uint(rand() * float(lightCount));
-		Light light = LightList[lightIndex];
-		float3 barycentric = GetRandomBarycentric();
+		if (perFrameConstants.EnableSamplingImportanceResampling && GetDispatchIndex().x < (Resolution.x / 2))
+		{
+#define MAX_SAMPLE_COUNT 16
+			RestirReservoir Reservoir;
+			Reservoir.Init();
 
-		LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
-		LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
-		LightColor = light.LightColor;
+			uint SamplingIportantanceResamplingLightCount = min(MAX_SAMPLE_COUNT, lightCount);
 
-		PDFValue = 1.0 / (light.SurfaceArea * lightCount);
+			for (uint i = 0; i < SamplingIportantanceResamplingLightCount; i++)
+			{
+				uint lightIndex = uint(rand() * float(lightCount));
+
+				Light light = LightList[lightIndex];
+				float TargetPDF = GetLightTargetPDF(light, PositionToLight);
+				float proposalPDF = 1.0 / float(lightCount);
+
+				Reservoir.AddSample(lightIndex, TargetPDF / (proposalPDF * SamplingIportantanceResamplingLightCount));
+			}
+
+			Light light = LightList[Reservoir.SelectedIndex];
+			float SamplingImportanceResamplingPDF = GetLightTargetPDF(light, PositionToLight) / Reservoir.WeightSum;
+			PDFValue = SamplingImportanceResamplingPDF / (light.SurfaceArea);
+
+			float3 barycentric = GetRandomBarycentric();
+			LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+			LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
+			LightColor = light.LightColor;
+		}
+		else
+		{
+			uint lightIndex = uint(rand() * float(lightCount));
+			Light light = LightList[lightIndex];
+			float3 barycentric = GetRandomBarycentric();
+
+			LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+			LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
+			LightColor = light.LightColor;
+
+			PDFValue = 1.0 / (light.SurfaceArea * lightCount);
+		}
 	}
 }
 
@@ -483,7 +544,7 @@ void ClearAOVs()
 #include "kernel.glsl"
 #include "VarianceUtil.h"
 
-#define USE_ADAPTIVE_RAY_DISPATCHING 1
+#define USE_ADAPTIVE_RAY_DISPATCHING 0
 
 float hash13(vec3 p3)
 {

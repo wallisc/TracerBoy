@@ -960,7 +960,7 @@ Material GetAreaLightMaterial()
     return GetMaterialInternal(AREA_LIGHT_MATERIAL_ID, 0u, vec3(0.0, 0.0, 0.0), vec2(0.0, 0.0), false);
 }
 
-void GetOneLightSample(out vec3 LightPosition, out vec3 LightColor, out float PDFValue, out vec3 LightNormal)
+void GetOneLightSample(in vec3 PositionToLight, out vec3 LightPosition, out vec3 LightColor, out float PDFValue, out vec3 LightNormal)
 {
 #if 0
     vec2 areaLightUV = vec2(rand() * 2.0 - 1.0, rand() * 2.0 - 1.0);
@@ -1277,10 +1277,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
     BlueNoiseData BlueNoise = GetBlueNoise();
 
     
-	float lightPDF;
-    vec3 lightPosition, lightColor, lightNormal;
-    GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
-    
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
 #if USE_RUSSIAN_ROULETTE
@@ -1383,6 +1379,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
 			{
 				break;
 			}
+
+            float lightPDF;
+            vec3 lightPosition, lightColor, lightNormal;
+            GetOneLightSample(RayPoint, lightPosition, lightColor, lightPDF, lightNormal);
 
             {
                 vec3 lightDirection = lightPosition - RayPoint;
@@ -1672,9 +1672,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
             }
             
             
-			float lightPDF;
-            vec3 lightPosition, lightColor, lightNormal;
-            GetOneLightSample(lightPosition, lightColor, lightPDF, lightNormal);
             {
 			    
                 if(bFirstRay)
