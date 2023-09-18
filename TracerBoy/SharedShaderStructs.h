@@ -86,6 +86,13 @@ struct Light
 	float SurfaceArea;
 	float3 P0, P1, P2;
 	float3 N0, N1, N2;
+
+#ifdef HLSL
+	float3 GetPosition(float3 Barycentric)
+	{
+		return P0 * Barycentric.x + P1 * Barycentric.y + P2 * Barycentric.z;
+	}
+#endif
 };
 
 #define DEFAULT_MATERIAL_FLAG 0x0
