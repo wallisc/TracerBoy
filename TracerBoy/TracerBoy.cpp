@@ -11,8 +11,6 @@
 #if SUPPORT_SW_RAYTRACING
 #include "SoftwareRaytraceCS.h"
 #endif
-#include "RaytracePS.h"
-#include "VarianceStencilMaskPS.h"
 #include "FullscreenVS.h"
 #include "CompositeAlbedoCS.h"
 #include "XInput.h"
@@ -571,11 +569,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		D3D12_DESCRIPTOR_HEAP_DESC nonShaderVisibleDescriptorHeapDesc = viewDescriptorHeapDesc;
 		nonShaderVisibleDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&nonShaderVisibleDescriptorHeapDesc, IID_GRAPHICS_PPV_ARGS(m_pNonShaderVisibleDescriptorHeap.ReleaseAndGetAddressOf())));
-	
-		D3D12_DESCRIPTOR_HEAP_DESC depthDescriptorHeapDesc = {};
-		depthDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-		depthDescriptorHeapDesc.NumDescriptors = 1;
-		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&depthDescriptorHeapDesc, IID_GRAPHICS_PPV_ARGS(m_pDepthDescriptorHeap.ReleaseAndGetAddressOf())));
 	}
 
 	InitializeLocalRootSignature();
@@ -736,47 +729,10 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	if(m_bSupportsInlineRaytracing && m_bSupportsHardwareRaytracing)
 	{
-		{
-			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-			psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
-			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pRaytraceCS, ARRAYSIZE(g_pRaytraceCS));
-			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pRayTracingPSO.ReleaseAndGetAddressOf())));
-		}
-
-		{
-			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-			psoDesc.InputLayout = { nullptr, 0 };
-			psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
-			psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_pFullScreenVS, ARRAYSIZE(g_pFullScreenVS));
-			psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pRaytracePS, ARRAYSIZE(g_pRaytracePS));
-			psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-			psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-			psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-			psoDesc.DepthStencilState.DepthEnable = TRUE;
-			psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
-			psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-			psoDesc.DepthStencilState.StencilEnable = FALSE;
-			psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-			psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-			psoDesc.DepthStencilState.StencilReadMask = 0xff;
-			psoDesc.DepthStencilState.StencilWriteMask = 0x00;
-			psoDesc.SampleMask = UINT_MAX;
-			psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-			psoDesc.NumRenderTargets = 0;
-			psoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
-			psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-			psoDesc.SampleDesc.Count = 1;
-			VERIFY_HRESULT(m_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPixelShaderRayTracingPSO)));
-
-			psoDesc.DepthStencilState.StencilWriteMask = 0xff;
-			psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-			psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-			psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-			psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
-			psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pVarianceStencilMaskPS, ARRAYSIZE(g_pVarianceStencilMaskPS));
-			VERIFY_HRESULT(m_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pVarianceStencilPSO)));
-		}
-	
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
+		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pRaytraceCS, ARRAYSIZE(g_pRaytraceCS));
+		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pRayTracingPSO.ReleaseAndGetAddressOf())));
 	}
 
 #if SUPPORT_SW_RAYTRACING
@@ -2384,9 +2340,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		m_SamplesRendered = 0;
 		m_RenderStartTime = std::chrono::steady_clock::now();
-
-		D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_pDepthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		commandList.ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0, 0, 0, nullptr);
 	}
 
 	const UINT ZeroValue[4] = {};
@@ -2398,7 +2351,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		0,
 		nullptr);
 
-	const bool bIsGraphics = !EmulateRaytracing() && outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing && outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing;
+	const bool bIsGraphics = false;
 	SetRootSignature(bIsGraphics, commandList, *m_pRayTracingRootSignature.Get());
 
 	ComPtr<ID3D12GraphicsCommandList5> pRaytracingCommandList;
@@ -2487,37 +2440,11 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 
 		if (outputSettings.m_performanceSettings.m_bEnableInlineRaytracing && m_bSupportsInlineRaytracing)
 		{
-			if (!EmulateRaytracing() && outputSettings.m_performanceSettings.m_bEnablePixelShaderRaytracing)
-			{
-				D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_pDepthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+			commandList.SetPipelineState(EmulateRaytracing() ? m_pSoftwareRayTracingPSO.Get() : m_pRayTracingPSO.Get());
 
-				commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				commandList.RSSetViewports(1, &viewport);
-
-				D3D12_RECT scissorRect = CD3DX12_RECT(0, 0, viewport.Width, viewport.Height);
-				commandList.RSSetScissorRects(1, &scissorRect);
-
-				commandList.OMSetRenderTargets(0, nullptr, true, &dsv);
-
-				if (m_SamplesRendered % 32 == 0)
-				{
-					commandList.OMSetStencilRef(0x1);
-					commandList.SetPipelineState(m_pVarianceStencilPSO.Get());
-					commandList.DrawInstanced(3, 1, 0, 0);
-				}
-				
-				commandList.OMSetStencilRef(0x0);
-				commandList.SetPipelineState(m_pPixelShaderRayTracingPSO.Get());
-				commandList.DrawInstanced(3, 1, 0, 0);
-			}
-			else
-			{
-				commandList.SetPipelineState(EmulateRaytracing() ? m_pSoftwareRayTracingPSO.Get() : m_pRayTracingPSO.Get());
-
-				UINT DispatchWidth = (viewport.Width - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1;
-				UINT DispatchHeight = (viewport.Height - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1;
-				commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
-			}
+			UINT DispatchWidth = (viewport.Width - 1) / RAYTRACE_THREAD_GROUP_WIDTH + 1;
+			UINT DispatchHeight = (viewport.Height - 1) / RAYTRACE_THREAD_GROUP_HEIGHT + 1;
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
 		}
 		else
 		{
@@ -3095,27 +3022,6 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer)
 				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::ComposittedOutputSRV),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		}
-
-
-		D3D12_RESOURCE_DESC depthStencilDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-			DXGI_FORMAT_D24_UNORM_S8_UINT,
-			backBufferDesc.Width,
-			backBufferDesc.Height,
-			1, 1, 1, 0,
-			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-		
-		VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
-			&defaultHeapDesc,
-			D3D12_HEAP_FLAG_NONE,
-			&depthStencilDesc,
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			nullptr,
-			IID_GRAPHICS_PPV_ARGS(m_pDepthStencil.ReleaseAndGetAddressOf())));
-		D3D12_DEPTH_STENCIL_VIEW_DESC depthDesc = {};
-		depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		depthDesc.Flags = D3D12_DSV_FLAG_NONE;
-		depthDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-		m_pDevice->CreateDepthStencilView(m_pDepthStencil.Get(), &depthDesc, m_pDepthDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
 		for(UINT i = 0; i < ARRAYSIZE(m_pFinalTemporalOutput); i++)
 		{

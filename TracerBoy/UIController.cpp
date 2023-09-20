@@ -211,7 +211,6 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::Checkbox("Use Next Event Estimation", &performanceSettings.m_bEnableNextEventEstimation);
 		ImGui::Checkbox("Use Sampling Importance Resampling", &performanceSettings.m_bEnableSamplingImportanceResampling);
 		ImGui::Checkbox("Use Inline Raytracing", &performanceSettings.m_bEnableInlineRaytracing);
-		ImGui::Checkbox("Use Pixel Shader Raytracing", &performanceSettings.m_bEnablePixelShaderRaytracing);
 		ImGui::Checkbox("Use ExecuteIndirect", &performanceSettings.m_bEnableExecuteIndirect);
 		
 		ImGui::TreePop();

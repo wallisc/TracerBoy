@@ -183,7 +183,6 @@ public:
 		bool m_bEnableSamplingImportanceResampling;
 		bool m_bEnableBlueNoise;
 		bool m_bEnableInlineRaytracing;
-		bool m_bEnablePixelShaderRaytracing;
 		bool m_bEnableExecuteIndirect;
 		int m_OccupancyMultiplier;
 	};
@@ -255,7 +254,6 @@ public:
 		performanceSettings.m_bEnableNextEventEstimation = true;
 		performanceSettings.m_bEnableSamplingImportanceResampling = true;
 		performanceSettings.m_bEnableInlineRaytracing = true;
-		performanceSettings.m_bEnablePixelShaderRaytracing = false;
 		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
 
@@ -336,7 +334,6 @@ private:
 	ComPtr<ID3D12Device5> m_pDevice;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	ComPtr<ID3D12DescriptorHeap> m_pViewDescriptorHeap;
-	ComPtr<ID3D12DescriptorHeap> m_pDepthDescriptorHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pNonShaderVisibleDescriptorHeap;
 #if SUPPORT_SW_RAYTRACING
 	ComPtr<ID3D12RaytracingFallbackDevice> m_fallbackDevice;
@@ -419,8 +416,6 @@ private:
 	ComPtr<ID3D12StateObject> m_pRayTracingStateObject;
 	ComPtr<ID3D12PipelineState> m_pRayTracingPSO;
 	ComPtr<ID3D12PipelineState> m_pSoftwareRayTracingPSO;
-	ComPtr<ID3D12PipelineState> m_pPixelShaderRayTracingPSO;
-	ComPtr<ID3D12PipelineState> m_pVarianceStencilPSO;
 
 	ComPtr<ID3D12Resource> m_pRayGenShaderTable;
 	ComPtr<ID3D12Resource> m_pHitGroupShaderTable;
