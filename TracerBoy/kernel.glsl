@@ -1275,7 +1275,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
     uint FirstPrimitiveID = uint(-1); 
     BlueNoiseData BlueNoise = GetBlueNoise();
-
+    
+    bool bPrevRayWasPerfectlySpecular = false;
     
     for (int i = 0; i < MAX_BOUNCES; i++)
     {
@@ -1365,12 +1366,27 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 detailNormal = -detailNormal;
             }
 
+
+            bool bSpecularRay = false;
+            if(AllowsSpecular(material))
+            {
+                if(IsMetallic(material) || IsHairMaterial(material))
+                {
+                    bSpecularRay = true;
+                }
+                else
+                {
+                    bSpecularRay = rand() < 0.5;
+                }
+            }
+
+            bool bUsePerfectSpecularOptimization = bSpecularRay && UsePerfectSpecularOptimization(material.roughness);
             // Omit emissives if the intersected object is marked as a light. This is because 
             // we will sample the lighting contribution when adding direct lighting 
             // and adding the emissive contribution here would double it's contribution.
             // However, we DO take the emissive contribution if it's the first primary ray 
             // as a special case so that the light doesn't just appear black
-            if(bFirstRay || !IsLight(material) || !perFrameConstants.EnableNextEventEstimation)
+            if(bPrevRayWasPerfectlySpecular || bFirstRay || !IsLight(material) || !perFrameConstants.EnableNextEventEstimation)
             {
 			    accumulatedColor += accumulatedIndirectLightMultiplier * material.emissive;
             }
@@ -1384,6 +1400,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
             vec3 lightPosition, lightColor, lightNormal;
             GetOneLightSample(RayPoint, lightPosition, lightColor, lightPDF, lightNormal);
 
+            // No point doing NEEE for a mirror reflection because the chance of picking a correct point is 0
+            if(!bUsePerfectSpecularOptimization)
             {
                 vec3 lightDirection = lightPosition - RayPoint;
 				if(lightPDF > EPSILON && dot(lightDirection, lightNormal) < 0.0)
@@ -1468,19 +1486,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 ray.direction);
             
             vec3 previousDirection = ray.direction;
-            bool bSpecularRay = false;
-            if(AllowsSpecular(material))
-            {
-                if(IsMetallic(material) || IsHairMaterial(material))
-                {
-                    bSpecularRay = true;
-                }
-                else
-                {
-                    bSpecularRay = rand() < 0.5;
-                }
-            }
-            
+            bPrevRayWasPerfectlySpecular = bUsePerfectSpecularOptimization;
             if(bSpecularRay)
             {
                 float PDFValue;
@@ -1496,7 +1502,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     if (discriminant > EPSILON) 
                     {
                         vec3 refractionDirection = normalize( nr * (ray.direction - normal * RayDirectionDotN) - normal * sqrt(discriminant));
-                        if(UsePerfectSpecularOptimization(material.roughness))
+                        if(bUsePerfectSpecularOptimization)
                         {
                             ray.direction = refractionDirection;
                         }
@@ -1607,7 +1613,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                             if (discriminant > EPSILON) 
                             {
                                 vec3 refractionDirection = normalize( nr * (ray.direction - normal * RayDirectionDotN) - normal * sqrt(discriminant));
-                                if(UsePerfectSpecularOptimization(material.roughness))
+                                if(bUsePerfectSpecularOptimization)
                                 {
                                     ray.direction = refractionDirection;
                                 }
