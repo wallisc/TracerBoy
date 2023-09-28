@@ -30,24 +30,7 @@ D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) :
 #endif
 
 	std::string commandLine(pCommandLine);
-	m_pTracerBoy = std::unique_ptr<TracerBoy>(new TracerBoy(m_pCommandQueue.Get()));
-
-
-	bool bLoadSceneAsync = true;
-	if (bLoadSceneAsync)
-	{
-		m_asyncLoadSceneThread = std::thread([this, commandLine]
-		{ 
-				CoInitialize(nullptr);  
-				SetThreadDescription(GetCurrentThread(), L"LoadSceneThread");
-				this->LoadScene(commandLine); 
-		});
-		m_asyncLoadSceneThread.detach();
-	}
-	else
-	{
-		LoadScene(commandLine);
-	}
+	InitializeTracerBoy(commandLine);
 
 	for (auto &pReadbackStatBuffer : m_pReadbackStatBuffers)
 	{
@@ -62,9 +45,26 @@ D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) :
 			nullptr,
 			IID_GRAPHICS_PPV_ARGS(pReadbackStatBuffer.ReleaseAndGetAddressOf())));
 	}
+}
 
-
-
+void D3D12App::InitializeTracerBoy(const std::string& commandLine)
+{
+	m_pTracerBoy = std::unique_ptr<TracerBoy>(new TracerBoy(m_pCommandQueue.Get()));
+	bool bLoadSceneAsync = true;
+	if (bLoadSceneAsync)
+	{
+		m_asyncLoadSceneThread = std::thread([this, commandLine]
+			{
+				CoInitialize(nullptr);
+				SetThreadDescription(GetCurrentThread(), L"LoadSceneThread");
+				this->LoadScene(commandLine);
+			});
+		m_asyncLoadSceneThread.detach();
+	}
+	else
+	{
+		LoadScene(commandLine);
+	}
 }
 
 void D3D12App::LoadScene(const std::string& commandLine)
@@ -145,6 +145,15 @@ void D3D12App::Render()
 {
 	UINT backBufferIndex = m_deviceWrapper.GetBackBufferIndex();
 	WaitForFenceValue(m_FrameFence[backBufferIndex]);
+	
+	if (m_pUIController->HasSceneChangeRequest())
+	{
+		WaitForGPUIdle();
+		m_pTracerBoy = nullptr;
+		bIsSceneLoadFinished = false;
+
+		InitializeTracerBoy(m_pUIController->GetRequestedSceneName());
+	}
 
 	ComPtr<ID3D12Resource> pBackBuffer = &m_deviceWrapper.GetBackBuffer(backBufferIndex);
 

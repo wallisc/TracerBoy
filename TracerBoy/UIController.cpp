@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <shobjidl.h> 
 
 #if ENABLE_UI
 
@@ -143,6 +144,14 @@ void UIController::RenderLoadingScreen(ID3D12GraphicsCommandList& commandList, c
 	SubmitDrawData(commandList, true);
 }
 
+const std::string& UIController::GetRequestedSceneName()
+{
+	const std::lock_guard<std::mutex> lock(m_sceneNameMutex);
+
+	m_bHasSceneChangeRequest = false;
+	return m_sceneName;
+}
+
 void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats)
 {
 	ImGui_ImplDX12_NewFrame();
@@ -166,6 +175,40 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
+
+	if (ImGui::Button("Open Scene"))
+	{
+		std::thread fileDialogThread = std::thread([this]
+		{
+			VERIFY_HRESULT(CoInitialize(nullptr));
+			SetThreadDescription(GetCurrentThread(), L"File Dialog Thread");
+
+			std::string sSelectedFile;
+			std::string sFilePath;
+
+			ComPtr<IFileOpenDialog> pFileSystem;
+			VERIFY_HRESULT(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(pFileSystem.ReleaseAndGetAddressOf())));
+
+			VERIFY_HRESULT(pFileSystem->Show(NULL));
+
+			ComPtr<IShellItem> pFiles;
+			VERIFY_HRESULT(pFileSystem->GetResult(&pFiles));
+
+			PWSTR pPath;
+			VERIFY_HRESULT(pFiles->GetDisplayName(SIGDN_FILESYSPATH, &pPath));
+
+			std::wstring path(pPath);
+			CoTaskMemFree(pPath);
+
+			{
+				const std::lock_guard<std::mutex> lock(m_sceneNameMutex);
+				m_bHasSceneChangeRequest = true;
+				m_sceneName = std::string(path.begin(), path.end());
+
+			}
+		});
+		fileDialogThread.detach();
+	}
 
 	if (ImGui::TreeNode("Camera"))
 	{

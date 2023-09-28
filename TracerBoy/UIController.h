@@ -23,6 +23,13 @@ public:
 	float GetCaptureLengthInSeconds() { return m_captureLengthInSeconds; }
 	float GetCaptureFramesPerSecond() { return m_captureFramesPerSecond; }
 	float GetCaptureSamplesPerFrame() { return m_captureSamplesPerFrame; }
+
+	bool HasSceneChangeRequest() { return m_bHasSceneChangeRequest; }
+	
+	// Only call if HasSceneChangeRequest() == true
+	// After this has been called, HasSceneChangeRequest() will return back to false
+	const std::string& GetRequestedSceneName();
+
 private:
 	void SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool bClearRenderTarget);
 	void SetDefaultSettings();
@@ -32,6 +39,10 @@ private:
 	float m_captureLengthInSeconds;
 	int m_captureFramesPerSecond;
 	int m_captureSamplesPerFrame;
+
+	std::mutex m_sceneNameMutex;
+	bool m_bHasSceneChangeRequest = false;
+	std::string m_sceneName;
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12DescriptorHeap> m_pImguiSRVDescriptorHeap;

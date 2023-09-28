@@ -31,6 +31,7 @@ public:
 	void Render();
 private:
 	void LoadScene(const std::string &commandLine);
+	void InitializeTracerBoy(const std::string& commandLine);
 
 	typedef std::pair<ComPtr<ID3D12GraphicsCommandList>, ComPtr<ID3D12CommandAllocator>> CommandListAllocatorPair;
 	void AcquireCommandListAllocatorPair(CommandListAllocatorPair& pair);
