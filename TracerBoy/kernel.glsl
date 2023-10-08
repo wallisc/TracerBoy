@@ -1505,6 +1505,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                         if(bUsePerfectSpecularOptimization)
                         {
                             ray.direction = refractionDirection;
+                            bPrevRayWasPerfectlySpecular = true;
                         }
                         else
                         {
@@ -1616,6 +1617,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                                 if(bUsePerfectSpecularOptimization)
                                 {
                                     ray.direction = refractionDirection;
+                                    bPrevRayWasPerfectlySpecular = true;
                                 }
                                 else
                                 {
