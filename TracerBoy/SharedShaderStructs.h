@@ -60,6 +60,8 @@ struct PerFrameConstants
 	
 	float DebugValue;
 	float DebugValue2;
+	uint SelectedPixelX;
+	uint SelectedPixelY;
 };
 
 struct ConfigConstants

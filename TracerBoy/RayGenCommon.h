@@ -540,6 +540,19 @@ void OutputPrimaryWorldPosition(float3 worldPosition, float distanceToNeighbor)
 	DistanceToNeighbor += distanceToNeighbor;
 }
 
+bool IsSelectedPixel()
+{
+	return all(GetDispatchIndex() == uint2(perFrameConstants.SelectedPixelX, perFrameConstants.SelectedPixelY));
+}
+
+void OutputDistanceToFirstHit(float Distance)
+{
+	if (IsSelectedPixel())
+	{
+		StatsBuffer.Store(8, asuint(Distance));
+	}
+}
+
 void ClearAOVs()
 {
 	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 1.0);

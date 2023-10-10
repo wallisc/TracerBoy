@@ -14,6 +14,8 @@ public:
 
 
 	void UpdateMousePosition(int x, int y);
+	void NotifyLeftMouseClick();
+
 	void KeyUpEvent(char key) 
 	{ 
 		m_inputArray[key] = false; 
@@ -71,6 +73,8 @@ private:
 	std::atomic<bool> bIsSceneLoadFinished;
 	bool m_bRenderUI;
 
+	bool m_bValidPixelSelection = false;
+	UINT m_FramesSincePixelSelection = 0;
 
 	bool m_bIsRecording;
 	UINT m_SamplesRendered;

@@ -31,6 +31,7 @@ void OutputPrimaryEmissive(vec3 Emissive) {}
 void OutputPrimaryAlbedo(vec3 Albedo, float DiffuseContribution) {}
 void OutputPrimaryNormal(vec3 Normal) {}
 void OutputPrimaryWorldPosition(vec3 WorldPosition, float DistanceToNeighbor) {}
+void OutputDistanceToFirstHit(float Distance) {}
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 #endif
@@ -1349,6 +1350,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 vec3 NeighborRayPoint = GetRayPoint(neighborRay, result.x);
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(detailNormal);
+                OutputDistanceToFirstHit(result.x);
 			}
 
             // Duplicate but a more readable variable depending on the scenario

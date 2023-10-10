@@ -152,7 +152,7 @@ const std::string& UIController::GetRequestedSceneName()
 	return m_sceneName;
 }
 
-void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats)
+void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats, const PixelSelection* pPixelSelection)
 {
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -279,6 +279,13 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	}
 
 	ImGui::End();
+
+
+	if (pPixelSelection)
+	{	ImGui::Begin("Pixel Selection");
+		ImGui::Text("Distance from camera: %.3f", pPixelSelection->DistanceFromCamera);
+		ImGui::End();
+	}
 
 	ImGui::Render();
 	SubmitDrawData(commandList, false);

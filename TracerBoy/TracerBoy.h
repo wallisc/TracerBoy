@@ -264,6 +264,7 @@ public:
 	{
 		UINT ActiveWaves;
 		UINT ActivePixels;
+		float SelectedPixelDistance;
 	};
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
@@ -279,6 +280,11 @@ public:
 		bool m_ignoreMouse;
 	};
 	void Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], float dt, const ControllerState &controllerState, const CameraSettings &cameraSettings);
+	void SelectPixel(int x, int y)
+	{
+		m_selectedPixelX = x;
+		m_selectedPixelY = y;
+	}
 
 	friend class TextureAllocator;
 private:
@@ -445,6 +451,7 @@ private:
 	ComPtr<ID3D12PipelineState> m_pCompositeAlbedoPSO;
 
 	UINT32 m_mouseX, m_mouseY;
+	UINT32 m_selectedPixelX, m_selectedPixelY;
 	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
 

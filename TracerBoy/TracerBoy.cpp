@@ -2382,6 +2382,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
 	constants.DebugValue = outputSettings.m_debugSettings.m_DebugValue;
 	constants.DebugValue2 = outputSettings.m_debugSettings.m_DebugValue2;
+	constants.SelectedPixelX = m_selectedPixelX;
+	constants.SelectedPixelY = m_selectedPixelY;
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{

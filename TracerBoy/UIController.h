@@ -7,6 +7,11 @@ class UIController
 public:
 	UIController(HWND hwnd, ID3D12Device &device, IDXGISwapChain3 &swapchain);
 
+	struct PixelSelection
+	{
+		float DistanceFromCamera;
+	};
+
 	struct PerFrameStats
 	{
 		float ElapsedTimeSinceLastInvalidate;
@@ -16,7 +21,7 @@ public:
 	};
 
 	void RenderLoadingScreen(ID3D12GraphicsCommandList& commandList, const SceneLoadStatus &loadSceneStatus);
-	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats);
+	void Render(ID3D12GraphicsCommandList& commandList, const PerFrameStats &stats, const PixelSelection *pPixelSelection = nullptr);
 
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }
 	float GetCameraSpeed() { return m_cameraSpeed; }

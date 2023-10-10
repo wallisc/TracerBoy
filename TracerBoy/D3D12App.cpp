@@ -141,6 +141,14 @@ void D3D12App::UpdateMousePosition(int x, int y)
 	m_mouseY = y;
 }
 
+void D3D12App::NotifyLeftMouseClick()
+{
+	m_pTracerBoy->SelectPixel(m_mouseX, m_mouseY);
+	m_FramesSincePixelSelection = 0;
+	m_bValidPixelSelection = true;
+}
+
+
 void D3D12App::Render()
 {
 	UINT backBufferIndex = m_deviceWrapper.GetBackBufferIndex();
@@ -200,7 +208,6 @@ void D3D12App::Render()
 		m_pTracerBoy->Update(m_mouseX, m_mouseY, m_inputArray, timeSinceLastUpdate, controllerState, cameraSettings);
 
 
-
 #if ENABLE_UI
 		const auto& outputSettings = m_pUIController->GetOutputSettings();
 #else
@@ -241,6 +248,14 @@ void D3D12App::Render()
 			bConverged = false;
 		}
 
+		static UIController::PixelSelection pixelSelection = {};
+		bool bPixelSelectionQueryFinished = m_FramesSincePixelSelection == cNumBackBuffers;
+		if (bPixelSelectionQueryFinished)
+		{
+			pixelSelection.DistanceFromCamera = TracerStats.SelectedPixelDistance;
+		}
+		m_FramesSincePixelSelection++;
+
 #if ENABLE_UI
 		if (m_bRenderUI)
 		{
@@ -259,7 +274,7 @@ void D3D12App::Render()
 				(bConverged ? m_TimeSinceConvergence : std::chrono::steady_clock::now())
 				- m_TimeSinceLastInvalidate).count() / 1000.0f;
 
-			m_pUIController->Render(commandList, stats);
+			m_pUIController->Render(commandList, stats, m_bValidPixelSelection ? &pixelSelection : nullptr);
 		}
 #endif
 	}
