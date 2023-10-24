@@ -157,11 +157,21 @@ public:
 		NumModes
 	};
 
+	enum class FilterType : uint
+	{
+		Box,
+		Triangle,
+		Gaussian
+	};
+
 	struct CameraOutputSettings
 	{
 		float m_FocalDistance;
 		float m_DOFFocalDistance;
 		float m_ApertureWidth;
+		
+		uint m_FilterType;
+		float m_FilterWidth;
 	};
 
 	struct PostProcessSettings
@@ -236,6 +246,8 @@ public:
 		cameraSettings.m_FocalDistance = 3.0f;
 		cameraSettings.m_DOFFocalDistance = 0.0f;
 		cameraSettings.m_ApertureWidth = 0.075f;
+		cameraSettings.m_FilterType = (uint)FilterType::Box;
+		cameraSettings.m_FilterWidth = 1.0f;
 
 		DenoiserSettings &denoiserSettings = outputSettings.m_denoiserSettings;
 		denoiserSettings.m_bEnabled = true;

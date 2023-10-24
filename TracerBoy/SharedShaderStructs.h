@@ -57,11 +57,14 @@ struct PerFrameConstants
 	uint IsRealTime;
 	uint EnableNextEventEstimation;
 	uint EnableSamplingImportanceResampling;
+
+	float FilterWidth;
+	uint FilterType;
+	uint SelectedPixelX;
+	uint SelectedPixelY;
 	
 	float DebugValue;
 	float DebugValue2;
-	uint SelectedPixelX;
-	uint SelectedPixelY;
 };
 
 struct ConfigConstants
@@ -114,6 +117,9 @@ struct Light
 #define OUTPUT_TYPE_LIVE_PIXELS 5
 #define OUTPUT_TYPE_LIVE_WAVES 6
 
+#define FILTER_TYPE_BOX 0
+#define FILTER_TYPE_TRIANGLE 1
+#define FILTER_TYPE_GAUSSIAN 2
 
 struct Material
 {

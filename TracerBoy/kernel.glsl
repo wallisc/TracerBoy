@@ -1766,6 +1766,11 @@ vec3 GetLensPosition(in vec2 uv, float aspectRatio, float rotationFactor)
     return lensPoint;
 }
 
+float Gaussian(float x, float mu, float sigma) {
+    return 1 / sqrt(2 * PI * sigma * sigma) *
+           exp(-pow(x - mu, 2) / (2 * sigma * sigma));
+}
+
 vec4 PathTrace(in vec2 pixelCoord)
 {
     vec2 pixelUVSize = 1.0 / GetResolution().xy;
@@ -1792,7 +1797,38 @@ vec4 PathTrace(in vec2 pixelCoord)
 
     // Add some jitter for anti-aliasing
 	BlueNoiseData BlueNoise = GetBlueNoise();
-    uv += (BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5)) * pixelUVSize;
+    vec2 UVOffsetFromCenter = BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5);
+
+    float pixelDiameter = perFrameConstants.FilterWidth;
+    float pixelRadius = pixelDiameter / 2;
+    float filterWeight = 1.0f;
+    switch(perFrameConstants.FilterType)
+    {
+    case FILTER_TYPE_TRIANGLE:
+        {
+            filterWeight = max(0.5 - abs(UVOffsetFromCenter.x), 0.5 - abs(UVOffsetFromCenter.y));
+            break;
+        }
+    case FILTER_TYPE_GAUSSIAN:
+        {
+            float sigma = 0.8;
+            float expX = Gaussian(1, 0, sigma);
+            float expY = Gaussian(1, 0, sigma);
+
+            filterWeight = max(0, Gaussian(UVOffsetFromCenter.x * 2, 0, sigma) - expX) * max(0, Gaussian(UVOffsetFromCenter.y * 2, 0, sigma) - expY);
+            break;
+        }
+
+    case FILTER_TYPE_BOX: 
+    default:
+        {
+            filterWeight = 1.0f;
+            break;
+        }
+    }
+
+    uv += UVOffsetFromCenter * pixelUVSize * (pixelRadius * 2);
+
     
     float aspectRatio = GetResolution().x / GetResolution().y ; 
     vec3 focalPoint = GetCameraPosition() - GetCameraFocalDistance() * normalize(GetCameraLookAt() - GetCameraPosition());
@@ -1842,7 +1878,7 @@ vec4 PathTrace(in vec2 pixelCoord)
     outputColor += accumulatedColor.rgb;
 #endif
 
-    return vec4(outputColor, 1.0);
+    return vec4(outputColor * filterWeight, filterWeight);
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )

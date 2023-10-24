@@ -1962,6 +1962,8 @@ void TracerBoy::UpdateOutputSettings(const OutputSettings& outputSettings)
 		m_CachedOutputSettings.m_cameraSettings.m_FocalDistance != outputSettings.m_cameraSettings.m_FocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_DOFFocalDistance  != outputSettings.m_cameraSettings.m_DOFFocalDistance ||
 		m_CachedOutputSettings.m_cameraSettings.m_ApertureWidth != outputSettings.m_cameraSettings.m_ApertureWidth ||
+		m_CachedOutputSettings.m_cameraSettings.m_FilterType != outputSettings.m_cameraSettings.m_FilterType ||
+		m_CachedOutputSettings.m_cameraSettings.m_FilterWidth != outputSettings.m_cameraSettings.m_FilterWidth ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableNextEventEstimation != outputSettings.m_performanceSettings.m_bEnableNextEventEstimation ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling != outputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling ||
 		m_CachedOutputSettings.m_performanceSettings.m_bEnableBlueNoise != outputSettings.m_performanceSettings.m_bEnableBlueNoise)
@@ -2380,6 +2382,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.EnableSamplingImportanceResampling = outputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling;
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);
+	constants.FilterWidth = outputSettings.m_cameraSettings.m_FilterWidth;
+	constants.FilterType = outputSettings.m_cameraSettings.m_FilterType;
 	constants.DebugValue = outputSettings.m_debugSettings.m_DebugValue;
 	constants.DebugValue2 = outputSettings.m_debugSettings.m_DebugValue2;
 	constants.SelectedPixelX = m_selectedPixelX;
