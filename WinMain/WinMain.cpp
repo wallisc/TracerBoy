@@ -14,7 +14,7 @@ class WindowsDevice : public DeviceWrapper
 public:
 	WindowsDevice(HWND hwnd, UINT numBackBuffers) : m_hwnd(hwnd)
 	{
-#if 1
+#if 0
 		ComPtr<ID3D12Debug> debugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_GRAPHICS_PPV_ARGS(&debugController))))
 		{
@@ -28,7 +28,7 @@ public:
 		ComPtr<IDXGIFactory6> pDxgiFactory6;
 		ComPtr<IDXGIAdapter1> pAdapter;
 		if (SUCCEEDED(pDxgiFactory2->QueryInterface(IID_GRAPHICS_PPV_ARGS(&pDxgiFactory6))))
-		{
+		{	
 			pDxgiFactory6->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_GRAPHICS_PPV_ARGS(&pAdapter));
 			DXGI_ADAPTER_DESC1 adapterDesc;
 			pAdapter->GetDesc1(&adapterDesc);
@@ -159,11 +159,12 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+	case WM_LBUTTONUP:
+		g_pD3D12App->UpdateMousePosition(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		g_pD3D12App->NotifyLeftMouseClick();
+		return 0;
 	case WM_MOUSEMOVE:
-		//if (wParam & MK_LBUTTON)
-		{
-			g_pD3D12App->UpdateMousePosition(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-		}
+		g_pD3D12App->UpdateMousePosition(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		return 0;
 	}
 
@@ -184,7 +185,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	windowClass.lpszClassName = WindowName;
 	RegisterClassEx(&windowClass);
 
-	RECT windowRect = { 0, 0, 2560, 1440};
+	RECT windowRect = { 0, 0, 1920, 1080};
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	g_hwnd = CreateWindow(
