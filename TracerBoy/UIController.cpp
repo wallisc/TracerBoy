@@ -245,6 +245,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 #if USE_XESS
 		ImGui::Checkbox("Enable XeSS", &postProcessSettings.m_bEnableXeSS);
 #endif
+#if USE_DLSS
+		ImGui::Checkbox("Enable DLSS", &postProcessSettings.m_bEnableDLSS);
+#endif
 		ImGui::TreePop();
 	}
 

@@ -181,6 +181,7 @@ public:
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
 		bool m_bEnableXeSS;
+		bool m_bEnableDLSS;
 	};
 
 	struct PerformanceSettings
@@ -241,6 +242,7 @@ public:
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
 		postProcessSettings.m_bEnableXeSS = false;
+		postProcessSettings.m_bEnableDLSS = false;
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
@@ -303,7 +305,7 @@ private:
 	void UpdateOutputSettings(const OutputSettings& outputSettings);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetOutputSRV(OutputType outputType);
 
-	void ResizeBuffersIfNeeded(ID3D12Resource *pBackBuffer);
+	void ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
 
 	void InvalidateHistory(bool bForceRealTimeInvalidate = false);
@@ -361,6 +363,12 @@ private:
 
 #if USE_XESS
 	xess_context_handle_t m_xessContext = nullptr;
+#endif
+
+#if USE_DLSS
+	int m_bSupportsDLSS = false;
+	NVSDK_NGX_Parameter* m_pNGXParameters = nullptr;
+	NVSDK_NGX_Handle* m_pDLSSFeature = nullptr;
 #endif
 
 	bool EmulateRaytracing() 

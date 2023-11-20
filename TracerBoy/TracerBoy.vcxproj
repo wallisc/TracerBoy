@@ -120,7 +120,8 @@ xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
 xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
 xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\xess\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\xess\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -165,7 +166,8 @@ xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"</Command>
       <Command>xcopy /y  "$(ProjectDir)..\bin\assimp\*.dll" "$(OutDir)"
 xcopy /y  "$(ProjectDir)..\bin\openvdb\*.dll" "$(OutDir)"
 xcopy /y  "$(ProjectDir)..\bin\razer\*.dll" "$(OutDir)"
-xcopy /y  "$(ProjectDir)..\bin\xess\*.dll" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)..\bin\xess\*.dll" "$(OutDir)"
+xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
