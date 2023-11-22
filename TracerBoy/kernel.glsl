@@ -1797,7 +1797,15 @@ vec4 PathTrace(in vec2 pixelCoord)
 
     // Add some jitter for anti-aliasing
 	BlueNoiseData BlueNoise = GetBlueNoise();
-    vec2 UVOffsetFromCenter = BlueNoise.PrimaryJitter.xy - vec2(0.5, 0.5);
+
+    float2 PrimaryJitter = BlueNoise.PrimaryJitter.xy;
+    // Override with fixed pixel offset if specified (i.e. realtime mode)
+    if(perFrameConstants.FixedPixelOffset.x >= 0.0)
+    {
+        PrimaryJitter = perFrameConstants.FixedPixelOffset;
+    }
+    vec2 UVOffsetFromCenter = PrimaryJitter - vec2(0.5, 0.5);
+
 
     float pixelDiameter = perFrameConstants.FilterWidth;
     float pixelRadius = pixelDiameter / 2;

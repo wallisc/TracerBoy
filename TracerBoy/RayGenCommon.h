@@ -547,6 +547,8 @@ bool IsSelectedPixel()
 
 void OutputDistanceToFirstHit(float Distance)
 {
+	AOVDepth[GetDispatchIndex().xy] = saturate(Distance / perFrameConstants.MaxZ);
+
 	if (IsSelectedPixel())
 	{
 		StatsBuffer.Store(8, asuint(Distance));

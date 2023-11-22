@@ -144,6 +144,7 @@ public:
 		Lit,
 		Albedo,
 		Normals,
+		Depth,
 		Luminance,
 		LuminanceVariance,
 		LivePixels,
@@ -258,6 +259,7 @@ public:
 		denoiserSettings.m_luminanceWeightingMultiplier = 4.0f;
 		denoiserSettings.m_waveletIterations = 5;
 		denoiserSettings.m_fireflyClampValue = 0.0f;
+		denoiserSettings.m_maxZ = 10000.0f;
 
 		PerformanceSettings& performanceSettings = outputSettings.m_performanceSettings;
 		performanceSettings.m_SampleTarget = 256;
@@ -481,10 +483,10 @@ private:
 	PassResource m_pUpscaleItermediateOutput;
 	PassResource m_pDenoiserBuffers[2];
 
-	ComPtr<ID3D12Resource> m_pDepthStencil;
 	ComPtr<ID3D12Resource> m_pAOVNormals;
 	ComPtr<ID3D12Resource> m_pAOVCustomOutput;
 	ComPtr<ID3D12Resource> m_pAOVWorldPosition[2];
+	ComPtr<ID3D12Resource> m_pAOVDepth;
 	ComPtr<ID3D12Resource> m_pAOVEmissive;
 	ComPtr<ID3D12Resource> m_pLuminanceVariance;
 	ComPtr<ID3D12Resource> m_pVolume;
@@ -530,6 +532,7 @@ private:
 		AOVWorldPosition0UAV,
 		AOVWorldPosition1UAV,
 		AOVCustomOutputUAV,
+		AOVDepthUAV,
 		AOVEmissiveUAV,
 		AOVLastUAVSlot = AOVEmissiveUAV,
 		AOVBaseSRVSlot,
@@ -537,6 +540,7 @@ private:
 		AOVWorldPosition0SRV,
 		AOVWorldPosition1SRV,
 		AOVCustomOutputSRV,
+		AOVDepthSRV,
 		AOVEmissiveSRV,
 		AOVLastSRVSlot = AOVEmissiveSRV,
 		LuminanceVarianceSRV,

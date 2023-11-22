@@ -10,6 +10,7 @@ struct DenoiserSettings
 	float m_intersectPositionWeightingMultiplier;
 	float m_luminanceWeightingMultiplier;
 	int m_waveletIterations;
+	float m_maxZ;
 };
 
 class DenoiserPass

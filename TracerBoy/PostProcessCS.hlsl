@@ -140,6 +140,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 	case OUTPUT_TYPE_NORMAL:
 		outputColor = ProcessNormal(colorData);
 		break;
+	case OUTPUT_TYPE_DEPTH:
+		outputColor = PassThroughColor(colorData);
+		break;
 	case OUTPUT_TYPE_LUMINANCE:
 		outputColor = ProcessLuminance(colorData);
 		break;

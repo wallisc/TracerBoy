@@ -170,7 +170,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	const char* RenderModes[] = { "Unbiased", "Real-time"};
 	ImGui::Combo("Render Mode", (int*)&m_outputSettings.m_renderMode, RenderModes, IM_ARRAYSIZE(RenderModes));
 
-	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Luminance", "Luminance Variance", "Live Pixels", "Live Waves" };
+	const char* OutputTypes[] = { "Lit", "Albedo", "Normals", "Depth", "Luminance", "Luminance Variance", "Live Pixels", "Live Waves" };
 	ImGui::Combo("View Mode", (int*)&m_outputSettings.m_OutputType, OutputTypes, IM_ARRAYSIZE(OutputTypes));
 	
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
@@ -232,6 +232,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputFloat("Intersection Position Weighting Multiplier", &denoiserSettings.m_intersectPositionWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Luminance Weighting Multiplier", &denoiserSettings.m_luminanceWeightingMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Firefly Clamping value", &denoiserSettings.m_fireflyClampValue, 1.0f, 10.0f, "%.1f");
+		ImGui::InputFloat("Max Z", &denoiserSettings.m_maxZ, 1.0f, 10.0f, "%.2f");
 		ImGui::TreePop();
 	}
 

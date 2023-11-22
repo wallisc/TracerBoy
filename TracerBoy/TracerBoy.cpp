@@ -2167,6 +2167,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 	case OutputType::Normals:
 		slot = ViewDescriptorHeapSlots::AOVNormalsSRV;
 		break;
+	case OutputType::Depth:
+		slot = ViewDescriptorHeapSlots::AOVDepthSRV;
+		break;
 	case OutputType::LuminanceVariance:
 		slot = ViewDescriptorHeapSlots::LuminanceVarianceSRV;
 		break;
@@ -2183,6 +2186,8 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 		return OUTPUT_TYPE_LIT;
 	case TracerBoy::OutputType::Normals:
 		return OUTPUT_TYPE_NORMAL;
+	case TracerBoy::OutputType::Depth:
+		return OUTPUT_TYPE_DEPTH;
 	case TracerBoy::OutputType::Albedo:
 		return OUTPUT_TYPE_ALBEDO;
 	case TracerBoy::OutputType::LuminanceVariance:
@@ -2403,6 +2408,13 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.DebugValue2 = outputSettings.m_debugSettings.m_DebugValue2;
 	constants.SelectedPixelX = m_selectedPixelX;
 	constants.SelectedPixelY = m_selectedPixelY;
+	constants.FixedPixelOffset = { -1.0f, -1.0f };
+	constants.MaxZ = outputSettings.m_denoiserSettings.m_maxZ;
+
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
+	{
+		constants.FixedPixelOffset = { (float)rand() / (float)RAND_MAX, (float)rand() / (float)RAND_MAX};
+	}
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{
@@ -2498,6 +2510,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[1].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVEmissive.Get(),	D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVDepth.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
 	};
@@ -2680,11 +2693,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		NVSDK_NGX_D3D12_DLSS_Eval_Params D3D12DlssEvalParams = {};
 		D3D12DlssEvalParams.Feature.pInColor = FinalBuffer.Get();
 		D3D12DlssEvalParams.Feature.pInOutput = m_pUpscaleOutput.m_pResource.Get();
-		D3D12DlssEvalParams.pInDepth = m_pMotionVectors.Get();
+		D3D12DlssEvalParams.pInDepth = m_pAOVDepth.Get();
 		D3D12DlssEvalParams.pInMotionVectors = m_pMotionVectors.Get();
 		D3D12DlssEvalParams.pInExposureTexture = nullptr;
-		D3D12DlssEvalParams.InJitterOffsetX = 0.5f;
-		D3D12DlssEvalParams.InJitterOffsetY = 0.5f;
+
+		D3D12DlssEvalParams.InJitterOffsetX = constants.FixedPixelOffset.x - 0.5f;
+		D3D12DlssEvalParams.InJitterOffsetY = constants.FixedPixelOffset.y - 0.5f;
 		D3D12DlssEvalParams.InReset = false;
 		D3D12DlssEvalParams.InMVScaleX = 1.0f;
 		D3D12DlssEvalParams.InMVScaleY = 1.0f;
@@ -2715,6 +2729,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pUpscaleOutput.m_pResource;
 	}
 
+
 	{
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
 		{
@@ -2732,6 +2747,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[0].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVWorldPosition[1].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVEmissive.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVDepth.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pAOVCustomOutput.Get(),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(m_pStatsBuffer.Get(),	D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
@@ -3280,6 +3296,16 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 					emissiveDesc,
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVEmissiveUAV),
 					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVEmissiveSRV));
+			}
+
+			{
+				D3D12_RESOURCE_DESC depthDesc = postProcessOutput;
+				depthDesc.Format = DXGI_FORMAT_R32_FLOAT;
+				m_pAOVDepth = CreateUAVandSRV(
+					L"AOVDepth",
+					depthDesc,
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVDepthUAV),
+					GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AOVDepthSRV));
 			}
 
 			{

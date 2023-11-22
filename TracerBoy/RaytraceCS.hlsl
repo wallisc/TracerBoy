@@ -6,7 +6,7 @@
 #define ComputeRS \
     "RootConstants(num32BitConstants=43, b0)," \
 	"CBV(b1)," \
-    "DescriptorTable(UAV(u2, numDescriptors=5), visibility=SHADER_VISIBILITY_ALL)," \
+    "DescriptorTable(UAV(u2, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL)," \
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)," \
     "DescriptorTable(UAV(u1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL)," \
     "SRV(t1)," \
@@ -42,7 +42,7 @@ void main( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint
 		GTid.xy,
 		Gid.xy);
 
-	DispatchIndex = DTid;
+	DispatchIndex = DTid.xy;
 
 	if (any(DTid.xy >= Resolution)) return;
 

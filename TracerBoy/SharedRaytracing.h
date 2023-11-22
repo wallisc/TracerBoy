@@ -16,7 +16,8 @@ RWTexture2D<float4> AOVNormals : register(u2);
 RWTexture2D<float4> AOVWorldPosition0 : register(u3);
 RWTexture2D<float4> AOVWorldPosition1 : register(u4);
 RWTexture2D<float4> AOVCustomOutput : register(u5);
-RWTexture2D<float4> AOVEmissive : register(u6);
+RWTexture2D<float> AOVDepth : register(u6);
+RWTexture2D<float4> AOVEmissive : register(u7);
 
 RWByteAddressBuffer StatsBuffer : register(u10);
 

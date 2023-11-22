@@ -52,17 +52,19 @@ struct PerFrameConstants
 	uint GlobalFrameCount;
 	float MinConvergence;
 	uint LightCount;
-
 	uint UseBlueNoise;
+
 	uint IsRealTime;
 	uint EnableNextEventEstimation;
 	uint EnableSamplingImportanceResampling;
-
 	float FilterWidth;
+
 	uint FilterType;
 	uint SelectedPixelX;
 	uint SelectedPixelY;
-	
+	float MaxZ;
+
+	float2 FixedPixelOffset;
 	float DebugValue;
 	float DebugValue2;
 };
@@ -112,10 +114,11 @@ struct Light
 #define OUTPUT_TYPE_LIT 0
 #define OUTPUT_TYPE_ALBEDO 1
 #define OUTPUT_TYPE_NORMAL 2
-#define OUTPUT_TYPE_LUMINANCE 3
-#define OUTPUT_TYPE_VARIANCE 4
-#define OUTPUT_TYPE_LIVE_PIXELS 5
-#define OUTPUT_TYPE_LIVE_WAVES 6
+#define OUTPUT_TYPE_DEPTH 3
+#define OUTPUT_TYPE_LUMINANCE 4
+#define OUTPUT_TYPE_VARIANCE 5
+#define OUTPUT_TYPE_LIVE_PIXELS 6
+#define OUTPUT_TYPE_LIVE_WAVES 7
 
 #define FILTER_TYPE_BOX 0
 #define FILTER_TYPE_TRIANGLE 1
