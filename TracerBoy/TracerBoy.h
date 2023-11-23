@@ -145,6 +145,7 @@ public:
 		Albedo,
 		Normals,
 		Depth,
+		MotionVectors,
 		Luminance,
 		LuminanceVariance,
 		LivePixels,
@@ -596,6 +597,7 @@ private:
 	std::string m_sceneFileDirectory;
 	std::unique_ptr<DenoiserPass> m_pDenoiserPass;
 	std::unique_ptr<TemporalAccumulationPass> m_pTemporalAccumulationPass;
+	std::unique_ptr<GenerateMotionVectorsPass> m_pGenerateMotionVectorsPass;
 	std::unique_ptr<FidelityFXSuperResolutionPass> m_pFidelityFXSuperResolutionPass;
 };
 

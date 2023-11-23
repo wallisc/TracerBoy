@@ -829,6 +829,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
 	m_pTemporalAccumulationPass = std::unique_ptr<TemporalAccumulationPass>(new TemporalAccumulationPass(*m_pDevice.Get()));
+	m_pGenerateMotionVectorsPass = std::unique_ptr<GenerateMotionVectorsPass>(new GenerateMotionVectorsPass(*m_pDevice.Get()));
 	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
 }
 
@@ -2170,6 +2171,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 	case OutputType::Depth:
 		slot = ViewDescriptorHeapSlots::AOVDepthSRV;
 		break;
+	case OutputType::MotionVectors:
+		slot = ViewDescriptorHeapSlots::MotionVectorsSRV;
+		break;
 	case OutputType::LuminanceVariance:
 		slot = ViewDescriptorHeapSlots::LuminanceVarianceSRV;
 		break;
@@ -2188,6 +2192,8 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 		return OUTPUT_TYPE_NORMAL;
 	case TracerBoy::OutputType::Depth:
 		return OUTPUT_TYPE_DEPTH;
+	case TracerBoy::OutputType::MotionVectors:
+		return OUTPUT_TYPE_MOTION_VECTORS;
 	case TracerBoy::OutputType::Albedo:
 		return OUTPUT_TYPE_ALBEDO;
 	case TracerBoy::OutputType::LuminanceVariance:
@@ -2516,6 +2522,27 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
+
+	bool bNeedsMotionVectors = outputSettings.m_postProcessSettings.m_bEnableDLSS || outputSettings.m_OutputType == OutputType::MotionVectors;
+	if (bNeedsMotionVectors)
+	{
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Generate Motion Vectors");
+
+		PassResource MotionVectorsOutput;
+		MotionVectorsOutput.m_pResource = m_pMotionVectors;
+		MotionVectorsOutput.m_srvHandle = GetGPUDescriptorHandle(MotionVectorsSRV);
+		MotionVectorsOutput.m_uavHandle = GetGPUDescriptorHandle(MotionVectorsUAV);
+
+		m_pGenerateMotionVectorsPass->Run(commandList,
+			MotionVectorsOutput,
+			GetGPUDescriptorHandle(GetWorldPositionSRV()),
+			GetGPUDescriptorHandle(GetPreviousFrameWorldPositionSRV()),
+			m_camera,
+			m_prevFrameCamera,
+			m_SamplesRendered == 0,
+			viewport.Width,
+			viewport.Height);
+	}
 	
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);
 	if(outputSettings.m_renderMode == RenderMode::RealTime)
@@ -3064,12 +3091,10 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 		bool bIsDepthInverted = false;
 		bool bDoSharpening = false;
 		bool bEnableAutoExposure = false;
-		bool MotionVectorResolutionLow = false;
 		// Next create features	
 		int DlssCreateFeatureFlags = NVSDK_NGX_DLSS_Feature_Flags_None;
-		DlssCreateFeatureFlags |= MotionVectorResolutionLow ? NVSDK_NGX_DLSS_Feature_Flags_MVLowRes : 0;
+		DlssCreateFeatureFlags |= NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
 		DlssCreateFeatureFlags |= bIsContentHDR ? NVSDK_NGX_DLSS_Feature_Flags_IsHDR : 0;
-		DlssCreateFeatureFlags |= bIsDepthInverted ? NVSDK_NGX_DLSS_Feature_Flags_DepthInverted : 0;
 		DlssCreateFeatureFlags |= bDoSharpening ? NVSDK_NGX_DLSS_Feature_Flags_DoSharpening : 0;
 		DlssCreateFeatureFlags |= bEnableAutoExposure ? NVSDK_NGX_DLSS_Feature_Flags_AutoExposure : 0;
 

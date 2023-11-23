@@ -45,6 +45,9 @@
     <ClCompile Include="Curves.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GenerateMotionVectorsPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -122,6 +125,12 @@
     <ClInclude Include="Curves.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GenerateMotionVectorsPass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GenerateMotionVectorsSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -161,6 +170,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="FullScreenVS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="GenerateMotionVectorsCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

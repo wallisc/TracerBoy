@@ -103,6 +103,7 @@ using namespace DirectX;
 
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"
+#include "GenerateMotionVectorsPass.h"
 #include "TemporalAccumulationPass.h"
 #include "FidelityFXSuperResolution.h"
 #include "TracerBoy.h"

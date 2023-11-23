@@ -98,6 +98,16 @@ float3 ProcessLiveWaves(float4 color, float4 filter)
 	return output;
 }
 
+float3 ProcessMotionVectors(float4 color)
+{
+	float3 output = float3(color.xy / float2(Constants.Resolution), 0.0f);
+	if (Constants.UseGammaCorrection)
+	{
+		output = GammaCorrect(output);
+	}
+
+	return output;
+}
 
 float3 PassThroughColor(float4 color)
 {
@@ -142,6 +152,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_DEPTH:
 		outputColor = PassThroughColor(colorData);
+		break;
+	case OUTPUT_TYPE_MOTION_VECTORS:
+		outputColor = ProcessMotionVectors(colorData);
 		break;
 	case OUTPUT_TYPE_LUMINANCE:
 		outputColor = ProcessLuminance(colorData);
