@@ -50,7 +50,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	UV = (UV + 1.0) / 2.0;
 	UV.y = 1.0 - UV.y;
 	
-	float2 MotionVectors = (CurrentUV - UV) * Constants.Resolution;
-
+	float2 MotionVectors = (UV - CurrentUV) * Constants.Resolution;
 	OutputMotionVectors[DTid.xy] = MotionVectors;
 }

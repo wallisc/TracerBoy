@@ -2416,7 +2416,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.SelectedPixelY = m_selectedPixelY;
 	constants.FixedPixelOffset = { -1.0f, -1.0f };
 	constants.MaxZ = outputSettings.m_denoiserSettings.m_maxZ;
-
+	
 	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
 	{
 		constants.FixedPixelOffset = { (float)rand() / (float)RAND_MAX, (float)rand() / (float)RAND_MAX};
@@ -3087,16 +3087,10 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 		// TODO: What is this?
 		unsigned int renderPreset = 0;
 
-		bool bIsContentHDR = false;
-		bool bIsDepthInverted = false;
 		bool bDoSharpening = false;
-		bool bEnableAutoExposure = false;
-		// Next create features	
 		int DlssCreateFeatureFlags = NVSDK_NGX_DLSS_Feature_Flags_None;
 		DlssCreateFeatureFlags |= NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
-		DlssCreateFeatureFlags |= bIsContentHDR ? NVSDK_NGX_DLSS_Feature_Flags_IsHDR : 0;
 		DlssCreateFeatureFlags |= bDoSharpening ? NVSDK_NGX_DLSS_Feature_Flags_DoSharpening : 0;
-		DlssCreateFeatureFlags |= bEnableAutoExposure ? NVSDK_NGX_DLSS_Feature_Flags_AutoExposure : 0;
 
 		NVSDK_NGX_DLSS_Create_Params DlssCreateParams = {};
 
