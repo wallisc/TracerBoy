@@ -2523,7 +2523,35 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
 
-	bool bNeedsMotionVectors = outputSettings.m_postProcessSettings.m_bEnableDLSS || outputSettings.m_OutputType == OutputType::MotionVectors;
+	TAAUpscaler selectedTAAUpscaler = TAAUpscaler::None;
+	bool bNeedsUpscale = m_downscaleFactor < 1.0;
+
+	bool bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
+	
+#if USE_DLSS
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
+	{
+		selectedTAAUpscaler = TAAUpscaler::DLSS;
+		bNeedsMotionVectors = true;
+	}
+	else 
+#endif
+#if USE_XESS
+	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	{
+		selectedTAAUpscaler = TAAUpscaler::XeSS;
+	}
+	else 
+#endif
+	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
+	{
+		selectedTAAUpscaler = TAAUpscaler::FSR;
+	}
+	else if (outputSettings.m_renderMode == RenderMode::RealTime)
+	{
+		selectedTAAUpscaler = TAAUpscaler::Native;
+	}
+
 	if (bNeedsMotionVectors)
 	{
 		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Generate Motion Vectors");
@@ -2545,7 +2573,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	}
 	
 	D3D12_GPU_DESCRIPTOR_HANDLE PostProcessInput = GetOutputSRV(outputSettings.m_OutputType);
-	if(outputSettings.m_renderMode == RenderMode::RealTime)
+	if(outputSettings.m_renderMode == RenderMode::RealTime && selectedTAAUpscaler == TAAUpscaler::Native)
 	{
 		UINT32 previousFrameIndex = m_ActiveFrameIndex == 0 ? MaxActiveFrames - 1 : (m_ActiveFrameIndex - 1);
 
@@ -2625,6 +2653,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 			PostProcessInput = GetGPUDescriptorHandle(ComposittedOutputSRV);
 		}
         
+		if(selectedTAAUpscaler == TAAUpscaler::Native)
 		{
 			UINT32 previousFrameIndex = m_ActiveFrameIndex == 0 ? MaxActiveFrames - 1 : (m_ActiveFrameIndex - 1);
 
@@ -2681,9 +2710,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pPostProcessOutput;
 	}
 
-	bool bNeedsUpscale = m_downscaleFactor < 1.0;
 #if USE_XESS 
-	if(outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	if (selectedTAAUpscaler == TAAUpscaler::XeSS)
 	{
 		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"XeSS");
 
@@ -2713,7 +2741,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 #endif
 
 #if USE_DLSS
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
+	if (selectedTAAUpscaler == TAAUpscaler::DLSS)
 	{
 		auto inputDesc = m_pPostProcessOutput->GetDesc();
 
@@ -2741,9 +2769,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		bNeedsUpscale = false;
 	}
 #endif
-
-	// Haven't added any upscale code so force FSR on if we need to upscale even if it's disabled
-	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
+	if (selectedTAAUpscaler == TAAUpscaler::FSR)
 	{
 		auto inputDesc = m_pPostProcessOutput->GetDesc();
 		m_pFidelityFXSuperResolutionPass->Run(

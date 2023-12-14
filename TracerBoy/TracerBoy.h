@@ -182,8 +182,12 @@ public:
 		bool m_bEnableToneMapping;
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
+#if USE_XESS
 		bool m_bEnableXeSS;
+#endif
+#if USE_DLSS
 		bool m_bEnableDLSS;
+#endif
 	};
 
 	struct PerformanceSettings
@@ -243,8 +247,12 @@ public:
 		postProcessSettings.m_bEnableToneMapping = false;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
+#if USE_XESS
 		postProcessSettings.m_bEnableXeSS = false;
-		postProcessSettings.m_bEnableDLSS = false;
+#endif
+#if USE_DLSS
+		postProcessSettings.m_bEnableDLSS = true;
+#endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
 		cameraSettings.m_FocalDistance = 3.0f;
@@ -411,6 +419,15 @@ private:
 	ComPtr<ID3D12Resource> m_pJitteredAccumulatedPathTracerOutput;
 	ComPtr<ID3D12Resource> m_pComposittedOutput;
 	UINT8 m_ActiveFrameIndex;
+
+	enum TAAUpscaler
+	{
+		Native,
+		FSR,
+		XeSS,
+		DLSS,
+		None
+	};
 
 	enum LocalRayTracingRootSignatureParameters
 	{
