@@ -84,28 +84,14 @@ using namespace DirectX;
 #include "xess/xess_debug.h"
 #endif 
 
-#if USE_DLSS
-#include "dlss/nvsdk_ngx_helpers.h"
-
-#define NV_VERIFY(x) \
-{																										\
-	NVSDK_NGX_Result nvResult = x;																		\
-	if(nvResult != NVSDK_NGX_Result_Success)															\
-	{																									\
-		std::wstring ngxErrorWString = L"NGX error: " + std::wstring(GetNGXResultAsString(nvResult));	\
-		std::string ngxErrorString(ngxErrorWString.begin(), ngxErrorWString.end());						\
-		OutputDebugString(ngxErrorString.c_str());														\
-		HANDLE_FAILURE();																				\
-	}																									\
-}
-
-#endif
-
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"
 #include "GenerateMotionVectorsPass.h"
 #include "TemporalAccumulationPass.h"
 #include "FidelityFXSuperResolution.h"
+#if USE_DLSS
+#include "DeepLearningSuperSampling.h"
+#endif
 #include "TracerBoy.h"
 #include "UIController.h"
 #include "DeviceWrapper.h"

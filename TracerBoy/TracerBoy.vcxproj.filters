@@ -48,6 +48,9 @@
     <ClCompile Include="GenerateMotionVectorsPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DeepLearningSuperSamplingPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -130,6 +133,9 @@
     </ClInclude>
     <ClInclude Include="GenerateMotionVectorsSharedShaderStructs.h">
       <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="DeepLearningSuperSampling.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

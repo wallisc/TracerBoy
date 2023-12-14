@@ -541,20 +541,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	}
 #endif
 
-#if USE_DLSS
-	NV_VERIFY(NVSDK_NGX_D3D12_Init(231313132, L".", m_pDevice.Get()));
 
-	NV_VERIFY(NVSDK_NGX_D3D12_GetCapabilityParameters(&m_pNGXParameters));
-
-	int needsUpdatedDriver = 0;
-	unsigned int minDriverVersionMajor = 0;
-	unsigned int minDriverVersionMinor = 0;
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver, &needsUpdatedDriver));
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor, &minDriverVersionMajor));
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor, &minDriverVersionMinor));
-
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult, &m_bSupportsDLSS));
-#endif
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS1 option1;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &option1, sizeof(option1)));
@@ -831,6 +818,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_pTemporalAccumulationPass = std::unique_ptr<TemporalAccumulationPass>(new TemporalAccumulationPass(*m_pDevice.Get()));
 	m_pGenerateMotionVectorsPass = std::unique_ptr<GenerateMotionVectorsPass>(new GenerateMotionVectorsPass(*m_pDevice.Get()));
 	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
+#if USE_DLSS
+	m_pDLSSPass = std::unique_ptr<DeepLearningSuperSamplingPass>(new DeepLearningSuperSamplingPass(*m_pDevice.Get()));
+#endif
 }
 
 class HeapAllocator
@@ -2529,7 +2519,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	bool bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
 	
 #if USE_DLSS
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS && m_pDLSSPass->IsSupported())
 	{
 		selectedTAAUpscaler = TAAUpscaler::DLSS;
 		bNeedsMotionVectors = true;
@@ -2710,77 +2700,72 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pPostProcessOutput;
 	}
 
-#if USE_XESS 
-	if (selectedTAAUpscaler == TAAUpscaler::XeSS)
+
+	switch (selectedTAAUpscaler)
 	{
-		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"XeSS");
-
-		ScopedResourceBarrier colorTextureBarrier(commandList, FinalBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		ScopedResourceBarrier outputBarrier(commandList, m_pUpscaleOutput.m_pResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		auto inputDesc = m_pPostProcessOutput->GetDesc();
-
-		xess_d3d12_execute_params_t exec_params{};
-		exec_params.inputWidth = inputDesc.Width;		exec_params.inputHeight = inputDesc.Height;
-		exec_params.jitterOffsetX = 0.0f;
-		exec_params.jitterOffsetY = 0.0f;
-		exec_params.exposureScale = 1.0f;
-		exec_params.pColorTexture = FinalBuffer.Get();
-		exec_params.pVelocityTexture = m_pMotionVectors.Get();
-		exec_params.pOutputTexture = m_pUpscaleOutput.m_pResource.Get();
-		exec_params.pDepthTexture = nullptr;
-		exec_params.pExposureScaleTexture = 0;
-		auto status = xessD3D12Execute(m_xessContext, &commandList, &exec_params);
-		if (status != XESS_RESULT_SUCCESS)
+#if USE_XESS 
+		case TAAUpscaler::XeSS:
 		{
-			HANDLE_FAILURE();
-		}
+			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"XeSS");
 
-		FinalBuffer = m_pUpscaleOutput.m_pResource;
-		bNeedsUpscale = false;
-	}
+			ScopedResourceBarrier colorTextureBarrier(commandList, FinalBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			ScopedResourceBarrier outputBarrier(commandList, m_pUpscaleOutput.m_pResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			auto inputDesc = m_pPostProcessOutput->GetDesc();
+
+			xess_d3d12_execute_params_t exec_params{};
+			exec_params.inputWidth = inputDesc.Width;		exec_params.inputHeight = inputDesc.Height;
+			exec_params.jitterOffsetX = 0.0f;
+			exec_params.jitterOffsetY = 0.0f;
+			exec_params.exposureScale = 1.0f;
+			exec_params.pColorTexture = FinalBuffer.Get();
+			exec_params.pVelocityTexture = m_pMotionVectors.Get();
+			exec_params.pOutputTexture = m_pUpscaleOutput.m_pResource.Get();
+			exec_params.pDepthTexture = nullptr;
+			exec_params.pExposureScaleTexture = 0;
+			auto status = xessD3D12Execute(m_xessContext, &commandList, &exec_params);
+			if (status != XESS_RESULT_SUCCESS)
+			{
+				HANDLE_FAILURE();
+			}
+
+			FinalBuffer = m_pUpscaleOutput.m_pResource;
+			bNeedsUpscale = false;
+		}
 #endif
 
 #if USE_DLSS
-	if (selectedTAAUpscaler == TAAUpscaler::DLSS)
-	{
-		auto inputDesc = m_pPostProcessOutput->GetDesc();
+		case TAAUpscaler::DLSS:
+		{
+			auto inputDesc = m_pPostProcessOutput->GetDesc();
 
-		NVSDK_NGX_D3D12_DLSS_Eval_Params D3D12DlssEvalParams = {};
-		D3D12DlssEvalParams.Feature.pInColor = FinalBuffer.Get();
-		D3D12DlssEvalParams.Feature.pInOutput = m_pUpscaleOutput.m_pResource.Get();
-		D3D12DlssEvalParams.pInDepth = m_pAOVDepth.Get();
-		D3D12DlssEvalParams.pInMotionVectors = m_pMotionVectors.Get();
-		D3D12DlssEvalParams.pInExposureTexture = nullptr;
+			m_pDLSSPass->Run(
+				commandList,
+				m_pUpscaleOutput,
+				FinalBuffer.Get(),
+				m_pMotionVectors.Get(),
+				m_pAOVDepth.Get(),
+				constants.FixedPixelOffset.x - 0.5f,
+				constants.FixedPixelOffset.y - 0.5f,
+				inputDesc.Width,
+				inputDesc.Height);
 
-		D3D12DlssEvalParams.InJitterOffsetX = constants.FixedPixelOffset.x - 0.5f;
-		D3D12DlssEvalParams.InJitterOffsetY = constants.FixedPixelOffset.y - 0.5f;
-		D3D12DlssEvalParams.InReset = false;
-		D3D12DlssEvalParams.InMVScaleX = 1.0f;
-		D3D12DlssEvalParams.InMVScaleY = 1.0f;
-		D3D12DlssEvalParams.InColorSubrectBase = {};
-		D3D12DlssEvalParams.InDepthSubrectBase = {};
-		D3D12DlssEvalParams.InTranslucencySubrectBase = {};
-		D3D12DlssEvalParams.InMVSubrectBase = {};
-		D3D12DlssEvalParams.InRenderSubrectDimensions = { (unsigned int)inputDesc.Width, (unsigned int)inputDesc.Height };
-
-		NV_VERIFY(NGX_D3D12_EVALUATE_DLSS_EXT(&commandList, m_pDLSSFeature, m_pNGXParameters, &D3D12DlssEvalParams));
-
-		FinalBuffer = m_pUpscaleOutput.m_pResource;
-		bNeedsUpscale = false;
-	}
+			FinalBuffer = m_pUpscaleOutput.m_pResource;
+		}
 #endif
-	if (selectedTAAUpscaler == TAAUpscaler::FSR)
-	{
-		auto inputDesc = m_pPostProcessOutput->GetDesc();
-		m_pFidelityFXSuperResolutionPass->Run(
-			commandList,
-			m_pUpscaleOutput,
-			m_pUpscaleItermediateOutput,
-			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
-			inputDesc.Width,
-			inputDesc.Height);
-		FinalBuffer = m_pUpscaleOutput.m_pResource;
+		case TAAUpscaler::FSR:
+		{
+			auto inputDesc = m_pPostProcessOutput->GetDesc();
+			m_pFidelityFXSuperResolutionPass->Run(
+				commandList,
+				m_pUpscaleOutput,
+				m_pUpscaleItermediateOutput,
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
+				inputDesc.Width,
+				inputDesc.Height);
+			FinalBuffer = m_pUpscaleOutput.m_pResource;
+		}
 	}
+
 
 
 	{
@@ -3106,36 +3091,12 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 #endif
 
 #if USE_DLSS
-		unsigned int CreationNodeMask = 1;
-		unsigned int VisibilityNodeMask = 1;
-		NVSDK_NGX_Result ResultDLSS = NVSDK_NGX_Result_Fail;
-
-		// TODO: What is this?
-		unsigned int renderPreset = 0;
-
-		bool bDoSharpening = false;
-		int DlssCreateFeatureFlags = NVSDK_NGX_DLSS_Feature_Flags_None;
-		DlssCreateFeatureFlags |= NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
-		DlssCreateFeatureFlags |= bDoSharpening ? NVSDK_NGX_DLSS_Feature_Flags_DoSharpening : 0;
-
-		NVSDK_NGX_DLSS_Create_Params DlssCreateParams = {};
-
-		DlssCreateParams.Feature.InWidth = backBufferDesc.Width;
-		DlssCreateParams.Feature.InHeight = backBufferDesc.Height;
-		DlssCreateParams.Feature.InTargetWidth = upscaledBackBufferDesc.Width;
-		DlssCreateParams.Feature.InTargetHeight = upscaledBackBufferDesc.Height;
-		DlssCreateParams.Feature.InPerfQualityValue = NVSDK_NGX_PerfQuality_Value_MaxQuality;
-		DlssCreateParams.InFeatureCreateFlags = DlssCreateFeatureFlags;
-
-		// Select render preset (DL weights)
-		NVSDK_NGX_Parameter_SetUI(m_pNGXParameters, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA, renderPreset);              // will remain the chosen weights after OTA
-		NVSDK_NGX_Parameter_SetUI(m_pNGXParameters, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality, renderPreset);           // ^
-		NVSDK_NGX_Parameter_SetUI(m_pNGXParameters, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced, renderPreset);          // ^
-		NVSDK_NGX_Parameter_SetUI(m_pNGXParameters, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance, renderPreset);       // ^
-		NVSDK_NGX_Parameter_SetUI(m_pNGXParameters, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance, renderPreset);  // ^
-
-
-		NV_VERIFY(NGX_D3D12_CREATE_DLSS_EXT(&commandList, CreationNodeMask, VisibilityNodeMask, &m_pDLSSFeature, m_pNGXParameters, &DlssCreateParams));
+		m_pDLSSPass->OnResize(
+			commandList,
+			backBufferDesc.Width, 
+			backBufferDesc.Height, 
+			upscaledBackBufferDesc.Width, 
+			upscaledBackBufferDesc.Height);
 #endif
 
 		UpdateConfigConstants((UINT)backBufferDesc.Width, (UINT)backBufferDesc.Height);

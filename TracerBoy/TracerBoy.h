@@ -376,12 +376,6 @@ private:
 	xess_context_handle_t m_xessContext = nullptr;
 #endif
 
-#if USE_DLSS
-	int m_bSupportsDLSS = false;
-	NVSDK_NGX_Parameter* m_pNGXParameters = nullptr;
-	NVSDK_NGX_Handle* m_pDLSSFeature = nullptr;
-#endif
-
 	bool EmulateRaytracing() 
 	{
 		return !m_bSupportsHardwareRaytracing; 
@@ -616,6 +610,9 @@ private:
 	std::unique_ptr<TemporalAccumulationPass> m_pTemporalAccumulationPass;
 	std::unique_ptr<GenerateMotionVectorsPass> m_pGenerateMotionVectorsPass;
 	std::unique_ptr<FidelityFXSuperResolutionPass> m_pFidelityFXSuperResolutionPass;
+#if USE_DLSS
+	std::unique_ptr<DeepLearningSuperSamplingPass> m_pDLSSPass;
+#endif
 };
 
 class TextureAllocator
