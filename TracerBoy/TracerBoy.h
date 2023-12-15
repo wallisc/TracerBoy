@@ -372,10 +372,6 @@ private:
 
 	float m_downscaleFactor = 1.0;
 
-#if USE_XESS
-	xess_context_handle_t m_xessContext = nullptr;
-#endif
-
 	bool EmulateRaytracing() 
 	{
 		return !m_bSupportsHardwareRaytracing; 
@@ -612,6 +608,9 @@ private:
 	std::unique_ptr<FidelityFXSuperResolutionPass> m_pFidelityFXSuperResolutionPass;
 #if USE_DLSS
 	std::unique_ptr<DeepLearningSuperSamplingPass> m_pDLSSPass;
+#endif
+#if USE_XESS
+	std::unique_ptr<XeSuperSamplingPass> m_pXeSSPass;
 #endif
 };
 

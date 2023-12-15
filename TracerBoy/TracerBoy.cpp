@@ -533,16 +533,6 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 {
 	m_pCommandQueue->GetDevice(IID_GRAPHICS_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf()));
 
-#if USE_XESS
-	auto status = xessD3D12CreateContext(m_pDevice.Get(), &m_xessContext);
-	if (status != XESS_RESULT_SUCCESS)
-	{
-		HANDLE_FAILURE();
-	}
-#endif
-
-
-
 	D3D12_FEATURE_DATA_D3D12_OPTIONS1 option1;
 	VERIFY_HRESULT(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &option1, sizeof(option1)));
 
@@ -820,6 +810,9 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
 #if USE_DLSS
 	m_pDLSSPass = std::unique_ptr<DeepLearningSuperSamplingPass>(new DeepLearningSuperSamplingPass(*m_pDevice.Get()));
+#endif
+#if USE_XESS
+	m_pXeSSPass = std::unique_ptr<XeSuperSamplingPass>(new XeSuperSamplingPass(*m_pDevice.Get()));
 #endif
 }
 
@@ -2407,10 +2400,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.FixedPixelOffset = { -1.0f, -1.0f };
 	constants.MaxZ = outputSettings.m_denoiserSettings.m_maxZ;
 	
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS)
+#if USE_DLSS
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS || outputSettings.m_outputSettings.m_postProcessSettings.m_bEnableXeSS)
 	{
 		constants.FixedPixelOffset = { (float)rand() / (float)RAND_MAX, (float)rand() / (float)RAND_MAX};
 	}
+#endif
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{
@@ -2530,6 +2525,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
 	{
 		selectedTAAUpscaler = TAAUpscaler::XeSS;
+		bNeedsMotionVectors = true;
 	}
 	else 
 #endif
@@ -2706,33 +2702,22 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 #if USE_XESS 
 		case TAAUpscaler::XeSS:
 		{
-			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"XeSS");
-
-			ScopedResourceBarrier colorTextureBarrier(commandList, FinalBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			ScopedResourceBarrier outputBarrier(commandList, m_pUpscaleOutput.m_pResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			auto inputDesc = m_pPostProcessOutput->GetDesc();
 
-			xess_d3d12_execute_params_t exec_params{};
-			exec_params.inputWidth = inputDesc.Width;		exec_params.inputHeight = inputDesc.Height;
-			exec_params.jitterOffsetX = 0.0f;
-			exec_params.jitterOffsetY = 0.0f;
-			exec_params.exposureScale = 1.0f;
-			exec_params.pColorTexture = FinalBuffer.Get();
-			exec_params.pVelocityTexture = m_pMotionVectors.Get();
-			exec_params.pOutputTexture = m_pUpscaleOutput.m_pResource.Get();
-			exec_params.pDepthTexture = nullptr;
-			exec_params.pExposureScaleTexture = 0;
-			auto status = xessD3D12Execute(m_xessContext, &commandList, &exec_params);
-			if (status != XESS_RESULT_SUCCESS)
-			{
-				HANDLE_FAILURE();
-			}
+			m_pXeSSPass->Run(
+				commandList,
+				m_pUpscaleOutput,
+				FinalBuffer.Get(),
+				m_pMotionVectors.Get(),
+				m_pAOVDepth.Get(),
+				constants.FixedPixelOffset.x - 0.5f,
+				constants.FixedPixelOffset.y - 0.5f,
+				inputDesc.Width,
+				inputDesc.Height);
 
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
-			bNeedsUpscale = false;
 		}
 #endif
-
 #if USE_DLSS
 		case TAAUpscaler::DLSS:
 		{
@@ -3045,13 +3030,6 @@ UINT TracerBoy::GetPreviousFrameWorldPositionSRV()
 	return ViewDescriptorHeapSlots::AOVWorldPosition0SRV + GetPreviousFramePathTracerOutputIndex();
 }
 
-#if USE_XESS
-void xessCallback(const char* message, xess_logging_level_t loggingLevel)
-{
-	OutputDebugString(message);
-}
-#endif
-
 void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer)
 {
 	D3D12_RESOURCE_DESC upscaledBackBufferDesc = pBackBuffer->GetDesc();
@@ -3074,18 +3052,12 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 	if (bResizeNeeded)
 	{
 #if USE_XESS
-		xess_d3d12_init_params_t initParams = {};
-		initParams.outputResolution.x = upscaledBackBufferDesc.Width;
-		initParams.outputResolution.y = upscaledBackBufferDesc.Height;
-		initParams.qualitySetting = XESS_QUALITY_SETTING_ULTRA_QUALITY;
-		initParams.initFlags = XESS_INIT_FLAG_HIGH_RES_MV;
-		xessD3D12Init(m_xessContext, &initParams);
+		m_pXeSSPass->OnResize(
+			commandList,
+			upscaledBackBufferDesc.Width,
+			upscaledBackBufferDesc.Height,
+			m_downscaleFactor);
 
-		_xess_2d_t outputResolution = { upscaledBackBufferDesc.Width, upscaledBackBufferDesc.Height };
-		_xess_2d_t renderResolution;
-		xessGetInputResolution(m_xessContext, &outputResolution, initParams.qualitySetting, &renderResolution);
-
-		m_downscaleFactor = (float)renderResolution.x / (float)outputResolution.x;
 		backBufferDesc.Width *= m_downscaleFactor;
 		backBufferDesc.Height *= m_downscaleFactor;
 #endif

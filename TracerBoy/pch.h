@@ -79,11 +79,6 @@ using namespace DirectX;
 #include "D3D12RaytracingFallback.h"
 #endif
 
-#if USE_XESS
-#include "xess/xess_d3d12.h"
-#include "xess/xess_debug.h"
-#endif 
-
 #include "SharedShaderStructs.h"
 #include "DenoiserPass.h"
 #include "GenerateMotionVectorsPass.h"
@@ -91,6 +86,9 @@ using namespace DirectX;
 #include "FidelityFXSuperResolution.h"
 #if USE_DLSS
 #include "DeepLearningSuperSampling.h"
+#endif
+#if USE_XESS
+#include "XeSuperSampling.h"
 #endif
 #include "TracerBoy.h"
 #include "UIController.h"

@@ -182,6 +182,7 @@ xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"</Command>
     <ClCompile Include="TemporalAccumulationPass.cpp" />
     <ClCompile Include="TracerBoy.cpp" />
     <ClCompile Include="UIController.cpp" />
+    <ClCompile Include="XeSuperSampling.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssimpImporter.h" />
@@ -217,6 +218,7 @@ xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"</Command>
     <ClInclude Include="TracerBoy.h" />
     <ClInclude Include="UIController.h" />
     <ClInclude Include="VarianceUtil.h" />
+    <ClInclude Include="XeSuperSampling.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="AnyHit.hlsl">
