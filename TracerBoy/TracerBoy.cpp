@@ -2342,6 +2342,37 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	ResizeBuffersIfNeeded(commandList, pBackBuffer);
 	VERIFY(GetPathTracerOutput() && m_pPostProcessOutput);
 
+	TAAUpscaler selectedTAAUpscaler = TAAUpscaler::None;
+	bool bNeedsUpscale = m_downscaleFactor < 1.0;
+	bool bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
+	bool bNeedsFixedPixelOffset = false;
+#if USE_DLSS
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS && m_pDLSSPass->IsSupported())
+	{
+		selectedTAAUpscaler = TAAUpscaler::DLSS;
+		bNeedsMotionVectors = true;
+		bNeedsFixedPixelOffset = true;
+	}
+	else
+#endif
+#if USE_XESS
+	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	{
+		selectedTAAUpscaler = TAAUpscaler::XeSS;
+		bNeedsMotionVectors = true;
+		bNeedsFixedPixelOffset = true;
+	}
+	else
+#endif
+	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
+	{
+		selectedTAAUpscaler = TAAUpscaler::FSR;
+	}
+	else if (outputSettings.m_renderMode == RenderMode::RealTime)
+	{
+		selectedTAAUpscaler = TAAUpscaler::Native;
+	}
+
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
@@ -2400,12 +2431,10 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.FixedPixelOffset = { -1.0f, -1.0f };
 	constants.MaxZ = outputSettings.m_denoiserSettings.m_maxZ;
 	
-#if USE_DLSS
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS || outputSettings.m_outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	if (bNeedsFixedPixelOffset)
 	{
 		constants.FixedPixelOffset = { (float)rand() / (float)RAND_MAX, (float)rand() / (float)RAND_MAX};
 	}
-#endif
 
 	if (outputSettings.m_performanceSettings.m_TargetFrameRate > 0)
 	{
@@ -2507,36 +2536,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	};
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
-
-	TAAUpscaler selectedTAAUpscaler = TAAUpscaler::None;
-	bool bNeedsUpscale = m_downscaleFactor < 1.0;
-
-	bool bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
-	
-#if USE_DLSS
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS && m_pDLSSPass->IsSupported())
-	{
-		selectedTAAUpscaler = TAAUpscaler::DLSS;
-		bNeedsMotionVectors = true;
-	}
-	else 
-#endif
-#if USE_XESS
-	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
-	{
-		selectedTAAUpscaler = TAAUpscaler::XeSS;
-		bNeedsMotionVectors = true;
-	}
-	else 
-#endif
-	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
-	{
-		selectedTAAUpscaler = TAAUpscaler::FSR;
-	}
-	else if (outputSettings.m_renderMode == RenderMode::RealTime)
-	{
-		selectedTAAUpscaler = TAAUpscaler::Native;
-	}
 
 	if (bNeedsMotionVectors)
 	{
