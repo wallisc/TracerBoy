@@ -1368,7 +1368,12 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 detailNormal = -detailNormal;
             }
 
+            
+            float ReflectionCoefficient = material.SpecularCoef;
 
+
+            //bool bUseSpecularRayImportanceSampling =  GetDispatchIndex().x < (GetResolution().x / 2);
+            bool bUseSpecularRayImportanceSampling = false;
             bool bSpecularRay = false;
             if(AllowsSpecular(material))
             {
@@ -1378,7 +1383,14 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 }
                 else
                 {
-                    bSpecularRay = rand() < 0.5;
+                    if(bUseSpecularRayImportanceSampling)
+                    {
+                        bSpecularRay = rand() < ReflectionCoefficient;
+                    }
+                    else
+                    {
+                        bSpecularRay = rand() < 0.5;
+                    }
                 }
             }
 
@@ -1480,12 +1492,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
 					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
             }
-
-            float fresnelFactor = FresnelFactor(
-                CurrentIOR,
-                NewIOR,
-                normal,
-                ray.direction);
             
             vec3 previousDirection = ray.direction;
             bPrevRayWasPerfectlySpecular = bUsePerfectSpecularOptimization;
@@ -1673,7 +1679,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 float roughnessSquared = max(material.roughness * material.roughness, MIN_ROUGHNESS_SQUARED);
                 float DistributionPDF = ImportanceSampleGGXPDF(normal, ray.direction, halfVector, material.roughness);
                 float SpecularPDF = DistributionPDF;
-                float PDFValue = IsMetallic(material) ? SpecularPDF : mix(SpecularPDF, DiffusePDF, 0.5);
+
+                float PDFLerpValue = bUseSpecularRayImportanceSampling ? 1.0 - ReflectionCoefficient : 0.5;
+                float PDFValue = IsMetallic(material) ? SpecularPDF : mix(SpecularPDF, DiffusePDF, PDFLerpValue);
                 accumulatedIndirectLightMultiplier /= PDFValue;
             }
             else
@@ -1711,8 +1719,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     if(AllowsSpecular(material))
                     {
                         vec3 halfVector = GetHalfVectorSafe(-previousDirection, ray.direction, normal);
-                        
-                        float ReflectionCoefficient = material.SpecularCoef;
+
                         float fresnel = ReflectionCoefficient + (1.0 - ReflectionCoefficient) * 
                             AbsPow(1.0 - dot(-previousDirection, halfVector), 5.0); 
 
