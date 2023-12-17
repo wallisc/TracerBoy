@@ -2373,6 +2373,17 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		selectedTAAUpscaler = TAAUpscaler::Native;
 	}
 
+#if USE_DLSS
+	if (selectedTAAUpscaler != TAAUpscaler::DLSS && m_pDLSSPass->IsEnabled())
+	{
+		m_pDLSSPass->Disable();
+	}
+	else if (selectedTAAUpscaler == TAAUpscaler::DLSS && !m_pDLSSPass->IsEnabled())
+	{
+		m_pDLSSPass->Enable(*m_pDevice.Get());
+	}
+#endif
+
 	ID3D12DescriptorHeap* pDescriptorHeaps[] = { m_pViewDescriptorHeap.Get() };
 	commandList.SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
 
@@ -2715,6 +2726,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				inputDesc.Height);
 
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
+			break;
 		}
 #endif
 #if USE_DLSS
@@ -2734,6 +2746,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				inputDesc.Height);
 
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
+			break;
 		}
 #endif
 		case TAAUpscaler::FSR:
@@ -2747,6 +2760,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				inputDesc.Width,
 				inputDesc.Height);
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
+			break;
 		}
 	}
 

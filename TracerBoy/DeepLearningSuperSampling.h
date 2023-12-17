@@ -9,7 +9,11 @@ public:
 
 	DeepLearningSuperSamplingPass(ID3D12Device& device);
 
+	void Enable(ID3D12Device& device);
+	void Disable();
+
 	bool IsSupported() { return m_bSupportsDLSS != 0; }
+	bool IsEnabled() { return m_bEnabled; }
 
 	D3D12_GPU_DESCRIPTOR_HANDLE Run(
 		ID3D12GraphicsCommandList& commandList,
@@ -30,6 +34,7 @@ public:
 		UINT UpscaledHeight);
 
 private:
+	bool m_bEnabled = false;
 	int m_bSupportsDLSS = false;
 	NVSDK_NGX_Parameter* m_pNGXParameters = nullptr;
 	NVSDK_NGX_Handle* m_pDLSSFeature = nullptr;
