@@ -10,7 +10,7 @@ public:
 	DeepLearningSuperSamplingPass(ID3D12Device& device);
 
 	void Enable(ID3D12Device& device);
-	void Disable();
+	void Disable(ID3D12Device& device);
 
 	bool IsSupported() { return m_bSupportsDLSS != 0; }
 	bool IsEnabled() { return m_bEnabled; }

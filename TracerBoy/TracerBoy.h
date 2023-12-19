@@ -292,6 +292,8 @@ public:
 		float SelectedPixelDistance;
 	};
 
+	bool RequiresGPUFlush(const OutputSettings& outputSettings);
+
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
 
 	UINT GetNumberOfSamplesSinceLastInvalidate() 
@@ -418,6 +420,8 @@ private:
 		DLSS,
 		None
 	};
+
+	TAAUpscaler GetSelectedUpscaler(const OutputSettings &outputSettings, bool& bNeedsMotionVectors, bool& bNeedsFixedPixelOffset);
 
 	enum LocalRayTracingRootSignatureParameters
 	{

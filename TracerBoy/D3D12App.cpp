@@ -214,6 +214,11 @@ void D3D12App::Render()
 		auto outputSettings = TracerBoy::GetDefaultOutputSettings();
 #endif
 
+		if (m_pTracerBoy->RequiresGPUFlush(outputSettings))
+		{
+			WaitForGPUIdle();
+		}
+
 		m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), outputSettings);
 
 		uint TotalPixels = pBackBuffer->GetDesc().Width * pBackBuffer->GetDesc().Height;

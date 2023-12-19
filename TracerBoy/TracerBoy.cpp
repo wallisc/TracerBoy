@@ -2284,6 +2284,54 @@ void SetRootDescriptorTable(
 	}
 }
 
+bool TracerBoy::RequiresGPUFlush(const OutputSettings& outputSettings)
+{
+#if USE_DLSS
+	bool unused;
+	if (GetSelectedUpscaler(m_CachedOutputSettings, unused, unused) == TAAUpscaler::DLSS && GetSelectedUpscaler(outputSettings, unused, unused) != TAAUpscaler::DLSS)
+	{
+		return true;
+	}
+#endif
+	return false;
+}
+
+
+TracerBoy::TAAUpscaler TracerBoy::GetSelectedUpscaler(const OutputSettings& outputSettings, bool &bNeedsMotionVectors, bool &bNeedsFixedPixelOffset)
+{
+	bool bNeedsUpscale = m_downscaleFactor < 1.0;
+	bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
+	bNeedsFixedPixelOffset = false;
+	TAAUpscaler selectedTAAUpscaler = TAAUpscaler::Native;
+#if USE_DLSS
+	if (outputSettings.m_postProcessSettings.m_bEnableDLSS && m_pDLSSPass->IsSupported())
+	{
+		selectedTAAUpscaler = TAAUpscaler::DLSS;
+		bNeedsMotionVectors = true;
+		bNeedsFixedPixelOffset = true;
+	}
+	else
+#endif
+#if USE_XESS
+	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
+	{
+		selectedTAAUpscaler = TAAUpscaler::XeSS;
+		bNeedsMotionVectors = true;
+		bNeedsFixedPixelOffset = true;
+	}
+	else
+#endif
+	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
+	{
+		selectedTAAUpscaler = TAAUpscaler::FSR;
+	}
+	else if (outputSettings.m_renderMode == RenderMode::RealTime)
+	{
+		selectedTAAUpscaler = TAAUpscaler::Native;
+	}
+
+	return selectedTAAUpscaler;
+}
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* pBackBuffer, ID3D12Resource* pReadbackStats, const OutputSettings& outputSettings)
 {
@@ -2342,45 +2390,31 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	ResizeBuffersIfNeeded(commandList, pBackBuffer);
 	VERIFY(GetPathTracerOutput() && m_pPostProcessOutput);
 
-	TAAUpscaler selectedTAAUpscaler = TAAUpscaler::None;
-	bool bNeedsUpscale = m_downscaleFactor < 1.0;
-	bool bNeedsMotionVectors = outputSettings.m_OutputType == OutputType::MotionVectors;
-	bool bNeedsFixedPixelOffset = false;
-#if USE_DLSS
-	if (outputSettings.m_postProcessSettings.m_bEnableDLSS && m_pDLSSPass->IsSupported())
-	{
-		selectedTAAUpscaler = TAAUpscaler::DLSS;
-		bNeedsMotionVectors = true;
-		bNeedsFixedPixelOffset = true;
-	}
-	else
-#endif
-#if USE_XESS
-	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
-	{
-		selectedTAAUpscaler = TAAUpscaler::XeSS;
-		bNeedsMotionVectors = true;
-		bNeedsFixedPixelOffset = true;
-	}
-	else
-#endif
-	if (outputSettings.m_postProcessSettings.m_bEnableFSR || bNeedsUpscale)
-	{
-		selectedTAAUpscaler = TAAUpscaler::FSR;
-	}
-	else if (outputSettings.m_renderMode == RenderMode::RealTime)
-	{
-		selectedTAAUpscaler = TAAUpscaler::Native;
-	}
+	bool bNeedsMotionVectors;
+ 	bool bNeedsFixedPixelOffset;
+	TAAUpscaler selectedTAAUpscaler = GetSelectedUpscaler(outputSettings, bNeedsMotionVectors, bNeedsFixedPixelOffset);
 
 #if USE_DLSS
 	if (selectedTAAUpscaler != TAAUpscaler::DLSS && m_pDLSSPass->IsEnabled())
 	{
-		m_pDLSSPass->Disable();
+		m_pDLSSPass->Disable(*m_pDevice.Get());
 	}
 	else if (selectedTAAUpscaler == TAAUpscaler::DLSS && !m_pDLSSPass->IsEnabled())
 	{
 		m_pDLSSPass->Enable(*m_pDevice.Get());
+
+		D3D12_RESOURCE_DESC upscaledBackBufferDesc = pBackBuffer->GetDesc();
+		D3D12_RESOURCE_DESC backBufferDesc = upscaledBackBufferDesc;
+
+		backBufferDesc.Width *= m_downscaleFactor;
+		backBufferDesc.Height *= m_downscaleFactor;
+
+		m_pDLSSPass->OnResize(
+			commandList,
+			backBufferDesc.Width,
+			backBufferDesc.Height,
+			upscaledBackBufferDesc.Width,
+			upscaledBackBufferDesc.Height);
 	}
 #endif
 

@@ -18,7 +18,6 @@
 DeepLearningSuperSamplingPass::DeepLearningSuperSamplingPass(ID3D12Device& device)
 {
 	Enable(device);
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult, &m_bSupportsDLSS));
 }
 
 void DeepLearningSuperSamplingPass::Enable(ID3D12Device& device)
@@ -33,6 +32,7 @@ void DeepLearningSuperSamplingPass::Enable(ID3D12Device& device)
 	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver, &needsUpdatedDriver));
 	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor, &minDriverVersionMajor));
 	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor, &minDriverVersionMinor));
+	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult, &m_bSupportsDLSS));
 
 	m_bEnabled = true;
 }
@@ -114,10 +114,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE DeepLearningSuperSamplingPass::Run(
 	return OutputBuffer.m_srvHandle;
 }
 
-void DeepLearningSuperSamplingPass::Disable()
+void DeepLearningSuperSamplingPass::Disable(ID3D12Device& device)
 {
+	NVSDK_NGX_D3D12_ReleaseFeature(m_pDLSSFeature);
 	NVSDK_NGX_D3D12_DestroyParameters(m_pNGXParameters);
-	NVSDK_NGX_D3D12_Shutdown1(nullptr);
+	NVSDK_NGX_D3D12_Shutdown1(&device);
+
+	m_pDLSSFeature = nullptr;
+	m_pNGXParameters = nullptr; 
 
 	m_bEnabled = false;
 }
