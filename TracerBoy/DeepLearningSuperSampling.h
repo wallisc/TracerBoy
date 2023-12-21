@@ -7,7 +7,7 @@ class DeepLearningSuperSamplingPass
 {
 public:
 
-	DeepLearningSuperSamplingPass(ID3D12Device& device);
+	DeepLearningSuperSamplingPass(ID3D12Device& device, bool bEnable);
 
 	void Enable(ID3D12Device& device);
 	void Disable(ID3D12Device& device);

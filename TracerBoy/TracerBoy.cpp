@@ -809,7 +809,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	m_pGenerateMotionVectorsPass = std::unique_ptr<GenerateMotionVectorsPass>(new GenerateMotionVectorsPass(*m_pDevice.Get()));
 	m_pFidelityFXSuperResolutionPass = std::unique_ptr<FidelityFXSuperResolutionPass>(new FidelityFXSuperResolutionPass(*m_pDevice.Get()));
 #if USE_DLSS
-	m_pDLSSPass = std::unique_ptr<DeepLearningSuperSamplingPass>(new DeepLearningSuperSamplingPass(*m_pDevice.Get()));
+	m_pDLSSPass = std::unique_ptr<DeepLearningSuperSamplingPass>(new DeepLearningSuperSamplingPass(*m_pDevice.Get(), GetDefaultOutputSettings().m_postProcessSettings.m_bEnableDLSS));
 #endif
 #if USE_XESS
 	m_pXeSSPass = std::unique_ptr<XeSuperSamplingPass>(new XeSuperSamplingPass(*m_pDevice.Get()));

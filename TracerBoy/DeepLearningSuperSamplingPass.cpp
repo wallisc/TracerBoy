@@ -15,9 +15,12 @@
 	}																									\
 }
 
-DeepLearningSuperSamplingPass::DeepLearningSuperSamplingPass(ID3D12Device& device)
+DeepLearningSuperSamplingPass::DeepLearningSuperSamplingPass(ID3D12Device& device, bool bEnable)
 {
-	Enable(device);
+	if (bEnable)
+	{
+		Enable(device);
+	}
 }
 
 void DeepLearningSuperSamplingPass::Enable(ID3D12Device& device)
