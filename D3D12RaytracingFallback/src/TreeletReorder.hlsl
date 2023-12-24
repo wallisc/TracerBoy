@@ -308,5 +308,5 @@ void main(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadId)
         }
 
         DeviceMemoryBarrierWithGroupSync();
-    } while (i++ > 32);
+    } while (i++ < 32);
 }
