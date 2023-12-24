@@ -150,6 +150,7 @@ public:
 		LuminanceVariance,
 		LivePixels,
 		LiveWaves,
+		Heatmap
 	};
 
 	enum class RenderMode

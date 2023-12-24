@@ -312,6 +312,7 @@ struct Ray
 
 
 void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution);
+void OutputRayStats(uint TrianglesTested, uint BoxesTested);
 
 #if USE_SW_RAYTRACING
 #define HLSL
@@ -370,6 +371,8 @@ float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out floa
 	normal = payload.normal;
 	uv = payload.uv;
 	tangent = payload.tangent;
+
+	OutputRayStats(Query.TrianglesTested, Query.BoxesTested);
 #else
 	RayQuery<RAY_FLAG_NONE> Query;
     Query.TraceRayInline(
@@ -490,6 +493,14 @@ void OutputPrimaryAlbedo(float3 albedo, float DiffuseContribution)
 void OutputPrimaryEmissive(float3 emissive)
 {
 	AOVEmissive[GetDispatchIndex().xy] = float4(emissive, 1.0);
+}
+
+void OutputRayStats(uint TrianglesTested, uint BoxesTested)
+{
+	if (perFrameConstants.OutputMode == OUTPUT_TYPE_HEATMAP)
+	{
+		AOVCustomOutput[GetDispatchIndex().xy] = float4(TrianglesTested, BoxesTested, 0, 0);
+	}
 }
 
 void OutputLivePixels(bool bAlive)

@@ -125,6 +125,40 @@ float3 PassThroughColor(float4 color)
 	return outputColor;
 }
 
+float3 Lerp3(float3 col0, float3 col1, float3 col2, float lerpValue)
+{
+	if (lerpValue < 0.5)
+	{
+		return lerp(col0, col1, lerpValue * 2.0);
+	}
+	else
+	{
+		return lerp(col1, col2, (lerpValue - 0.5) * 2.0);
+	}
+}
+
+float3 ProcessHeatmap(float4 color)
+{
+	uint TrianglesTested = color.r;
+	uint BoxesTested = color.g;
+	uint TotalTests = TrianglesTested + BoxesTested;
+	float lerpValue = float(TotalTests) / 100.0f;
+	
+	float3 outputColor = Lerp3(float3(0, 1, 0), float3(1, 1, 0), float3(1, 0, 0), lerpValue);
+
+	if (Constants.UseToneMapping)
+	{
+		outputColor *= Constants.ExposureMultiplier;
+		outputColor = Tonemap(outputColor);
+	}
+
+	if (Constants.UseGammaCorrection)
+	{
+		outputColor = GammaCorrect(outputColor);
+	}
+	return outputColor;
+}
+
 [RootSignature(ComputeRS)]
 [numthreads(8, 8, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
@@ -167,6 +201,9 @@ void main( uint2 DTid : SV_DispatchThreadID )
 		break;
 	case OUTPUT_TYPE_LIVE_WAVES:
 		outputColor = ProcessLiveWaves(colorData, auxData);
+		break;
+	case OUTPUT_TYPE_HEATMAP:
+		outputColor = ProcessHeatmap(colorData);
 		break;
 	}
 

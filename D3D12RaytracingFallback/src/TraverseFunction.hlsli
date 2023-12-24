@@ -43,6 +43,9 @@ struct SoftwareRayQuery
     uint InstanceInclusionMask;
     uint GroupIndex;
 
+    uint TrianglesTested;
+    uint BoxesTested;
+
     void TraceRayInline(uint inRayFlags, uint inInstanceInclusionMask, SoftwareRayDesc inRayDesc, uint inGroupIndex)
     {
         RayDesc = inRayDesc;
@@ -50,6 +53,8 @@ struct SoftwareRayQuery
         InstanceInclusionMask = inInstanceInclusionMask;
         CommittedHitData.t = PendingHitData.t = RayDesc.TMax;
         GroupIndex = inGroupIndex;
+        TrianglesTested = 0;
+        BoxesTested = 0;
     }
 
     void Proceed();
@@ -651,50 +656,55 @@ bool Traverse(
 #ifdef DISABLE_PROCEDURAL_GEOMETRY
                         isProceduralGeometry = false;
 #endif
-                        if (!culled && TestLeafNodeIntersections( // TODO: We need to break out this function so we can run anyhit on each triangle
-                            currentBVH,
-                            SWRayQuery.RayFlags,
-                            flags,
-                            instanceFlags,
-#if FAST_PATH
-                            SWRayQuery.RayDesc.Origin,
-                            SWRayQuery.RayDesc.Direction,
-#else
-                            SWRayQuery.ObjectRayOrigin,
-                            SWRayQuery.ObjectRayDirection,
-#endif
-                            SWRayQuery.TMin(),
-                            currentRayData.SwizzledIndices,
-                            currentRayData.Shear,
-                            resultBary,
-                            resultT,
-                            resultTriId))
-                        {
-                            uint primIdx = primitiveMetadata.PrimitiveIndex;
-                            uint hitKind = HIT_KIND_TRIANGLE_FRONT_FACE;
 
-                            SWRayQuery.SetPendingHitData(resultBary, primIdx, primitiveMetadata.GeometryContributionToHitGroupIndex, instanceIndex, instanceId, resultT);
-                            closestBoxT = min(closestBoxT, resultT);
+                        if (!culled)
+                        {
+                            SWRayQuery.TrianglesTested++;
+                            if (TestLeafNodeIntersections( // TODO: We need to break out this function so we can run anyhit on each triangle
+                                currentBVH,
+                                SWRayQuery.RayFlags,
+                                flags,
+                                instanceFlags,
+#if FAST_PATH
+                                SWRayQuery.RayDesc.Origin,
+                                SWRayQuery.RayDesc.Direction,
+#else
+                                SWRayQuery.ObjectRayOrigin,
+                                SWRayQuery.ObjectRayDirection,
+#endif
+                                SWRayQuery.TMin(),
+                                currentRayData.SwizzledIndices,
+                                currentRayData.Shear,
+                                resultBary,
+                                resultT,
+                                resultTriId))
+                            {
+                                uint primIdx = primitiveMetadata.PrimitiveIndex;
+                                uint hitKind = HIT_KIND_TRIANGLE_FRONT_FACE;
+
+                                SWRayQuery.SetPendingHitData(resultBary, primIdx, primitiveMetadata.GeometryContributionToHitGroupIndex, instanceIndex, instanceId, resultT);
+                                closestBoxT = min(closestBoxT, resultT);
 
 #ifdef DISABLE_ANYHIT 
-                            bool skipAnyHit = true;
+                                bool skipAnyHit = true;
 #else
-                            bool skipAnyHit = opaque;
+                                bool skipAnyHit = opaque;
 #endif
 
-                            if (skipAnyHit)
-                            {
-                                SWRayQuery.CommitHit();
-                                SetBoolFlag(flagContainer, EndSearch, SWRayQuery.RayFlags & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH);
-                            }
-                            else
-                            {
-                                int ret = ACCEPT;
-                                // TODO return to app?
-                                if (ret != IGNORE)
+                                if (skipAnyHit)
+                                {
                                     SWRayQuery.CommitHit();
+                                    SetBoolFlag(flagContainer, EndSearch, SWRayQuery.RayFlags & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH);
+                                }
+                                else
+                                {
+                                    int ret = ACCEPT;
+                                    // TODO return to app?
+                                    if (ret != IGNORE)
+                                        SWRayQuery.CommitHit();
 
-                                SetBoolFlag(flagContainer, EndSearch, (ret == END_SEARCH) || (SWRayQuery.RayFlags & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH));
+                                    SetBoolFlag(flagContainer, EndSearch, (ret == END_SEARCH) || (SWRayQuery.RayFlags & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH));
+                                }
                             }
                         }
                         if (GetBoolFlag(flagContainer, EndSearch))
@@ -737,6 +747,8 @@ bool Traverse(
                         currentRayData.InverseDirection,
                         rightBox.center,
                         rightBox.halfDim);
+
+                    SWRayQuery.BoxesTested += 2;
 
                     bool isBottomLevel = GetBoolFlag(flagContainer, ProcessingBottomLevel);
                     if (leftTest && rightTest)

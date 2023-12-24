@@ -1268,6 +1268,11 @@ vec3 GetHalfVectorSafe(vec3 a, vec3 b, vec3 normal)
     }
 }
 
+bool TerminateAfterPrimaryHit()
+{
+    return perFrameConstants.OutputMode == OUTPUT_TYPE_HEATMAP;
+}
+
 #define USE_RUSSIAN_ROULETTE 1
 #define MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE 2
 vec4 Trace(Ray ray, Ray neighborRay)
@@ -1351,6 +1356,10 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(detailNormal);
                 OutputDistanceToFirstHit(result.x);
+                if(TerminateAfterPrimaryHit())
+                {
+                    break;
+                }
 			}
 
             // Duplicate but a more readable variable depending on the scenario

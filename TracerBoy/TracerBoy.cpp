@@ -2146,6 +2146,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetOutputSRV(OutputType outputType)
 		break;
 	case OutputType::Albedo:
 	case OutputType::LivePixels:
+	case OutputType::Heatmap:
 		slot = ViewDescriptorHeapSlots::AOVCustomOutputSRV;
 		break;
 	case OutputType::Normals:
@@ -2187,6 +2188,8 @@ UINT ShaderOutputType(TracerBoy::OutputType type)
 		return OUTPUT_TYPE_LIVE_PIXELS;
 	case TracerBoy::OutputType::LiveWaves:
 		return OUTPUT_TYPE_LIVE_WAVES;
+	case TracerBoy::OutputType::Heatmap:
+		return OUTPUT_TYPE_HEATMAP;
 	}
 }
 
