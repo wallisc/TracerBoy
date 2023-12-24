@@ -25,19 +25,24 @@ DeepLearningSuperSamplingPass::DeepLearningSuperSamplingPass(ID3D12Device& devic
 
 void DeepLearningSuperSamplingPass::Enable(ID3D12Device& device)
 {
-	NV_VERIFY(NVSDK_NGX_D3D12_Init(231313132, L".", &device));
+	if (NVSDK_NGX_D3D12_Init(231313132, L".", &device) == NVSDK_NGX_Result_Success)
+	{
+		NV_VERIFY(NVSDK_NGX_D3D12_GetCapabilityParameters(&m_pNGXParameters));
 
-	NV_VERIFY(NVSDK_NGX_D3D12_GetCapabilityParameters(&m_pNGXParameters));
+		int needsUpdatedDriver = 0;
+		unsigned int minDriverVersionMajor = 0;
+		unsigned int minDriverVersionMinor = 0;
+		NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver, &needsUpdatedDriver));
+		NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor, &minDriverVersionMajor));
+		NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor, &minDriverVersionMinor));
+		NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult, &m_bSupportsDLSS));
 
-	int needsUpdatedDriver = 0;
-	unsigned int minDriverVersionMajor = 0;
-	unsigned int minDriverVersionMinor = 0;
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver, &needsUpdatedDriver));
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor, &minDriverVersionMajor));
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor, &minDriverVersionMinor));
-	NV_VERIFY(m_pNGXParameters->Get(NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult, &m_bSupportsDLSS));
-
-	m_bEnabled = true;
+		m_bEnabled = true;
+	}
+	else
+	{
+		m_bSupportsDLSS = false;
+	}
 }
 
 
