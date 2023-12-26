@@ -2467,6 +2467,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	constants.MinConvergence = outputSettings.m_performanceSettings.m_ConvergencePercentage;
 	constants.UseBlueNoise = outputSettings.m_performanceSettings.m_bEnableBlueNoise;
 	constants.EnableNextEventEstimation = outputSettings.m_performanceSettings.m_bEnableNextEventEstimation;
+	constants.MaxBounces = outputSettings.m_performanceSettings.m_MaxBounces;
 	constants.EnableSamplingImportanceResampling = outputSettings.m_performanceSettings.m_bEnableSamplingImportanceResampling;
 	constants.IsRealTime = outputSettings.m_renderMode == RenderMode::RealTime;
 	constants.OutputMode = ShaderOutputType(outputSettings.m_OutputType);

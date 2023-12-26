@@ -1,4 +1,3 @@
-#define MAX_BOUNCES 6
 #define EPSILON 0.000001
 #define PI 3.1415926535
 #define LARGE_NUMBER 1e20
@@ -1284,7 +1283,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
     
     bool bPrevRayWasPerfectlySpecular = false;
     
-    for (int i = 0; i < MAX_BOUNCES; i++)
+    for (int i = 0; i < perFrameConstants.MaxBounces; i++)
     {
 #if USE_RUSSIAN_ROULETTE
         if(i >= MIN_BOUNCES_BEFORE_RUSSIAN_ROULETTE)
@@ -1302,7 +1301,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
         }
 #endif
 
-        bool bLastRay = (i == MAX_BOUNCES - 1);
+        bool bLastRay = (i == perFrameConstants.MaxBounces - 1);
         bool bFirstRay = (i == 0);
 
         vec3 normal;

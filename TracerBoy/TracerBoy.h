@@ -203,6 +203,7 @@ public:
 		bool m_bEnableInlineRaytracing;
 		bool m_bEnableExecuteIndirect;
 		int m_OccupancyMultiplier;
+		int m_MaxBounces;
 	};
 
 	struct DebugSettings 		
@@ -282,6 +283,7 @@ public:
 		performanceSettings.m_bEnableInlineRaytracing = true;
 		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
+		performanceSettings.m_MaxBounces = 6;
 
 		return outputSettings;
 	}

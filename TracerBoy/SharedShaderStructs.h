@@ -67,6 +67,8 @@ struct PerFrameConstants
 	float2 FixedPixelOffset;
 	float DebugValue;
 	float DebugValue2;
+
+	uint MaxBounces;
 };
 
 struct ConfigConstants

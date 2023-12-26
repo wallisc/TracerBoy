@@ -256,6 +256,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	{
 		auto& performanceSettings = m_outputSettings.m_performanceSettings;
 		ImGui::InputInt("Max Samples to target before", &performanceSettings.m_SampleTarget, 1, 16);
+		ImGui::InputInt("Max ray bounces", &performanceSettings.m_MaxBounces, 1, 128);
 		ImGui::InputFloat("Luminance Variance Multiplier", &performanceSettings.m_VarianceMultiplier, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Target frame rate", &performanceSettings.m_TargetFrameRate, 10.0f, 1.0f, "%.1f");
 		ImGui::InputFloat("Mininum convergence needed to terminate", &performanceSettings.m_ConvergencePercentage, 0.001f, 0.1f, "%.5f");
