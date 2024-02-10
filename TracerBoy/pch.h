@@ -5,7 +5,8 @@
 #define USE_OPENVDB 0
 #define SUPPORT_SW_RAYTRACING 1
 #define USE_XESS 0
-#define USE_DLSS 1
+#define USE_DLSS 0
+#define USE_DML 0
 
 #include <memory>
 #include <deque>
@@ -89,6 +90,9 @@ using namespace DirectX;
 #endif
 #if USE_XESS
 #include "XeSuperSampling.h"
+#endif
+#if USE_DML
+#include "DirectMLSuperResolution.h"
 #endif
 #include "TracerBoy.h"
 #include "UIController.h"

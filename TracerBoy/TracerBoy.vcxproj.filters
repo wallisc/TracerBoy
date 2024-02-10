@@ -54,6 +54,9 @@
     <ClCompile Include="XeSuperSampling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DirectMLSuperResolution.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D12App.h">
@@ -143,6 +146,12 @@
     <ClInclude Include="XeSuperSampling.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DirectMLSuperResolution.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectMLSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -185,6 +194,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="GenerateMotionVectorsCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="TensorToImageCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="ImageToTensorCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

@@ -550,10 +550,19 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	}
 #endif
 
+#if USE_DML
+	m_pDirectMLSuperResolutionPass = std::unique_ptr<DirectMLSuperResolutionPass>(new DirectMLSuperResolutionPass(*m_pDevice.Get()));
+#endif
+
 	m_bSupportsInlineRaytracing = options.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 || EmulateRaytracing();
 	{
+		UINT NumDescriptors = ViewDescriptorHeapSlots::NumTotalViews;
+#if USE_DML
+		NumDescriptors += m_pDirectMLSuperResolutionPass->GetRequiredDescriptorCount();
+#endif
+
 		D3D12_DESCRIPTOR_HEAP_DESC viewDescriptorHeapDesc = {};
-		viewDescriptorHeapDesc.NumDescriptors = ViewDescriptorHeapSlots::NumTotalViews;
+		viewDescriptorHeapDesc.NumDescriptors = NumDescriptors;
 		viewDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		viewDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		VERIFY_HRESULT(m_pDevice->CreateDescriptorHeap(&viewDescriptorHeapDesc, IID_GRAPHICS_PPV_ARGS(m_pViewDescriptorHeap.ReleaseAndGetAddressOf())));
@@ -2315,6 +2324,13 @@ TracerBoy::TAAUpscaler TracerBoy::GetSelectedUpscaler(const OutputSettings& outp
 	}
 	else
 #endif
+#if USE_DML
+	if (outputSettings.m_postProcessSettings.m_bEnableDirectMLSuperSampling)
+	{
+		selectedTAAUpscaler = TAAUpscaler::DirectML;
+	}
+	else
+#endif
 #if USE_XESS
 	if (outputSettings.m_postProcessSettings.m_bEnableXeSS)
 	{
@@ -2787,6 +2803,21 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 			break;
 		}
 #endif
+#if USE_DML
+		case TAAUpscaler::DirectML:
+		{
+			auto inputDesc = m_pPostProcessOutput->GetDesc();
+			m_pDirectMLSuperResolutionPass->Run(
+				commandList,
+				m_pUpscaleOutput,
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
+				inputDesc.Width,
+				inputDesc.Height);
+
+			FinalBuffer = m_pUpscaleOutput.m_pResource;
+			break;
+		}
+#endif
 		case TAAUpscaler::FSR:
 		{
 			auto inputDesc = m_pPostProcessOutput->GetDesc();
@@ -3120,6 +3151,24 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 			backBufferDesc.Height, 
 			upscaledBackBufferDesc.Width, 
 			upscaledBackBufferDesc.Height);
+#endif
+
+#if USE_DML
+		auto descriptorHeapBase = m_pViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		auto descriptorHeapGpuBase = m_pViewDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+		auto descriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(m_pViewDescriptorHeap->GetDesc().Type);
+
+		m_pDirectMLSuperResolutionPass->OnResize(
+			commandList,
+			CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapBase, ViewDescriptorHeapSlots::DMLBaseSlot, descriptorSize),
+			CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGpuBase, ViewDescriptorHeapSlots::DMLBaseSlot, descriptorSize),
+			descriptorSize,
+			upscaledBackBufferDesc.Width,
+			upscaledBackBufferDesc.Height,
+			m_downscaleFactor);
+
+		backBufferDesc.Width *= m_downscaleFactor;
+		backBufferDesc.Height *= m_downscaleFactor;
 #endif
 
 		UpdateConfigConstants((UINT)backBufferDesc.Width, (UINT)backBufferDesc.Height);

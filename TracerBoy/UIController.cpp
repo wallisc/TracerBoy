@@ -249,6 +249,9 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 #if USE_DLSS
 		ImGui::Checkbox("Enable DLSS", &postProcessSettings.m_bEnableDLSS);
 #endif
+#if USE_DML
+		ImGui::Checkbox("Enable DirectML Super Sampling", &postProcessSettings.m_bEnableDirectMLSuperSampling);
+#endif
 		ImGui::TreePop();
 	}
 

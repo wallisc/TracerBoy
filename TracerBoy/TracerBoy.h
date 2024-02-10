@@ -189,6 +189,9 @@ public:
 #if USE_DLSS
 		bool m_bEnableDLSS;
 #endif
+#if USE_DML
+		bool m_bEnableDirectMLSuperSampling;
+#endif
 	};
 
 	struct PerformanceSettings
@@ -253,7 +256,10 @@ public:
 		postProcessSettings.m_bEnableXeSS = false;
 #endif
 #if USE_DLSS
-		postProcessSettings.m_bEnableDLSS = true;
+		postProcessSettings.m_bEnableDLSS = false;
+#endif
+#if USE_DML
+		postProcessSettings.m_bEnableDirectMLSuperSampling = true;
 #endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;
@@ -421,6 +427,7 @@ private:
 		FSR,
 		XeSS,
 		DLSS,
+		DirectML,
 		None
 	};
 
@@ -585,6 +592,10 @@ private:
 		NumAOVTextures = AOVLastUAVSlot - AOVBaseUAVSlot + 1,
 		NumSystemTextures = SystemTexturesLastSlot - SystemTexturesBaseSlot + 1,
 		NumSceneDescriptors = SceneDescriptorsLastSlot - SceneDescriptorsBaseSlot + 1
+
+#if USE_DML
+		, DMLBaseSlot = NumTotalViews
+#endif
 	};
 
 
@@ -618,6 +629,9 @@ private:
 #endif
 #if USE_XESS
 	std::unique_ptr<XeSuperSamplingPass> m_pXeSSPass;
+#endif
+#if USE_DML
+	std::unique_ptr<DirectMLSuperResolutionPass> m_pDirectMLSuperResolutionPass;
 #endif
 };
 
