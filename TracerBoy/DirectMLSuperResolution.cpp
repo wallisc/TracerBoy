@@ -323,7 +323,8 @@ void DirectMLSuperResolutionPass::OnResize(
 
     uint32_t const filterSizes1[] = { 32, 3, 5, 5 };
     uint32_t intermediateInputSizes[2][4];
-    CreateConvolutionLayer(modelInputSizes, filterSizes1, true, &modelInputBufferSize,
+    uint32_t passIndex = 0;
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(modelInputSizes, filterSizes1, true, &modelInputBufferSize,
         &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[0]);
     CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
         filterSizes1, &m_modelConvFilterWeights[0], &m_modelConvBiasWeights[0]);
@@ -333,14 +334,14 @@ void DirectMLSuperResolutionPass::OnResize(
     int inputIndex = 0;
 
     uint32_t const filterSizes2[] = { 64, 32, 3, 3 };	// output filters
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes2, true, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes2, true, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[1]);
     CreateWeightTensors(commandList, weights, "conv2/weights", "conv2/BatchNorm/scale", "conv2/BatchNorm/shift",
         filterSizes2, &m_modelConvFilterWeights[1], &m_modelConvBiasWeights[1]);
     inputIndex = 1 - inputIndex;
 
     uint32_t const filterSizes3[] = { 64, 64, 3, 3 };
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes3, true, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes3, true, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[2]);
     CreateWeightTensors(commandList, weights, "conv3/weights", "conv3/BatchNorm/scale", "conv3/BatchNorm/shift",
         filterSizes3, &m_modelConvFilterWeights[2], &m_modelConvBiasWeights[2]);
@@ -351,31 +352,33 @@ void DirectMLSuperResolutionPass::OnResize(
     inputIndex = 1 - inputIndex;
 
     uint32_t const filterSizes4[] = { 32, 64, 5, 5 };
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes4, true, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes4, true, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[3]);
     CreateWeightTensors(commandList, weights, "conv_up1/conv/weights", "conv_up1/conv/BatchNorm/scale", "conv_up1/conv/BatchNorm/shift",
         filterSizes4, &m_modelConvFilterWeights[3], &m_modelConvBiasWeights[3]);
     inputIndex = 1 - inputIndex;
 
     uint32_t const filterSizes5[] = { 32, 32, 3, 3 };
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[4]);
     CreateWeightTensors(commandList, weights, "conv4/weights", "conv4/BatchNorm/scale", "conv4/BatchNorm/shift",
         filterSizes5, &m_modelConvFilterWeights[4], &m_modelConvBiasWeights[4]);
     inputIndex = 1 - inputIndex;
 
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[5]);
     CreateWeightTensors(commandList, weights, "conv5/weights", "conv5/BatchNorm/scale", "conv5/BatchNorm/shift",
         filterSizes5, &m_modelConvFilterWeights[5], &m_modelConvBiasWeights[5]);
     inputIndex = 1 - inputIndex;
 
     uint32_t const filterSizes6[] = { 3, 32, 3, 3 };
-    CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes6, false, &intermediateBufferMaxSize[inputIndex],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes6, false, &intermediateBufferMaxSize[inputIndex],
         &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[6]);
     CreateWeightTensors(commandList, weights, "conv6/weights", nullptr, nullptr, filterSizes6,
         &m_modelConvFilterWeights[6], nullptr);
     inputIndex = 1 - inputIndex;
+
+    VERIFY(passIndex == c_numConvLayers);
 
     // Resource for input tensor
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(modelInputBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -791,7 +794,7 @@ void GetStrides(
     }
 }
 
-void DirectMLSuperResolutionPass::CreateConvolutionLayer(
+DirectMLSuperResolutionPass::ConvolutionPass DirectMLSuperResolutionPass::CreateConvolutionLayer(
     _In_reads_(4) const uint32_t* inputSizes,
     _In_reads_(4) const uint32_t* filterSizes,
     bool useBiasAndActivation,
@@ -894,6 +897,15 @@ void DirectMLSuperResolutionPass::CreateConvolutionLayer(
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
     VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+
+    ConvolutionPass Pass = {};
+    Pass.Width = inputSizes[2];
+    Pass.Height = inputSizes[3];
+    Pass.InputChannelDepth = inputSizes[1];
+    Pass.OutputChannelDepth = outputSizesOut[1];
+    Pass.m_pOperator = *compiledOpOut;
+
+    return Pass;
 }
 
 void DirectMLSuperResolutionPass::CreateUpsampleLayer(
@@ -968,7 +980,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 	PassResource OutputBuffer,
 	D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
 	UINT inputWidth,
-	UINT inputHeight)
+	UINT inputHeight,
+    UINT convolutionLayerToDebug)
 {
 	PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"DirectML Super Resolution");
 
@@ -1007,7 +1020,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 	for (int i = 0; i < c_numConvLayers; i++)
 	{
 		// Convolution
-		m_pCommandRecorder->RecordDispatch(&commandList, m_dmlConvOps[i].Get(), m_dmlConvBindings[i].Get());
+		m_pCommandRecorder->RecordDispatch(&commandList, m_ConvolutionPasses[i].m_pOperator.Get(), m_dmlConvBindings[i].Get());
 		commandList.ResourceBarrier(1, &uavBarrier);
 
 		if (i == 2)
@@ -1016,13 +1029,20 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 			m_pCommandRecorder->RecordDispatch(&commandList, m_dmlUpsampleOps[1].Get(), m_dmlUpsampleBindings[1].Get());
 			commandList.ResourceBarrier(1, &uavBarrier);
 		}
+
+        if (i == convolutionLayerToDebug)
+        {
+            break;
+        }
 	}
 
 	// Add the residual image to the original nearest-neighbor upscale
 	m_pCommandRecorder->RecordDispatch(&commandList, m_dmlAddResidualOp.Get(), m_dmlAddResidualBinding.Get());
     commandList.ResourceBarrier(1, &uavBarrier);
 
-    // Render either the DML result or a bilinear upscale to a texture
+    ID3D12Resource* OutputResource;
+
+
     {
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Render to texture");
 

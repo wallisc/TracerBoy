@@ -29,20 +29,30 @@ public:
 		UINT Height,
 		float& OutDownscaleFactor);
 
+	static const UINT cDisableLayerDebugging = UINT_MAX;
 	D3D12_GPU_DESCRIPTOR_HANDLE Run(ID3D12GraphicsCommandList& commandList,
 		PassResource OutputBuffer,
 		D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
 		UINT inputWidth,
-		UINT inputHeight);
-
+		UINT inputHeight,
+		UINT convolutionLayerToDebug = cDisableLayerDebugging);
 
 	enum class TensorLayout
 	{
 		Default,
 		NHWC
 	};
+
+	struct ConvolutionPass
+	{
+		UINT Width, Height;
+		UINT InputChannelDepth;
+		UINT OutputChannelDepth;
+		ComPtr<IDMLCompiledOperator> m_pOperator;
+	};
+
 private:
-	void CreateConvolutionLayer(
+	ConvolutionPass CreateConvolutionLayer(
 		_In_reads_(4) const uint32_t* inputSizes,
 		_In_reads_(4) const uint32_t* filterSizes,
 		bool useBiasAndActivation,
@@ -102,6 +112,8 @@ private:
 	ComPtr<IDMLBindingTable>        m_dmlConvBindings[c_numConvLayers];
 	ComPtr<IDMLCompiledOperator>    m_dmlAddResidualOp;
 	ComPtr<IDMLBindingTable>        m_dmlAddResidualBinding;
+
+	ConvolutionPass					m_ConvolutionPasses[c_numConvLayers];
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsamplePersistentResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvPersistentResources[c_numConvLayers];
