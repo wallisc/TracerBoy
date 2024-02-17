@@ -183,6 +183,7 @@ xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"</Command>
     <ClCompile Include="DirectMLSuperResolution.cpp" />
     <ClCompile Include="FidelityFXSuperResolution.cpp" />
     <ClCompile Include="GenerateMotionVectorsPass.cpp" />
+    <ClCompile Include="OpenImageDenoise.cpp" />
     <ClCompile Include="RazerChromaManager.cpp" />
     <ClCompile Include="TemporalAccumulationPass.cpp" />
     <ClCompile Include="TracerBoy.cpp" />

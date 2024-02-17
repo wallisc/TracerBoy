@@ -253,6 +253,10 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::Checkbox("Enable DirectML Super Sampling", &postProcessSettings.m_bEnableDirectMLSuperSampling);
 		ImGui::InputInt("Layer to debug", &postProcessSettings.m_LayerToDebug, -1, 7);
 #endif
+#if USE_OIDN
+		ImGui::Checkbox("Enable Open Image Denoise", &postProcessSettings.m_bEnableOpenImageDenoise);
+		ImGui::InputInt("Layer to debug", &postProcessSettings.m_LayerToDebug, -1, 7);
+#endif
 		ImGui::TreePop();
 	}
 

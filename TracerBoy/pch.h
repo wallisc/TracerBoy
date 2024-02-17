@@ -6,7 +6,12 @@
 #define SUPPORT_SW_RAYTRACING 1
 #define USE_XESS 0
 #define USE_DLSS 0
-#define USE_DML 0
+
+#define PREFER_OIDN 1
+
+// Currently OIDN and DML are mutually exclusive
+#define USE_DML !PREFER_OIDN
+#define USE_OIDN PREFER_OIDN
 
 #include <memory>
 #include <deque>
@@ -93,6 +98,9 @@ using namespace DirectX;
 #endif
 #if USE_DML
 #include "DirectMLSuperResolution.h"
+#endif
+#if USE_OIDN
+#include "OpenImageDenoise.h"
 #endif
 #include "TracerBoy.h"
 #include "UIController.h"

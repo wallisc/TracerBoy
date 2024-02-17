@@ -193,6 +193,10 @@ public:
 		bool m_bEnableDirectMLSuperSampling;
 		int m_LayerToDebug;
 #endif
+#if USE_OIDN
+		bool m_bEnableOpenImageDenoise;
+		int m_LayerToDebug;
+#endif
 	};
 
 	struct PerformanceSettings
@@ -261,6 +265,10 @@ public:
 #endif
 #if USE_DML
 		postProcessSettings.m_bEnableDirectMLSuperSampling = true;
+		postProcessSettings.m_LayerToDebug = -1;
+#endif
+#if USE_OIDN
+		postProcessSettings.m_bEnableOpenImageDenoise = true;
 		postProcessSettings.m_LayerToDebug = -1;
 #endif
 
@@ -430,6 +438,7 @@ private:
 		XeSS,
 		DLSS,
 		DirectML,
+		OIDN,
 		None
 	};
 
@@ -595,7 +604,7 @@ private:
 		NumSystemTextures = SystemTexturesLastSlot - SystemTexturesBaseSlot + 1,
 		NumSceneDescriptors = SceneDescriptorsLastSlot - SceneDescriptorsBaseSlot + 1
 
-#if USE_DML
+#if USE_DML || USE_OIDN
 		, DMLBaseSlot = NumTotalViews
 #endif
 	};
@@ -634,6 +643,9 @@ private:
 #endif
 #if USE_DML
 	std::unique_ptr<DirectMLSuperResolutionPass> m_pDirectMLSuperResolutionPass;
+#endif
+#if USE_OIDN
+	std::unique_ptr<OpenImageDenoise> m_pOpenImageDenoise;		
 #endif
 };
 
