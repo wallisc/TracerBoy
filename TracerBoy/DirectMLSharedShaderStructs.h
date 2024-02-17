@@ -5,7 +5,8 @@
 
 struct DirectMLConstants
 {
-	uint2 Resolution;
+	uint2 InputResolution;
+	uint2 OutputResolution;
 	uint UseNHWC;
 	uint Padding;
 };

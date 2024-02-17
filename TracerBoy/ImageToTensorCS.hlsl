@@ -12,9 +12,10 @@ RWBuffer<half> opTensor : register(u0);
 [numthreads(DIRECTML_THREAD_GROUP_WIDTH, DIRECTML_THREAD_GROUP_HEIGHT, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {
-    if (DTid.x >= Constants.Resolution.x || DTid.y >= Constants.Resolution.y) return;
+    if (DTid.x >= Constants.OutputResolution.x || DTid.y >= Constants.OutputResolution.y)
+        return;
     
-    uint index = DTid.y * Constants.Resolution.x + DTid.x;
+    uint index = DTid.y * Constants.OutputResolution.x + DTid.x;
 
     float3 val = inputImage[DTid.xy].xyz;
 
@@ -26,7 +27,7 @@ void main( uint3 DTid : SV_DispatchThreadID )
     }
     else
     {
-        uint planeSize = Constants.Resolution.x * Constants.Resolution.y;
+        uint planeSize = Constants.OutputResolution.x * Constants.OutputResolution.y;
 
         // RGB plane order since model was trained on this
         opTensor[index] = val.x;

@@ -2725,6 +2725,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	}
 
 	ComPtr<ID3D12Resource> FinalBuffer;
+	auto& postProcessSettings = outputSettings.m_postProcessSettings;
 	{
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Post Processing");
 
@@ -2732,7 +2733,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		commandList.SetPipelineState(m_pPostProcessPSO.Get());
 
 		auto outputDesc = m_pPostProcessOutput->GetDesc();
-		auto& postProcessSettings = outputSettings.m_postProcessSettings;
 		PostProcessConstants postProcessConstants;
 		postProcessConstants.Resolution.x = static_cast<UINT32>(outputDesc.Width);
 		postProcessConstants.Resolution.y = static_cast<UINT32>(outputDesc.Height);
@@ -2812,7 +2812,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				m_pUpscaleOutput,
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
 				inputDesc.Width,
-				inputDesc.Height);
+				inputDesc.Height,
+				postProcessSettings.m_LayerToDebug >= 0 ? postProcessSettings.m_LayerToDebug : DirectMLSuperResolutionPass::cDisableLayerDebugging);
 
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
 			break;

@@ -191,6 +191,7 @@ public:
 #endif
 #if USE_DML
 		bool m_bEnableDirectMLSuperSampling;
+		int m_LayerToDebug;
 #endif
 	};
 
@@ -260,6 +261,7 @@ public:
 #endif
 #if USE_DML
 		postProcessSettings.m_bEnableDirectMLSuperSampling = true;
+		postProcessSettings.m_LayerToDebug = -1;
 #endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;

@@ -430,6 +430,8 @@ void DirectMLSuperResolutionPass::OnResize(
     UINT modelInputDescriptorIndex = additionDescriptorsIdx + additionOpDescriptorCount;
     UINT modelOutputDescriptorIndex = modelInputDescriptorIndex + 1;
 
+    UINT intermediateDescriptorsIdx = modelOutputDescriptorIndex + 1;
+
     // Describe and create a UAV for the original input tensor.
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
     uavDesc.Format = DXGI_FORMAT_R16_FLOAT;
@@ -467,6 +469,12 @@ void DirectMLSuperResolutionPass::OnResize(
             nullptr,
             IID_PPV_ARGS(&m_modelIntermediateResult[i])
         ));
+
+        srvDesc.Buffer.NumElements = static_cast<UINT>(intermediateBufferMaxSize[i] / sizeof(uint16_t));
+
+        UINT descriptorIndex = intermediateDescriptorsIdx + i;
+        m_device.CreateShaderResourceView(m_modelIntermediateResult[i].Get(), &srvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, descriptorIndex, descriptorSize));
+        m_modelIntermediateSRV[i] = CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, descriptorIndex, descriptorSize);
     }
 
     // Make sure the requested amount is lower than the hard-coded max amount
@@ -899,8 +907,8 @@ DirectMLSuperResolutionPass::ConvolutionPass DirectMLSuperResolutionPass::Create
     VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 
     ConvolutionPass Pass = {};
-    Pass.Width = inputSizes[2];
-    Pass.Height = inputSizes[3];
+    Pass.Width = inputSizes[3];
+    Pass.Height = inputSizes[2];
     Pass.InputChannelDepth = inputSizes[1];
     Pass.OutputChannelDepth = outputSizesOut[1];
     Pass.m_pOperator = *compiledOpOut;
@@ -996,7 +1004,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 
 
         DirectMLConstants constants = {};
-        constants.Resolution = { inputWidth, inputHeight };
+        constants.InputResolution = { inputWidth, inputHeight };
+        constants.OutputResolution = { inputWidth, inputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
@@ -1017,11 +1026,18 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 	// Run the intermediate model steps: 3 convolutions (with premultiplied batch normalization
 	// baked into the weights), an upsample, 3 convolutions w/ premultiplied batch norm, 1 final convolution.
 	// This generates a residual image.
+
+    D3D12_GPU_DESCRIPTOR_HANDLE OutputSRV = m_modelOutputSRV;
+    UINT convolutionWidth = inputWidth;
+    UINT convolutionHeight = inputHeight;
 	for (int i = 0; i < c_numConvLayers; i++)
 	{
 		// Convolution
 		m_pCommandRecorder->RecordDispatch(&commandList, m_ConvolutionPasses[i].m_pOperator.Get(), m_dmlConvBindings[i].Get());
 		commandList.ResourceBarrier(1, &uavBarrier);
+
+        convolutionWidth = m_ConvolutionPasses[i].Width;
+        convolutionHeight = m_ConvolutionPasses[i].Height;
 
 		if (i == 2)
 		{
@@ -1030,18 +1046,21 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
 			commandList.ResourceBarrier(1, &uavBarrier);
 		}
 
+        OutputSRV = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
+
         if (i == convolutionLayerToDebug)
         {
             break;
         }
 	}
 
-	// Add the residual image to the original nearest-neighbor upscale
-	m_pCommandRecorder->RecordDispatch(&commandList, m_dmlAddResidualOp.Get(), m_dmlAddResidualBinding.Get());
-    commandList.ResourceBarrier(1, &uavBarrier);
-
-    ID3D12Resource* OutputResource;
-
+    if (convolutionLayerToDebug > c_numConvLayers)
+    {
+        // Add the residual image to the original nearest-neighbor upscale
+        m_pCommandRecorder->RecordDispatch(&commandList, m_dmlAddResidualOp.Get(), m_dmlAddResidualBinding.Get());
+        commandList.ResourceBarrier(1, &uavBarrier);
+        OutputSRV = m_modelOutputSRV;
+    }
 
     {
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Render to texture");
@@ -1053,11 +1072,12 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectMLSuperResolutionPass::Run(
         UINT outputHeight = inputHeight * 2;
 
         DirectMLConstants constants = {};
-        constants.Resolution = { outputWidth, outputHeight };
+        constants.InputResolution = { convolutionWidth, convolutionHeight };
+        constants.OutputResolution = { outputWidth, outputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
-        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, m_modelOutputSRV);
+        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, OutputSRV);
         commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Output, OutputBuffer.m_uavHandle);
 
         UINT DispatchWidth = (outputWidth - 1) / DIRECTML_THREAD_GROUP_WIDTH + 1;

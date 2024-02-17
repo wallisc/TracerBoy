@@ -132,6 +132,7 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelOutput;
 	D3D12_GPU_DESCRIPTOR_HANDLE						m_modelOutputSRV;
+	D3D12_GPU_DESCRIPTOR_HANDLE						m_modelIntermediateSRV[c_numIntermediateBuffers];
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelIntermediateResult[c_numIntermediateBuffers];
 
