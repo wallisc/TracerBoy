@@ -10,6 +10,8 @@ struct PassResource;
 typedef std::vector<float> WeightsType;
 typedef std::map<std::string, WeightsType> WeightMapType;
 
+class Tensor;
+
 // Let DirectML manage the data in the weight tensors. This can be faster on some hardware.
 #define DML_MANAGED_WEIGHTS 0
 
@@ -35,7 +37,8 @@ public:
 		D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
 		UINT inputWidth,
 		UINT inputHeight,
-		UINT convolutionLayerToDebug = cDisableLayerDebugging);
+		UINT convolutionLayerToDebug = cDisableLayerDebugging,
+		UINT convolutionSliceToDebug = 0);
 
 	enum class TensorLayout
 	{
@@ -49,12 +52,17 @@ public:
 		UINT InputChannelDepth;
 		UINT OutputChannelDepth;
 		ComPtr<IDMLCompiledOperator> m_pOperator;
+
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pFilterWeightResource;
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pBiasWeightResource;
 	};
 
 private:
 	ConvolutionPass CreateConvolutionLayer(
+		ID3D12GraphicsCommandList& commandList,
+		const Tensor& weights,
+		const Tensor& bias,
 		_In_reads_(4) const uint32_t* inputSizes,
-		_In_reads_(4) const uint32_t* filterSizes,
 		bool useBiasAndActivation,
 		_Inout_updates_(1) uint64_t* inputBufferRequiredSize,
 		_Inout_updates_(1) uint64_t* outputBufferRequiredSize,
@@ -63,6 +71,11 @@ private:
 
 	void CreateAdditionLayer(
 		_In_reads_(4) const uint32_t* inputSizes,
+		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
+
+	void CreatePoolingLayer(
+		_In_reads_(4) const uint32_t* inputSizes,
+		_Out_writes_(4) uint32_t* outputSizesOut,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
 	void CreateUpsampleLayer(
@@ -74,23 +87,22 @@ private:
 
 	void CreateWeightTensors(
 		ID3D12GraphicsCommandList& commandList,
-		WeightMapType& weights,
-		const char* convLayerName,
-		const char* scaleLayerName,
-		const char* shiftLayerName,
+		const Tensor& weights,
+		const Tensor& bias,
 		std::span<const uint32_t> filterSizes,
-		//DirectX::ResourceUploadBatch& uploadBatch,
 		_Out_writes_(1) ID3D12Resource** filterWeightResourceOut,
 		_Out_writes_opt_(1) ID3D12Resource** biasWeightResourceOut);
-
 	
 	void CreateWeightResource(
 		_In_reads_(4) const uint32_t* tensorSizes,
 		_Out_writes_(1) ID3D12Resource** d3dResourceOut);
 
 	// Model layer sizes and indices
-	static const size_t                             c_numUpsampleLayers = 2;
-	static const size_t                             c_numConvLayers = 7;
+	static const size_t                             c_numUpsampleLayers = 4;
+	//static const size_t                             c_numConvLayers = 16;
+	static const size_t                             c_numConvLayers = 2;
+	static const size_t                             c_numJoinLayers = 4;
+	static const size_t                             c_numPoolingLayers = 4;
 	static const size_t                             c_numIntermediateBuffers = 2;
 
 	// Hard-coded so that we don't need to recreate the descriptor heap on window resize
@@ -110,8 +122,10 @@ private:
 	ComPtr<IDMLBindingTable>        m_dmlUpsampleBindings[c_numUpsampleLayers];
 	ComPtr<IDMLCompiledOperator>    m_dmlConvOps[c_numConvLayers];
 	ComPtr<IDMLBindingTable>        m_dmlConvBindings[c_numConvLayers];
-	ComPtr<IDMLCompiledOperator>    m_dmlAddResidualOp;
-	ComPtr<IDMLBindingTable>        m_dmlAddResidualBinding;
+	ComPtr<IDMLCompiledOperator>    m_dmlPoolingOps[c_numPoolingLayers];
+	ComPtr<IDMLBindingTable>        m_dmlPoolingBindings[c_numPoolingLayers];
+	ComPtr<IDMLCompiledOperator>    m_dmlJoinOps[c_numJoinLayers];
+	ComPtr<IDMLBindingTable>        m_dmlJoinBindings[c_numJoinLayers];
 
 	ConvolutionPass					m_ConvolutionPasses[c_numConvLayers];
 
@@ -123,9 +137,6 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsampleTemporaryResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvTemporaryResources[c_numConvLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddTemporaryResource;
-
-	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvFilterWeights[c_numConvLayers];
-	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvBiasWeights[c_numConvLayers];
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInput;
 	D3D12_GPU_DESCRIPTOR_HANDLE						m_modelInputUAV;

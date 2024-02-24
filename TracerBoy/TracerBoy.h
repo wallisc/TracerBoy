@@ -196,6 +196,7 @@ public:
 #if USE_OIDN
 		bool m_bEnableOpenImageDenoise;
 		int m_LayerToDebug;
+		int m_SliceToDebug;
 #endif
 	};
 
@@ -269,7 +270,8 @@ public:
 #endif
 #if USE_OIDN
 		postProcessSettings.m_bEnableOpenImageDenoise = true;
-		postProcessSettings.m_LayerToDebug = -1;
+		postProcessSettings.m_LayerToDebug = 0;
+		postProcessSettings.m_SliceToDebug = 0;
 #endif
 
 		CameraOutputSettings& cameraSettings = outputSettings.m_cameraSettings;

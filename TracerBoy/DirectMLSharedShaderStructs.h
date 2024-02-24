@@ -8,6 +8,6 @@ struct DirectMLConstants
 	uint2 InputResolution;
 	uint2 OutputResolution;
 	uint UseNHWC;
-	uint Padding;
+	uint SliceToDebug;
 };
 

@@ -256,6 +256,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 #if USE_OIDN
 		ImGui::Checkbox("Enable Open Image Denoise", &postProcessSettings.m_bEnableOpenImageDenoise);
 		ImGui::InputInt("Layer to debug", &postProcessSettings.m_LayerToDebug, -1, 7);
+		ImGui::InputInt("Slice to debug", &postProcessSettings.m_SliceToDebug, 0, 10);
 #endif
 		ImGui::TreePop();
 	}

@@ -29,10 +29,11 @@ void main( uint3 DTid : SV_DispatchThreadID )
         else
         {
             uint blockSize = Constants.InputResolution.x * Constants.InputResolution.y;
+            uint sliceOffset = Constants.SliceToDebug * 3 * blockSize;
 
-            color.r = Tensor[index];
-            color.g = Tensor[index + blockSize];
-            color.b = Tensor[index + 2 * blockSize];
+            color.r = Tensor[sliceOffset + index + 0 * blockSize];
+            color.g = Tensor[sliceOffset + index + 1 * blockSize];
+            color.b = Tensor[sliceOffset + index + 2 * blockSize];
             color.a = 1.0f;
         }
     }
@@ -42,5 +43,5 @@ void main( uint3 DTid : SV_DispatchThreadID )
     }
 
    
-    OutputTexture[DTid.xy] = color;
+    OutputTexture[DTid.xy] = abs(color);
 }

@@ -6,6 +6,523 @@
 #include "ImageToTensorCS.h"
 #include "DirectMLSharedShaderStructs.h"
 
+// https://gist.github.com/rygorous/2156668
+namespace
+{
+    typedef unsigned int uint;
+
+    union FP32
+    {
+        uint u;
+        float f;
+        struct
+        {
+            uint Mantissa : 23;
+            uint Exponent : 8;
+            uint Sign : 1;
+        };
+    };
+
+    union FP16
+    {
+        unsigned short u;
+        struct
+        {
+            uint Mantissa : 10;
+            uint Exponent : 5;
+            uint Sign : 1;
+        };
+    };
+
+    // Original ISPC reference version; this always rounds ties up.
+    FP16 float_to_half(FP32 f)
+    {
+        FP16 o = { 0 };
+
+        // Based on ISPC reference code (with minor modifications)
+        if (f.Exponent == 0) // Signed zero/denormal (which will underflow)
+            o.Exponent = 0;
+        else if (f.Exponent == 255) // Inf or NaN (all exponent bits set)
+        {
+            o.Exponent = 31;
+            o.Mantissa = f.Mantissa ? 0x200 : 0; // NaN->qNaN and Inf->Inf
+        }
+        else // Normalized number
+        {
+            // Exponent unbias the single, then bias the halfp
+            int newexp = f.Exponent - 127 + 15;
+            if (newexp >= 31) // Overflow, return signed infinity
+                o.Exponent = 31;
+            else if (newexp <= 0) // Underflow
+            {
+                if ((14 - newexp) <= 24) // Mantissa might be non-zero
+                {
+                    uint mant = f.Mantissa | 0x800000; // Hidden 1 bit
+                    o.Mantissa = mant >> (14 - newexp);
+                    if ((mant >> (13 - newexp)) & 1) // Check for rounding
+                        o.u++; // Round, might overflow into exp bit, but this is OK
+                }
+            }
+            else
+            {
+                o.Exponent = newexp;
+                o.Mantissa = f.Mantissa >> 13;
+                if (f.Mantissa & 0x1000) // Check for rounding
+                    o.u++; // Round, might overflow to inf, this is OK
+            }
+        }
+
+        o.Sign = f.Sign;
+        return o;
+    }
+
+    FP32 half_to_float(FP16 h)
+    {
+        static const FP32 magic = { 113 << 23 };
+        static const uint shifted_exp = 0x7c00 << 13; // exponent mask after shift
+        FP32 o;
+
+        o.u = (h.u & 0x7fff) << 13;     // exponent/mantissa bits
+        uint exp = shifted_exp & o.u;   // just the exponent
+        o.u += (127 - 15) << 23;        // exponent adjust
+
+        // handle exponent special cases
+        if (exp == shifted_exp) // Inf/NaN?
+            o.u += (128 - 16) << 23;    // extra exp adjust
+        else if (exp == 0) // Zero/Denormal?
+        {
+            o.u += 1 << 23;             // extra exp adjust
+            o.f -= magic.f;             // renormalize
+        }
+
+        o.u |= (h.u & 0x8000) << 16;    // sign bit
+        return o;
+    }
+}
+
+float half_to_float(int16_t x)
+{
+    FP16 fp16;
+    fp16.u = (unsigned short)x;
+    return half_to_float(fp16).f;
+}
+
+int16_t float_to_half(float x)
+{
+    FP32 fp32;
+    fp32.f = x;
+    return (int16_t)float_to_half(fp32).u;
+}
+
+// Tensor dimensions
+// Canonical order: CHW / OIHW
+using TensorDims = std::vector<int>;
+
+std::ostream& operator <<(std::ostream& sm, const TensorDims& dims);
+
+// Tensor memory layout
+enum class TensorLayout
+{
+    x,
+
+    chw,
+    Chw8c,  // blocked
+    Chw16c, // blocked
+    oihw,
+    OIhw8i8o,     // blocked
+    OIhw16i16o,   // blocked
+    OIhw2o8i8o2i, // blocked (Xe-HPG DPAS)
+    OIhw8i16o2i,  // blocked (Xe-HPC DPAS)
+
+    hwc,
+    ohwi,
+};
+
+struct TensorLayoutInfo
+{
+    int rank;
+    int blockC;
+};
+
+// Returns information about the tensor layout
+inline TensorLayoutInfo getTensorLayoutInfo(TensorLayout layout)
+{
+    switch (layout)
+    {
+    case TensorLayout::x:
+        return { 1, 1 };
+    case TensorLayout::chw:
+    case TensorLayout::hwc:
+        return { 3, 1 };
+    case TensorLayout::Chw8c:
+        return { 3, 8 };
+    case TensorLayout::Chw16c:
+        return { 3, 16 };
+    case TensorLayout::oihw:
+    case TensorLayout::ohwi:
+        return { 4, 1 };
+    case TensorLayout::OIhw8i8o:
+        return { 4, 8 };
+    case TensorLayout::OIhw16i16o:
+    case TensorLayout::OIhw2o8i8o2i:
+    case TensorLayout::OIhw8i16o2i:
+        return { 4, 16 };
+    default:
+        throw std::invalid_argument("invalid tensor layout");
+    }
+}
+
+// Data types sorted by precision in ascending order
+enum class DataType
+{
+    Void,
+    UInt8,
+    Float16,
+    Float32,
+};
+
+size_t getDataTypeSize(DataType dataType)
+{
+    switch (dataType)
+    {
+    case DataType::UInt8:   return 1;
+    case DataType::Float16: return sizeof(int16_t);
+    case DataType::Float32: return sizeof(float);
+    default:
+        throw std::invalid_argument("invalid data type");
+    }
+}
+
+// Tensor descriptor
+struct TensorDesc
+{
+    TensorDims   dims;       // logical dimensions
+    TensorDims   paddedDims; // storage dimensions with zero-padding
+    TensorLayout layout;     // storage layout
+    DataType     dataType;   // element data type
+
+    TensorDesc() = default;
+
+    TensorDesc(TensorDims dims, TensorDims paddedDims, TensorLayout layout, DataType dataType)
+        : dims(dims), paddedDims(paddedDims), layout(layout), dataType(dataType)
+    {
+        assert(isValid());
+    }
+
+    TensorDesc(TensorDims dims, TensorLayout layout, DataType dataType)
+        : dims(dims), paddedDims(dims), layout(layout), dataType(dataType)
+    {
+        assert(isValid());
+    }
+
+    bool isValid() const
+    {
+        const auto info = getTensorLayoutInfo(layout);
+
+        return getRank() == info.rank &&
+            dims.size() == paddedDims.size() &&
+            std::mismatch(dims.begin(), dims.end(), paddedDims.begin(),
+                [](int a, int b) { return a <= b; }).first == dims.end() &&
+            (info.blockC == 1 ||
+                (getRank() == 3 && getPaddedC() % info.blockC == 0) ||
+                (getRank() == 4 && getPaddedO() % info.blockC == 0 && getPaddedI() % info.blockC == 0));
+    }
+
+    // Returns the number of dimensions
+    inline int getRank() const { return int(dims.size()); }
+
+    // Returns the number of elements in a 1D tensor
+    inline int getX() const
+    {
+        assert(dims.size() == 1);
+        return dims[0];
+    }
+
+    inline int getPaddedX() const
+    {
+        assert(paddedDims.size() == 1);
+        return paddedDims[0];
+    }
+
+    // Returns the number of output channels in the tensor
+    inline int getO() const
+    {
+        assert(dims.size() >= 4);
+        return dims[dims.size() - 4];
+    }
+
+    inline int getPaddedO() const
+    {
+        assert(paddedDims.size() >= 4);
+        return paddedDims[paddedDims.size() - 4];
+    }
+
+    // Returns the number of input channels in the tensor
+    inline int getI() const
+    {
+        assert(dims.size() >= 3);
+        return dims[dims.size() - 3];
+    }
+
+    inline int getPaddedI() const
+    {
+        assert(paddedDims.size() >= 3);
+        return paddedDims[paddedDims.size() - 3];
+    }
+
+    // Returns the number of channels in the tensor
+    inline int getC() const
+    {
+        assert(dims.size() >= 3);
+        return dims[dims.size() - 3];
+    }
+
+    inline int getPaddedC() const
+    {
+        assert(paddedDims.size() >= 3);
+        return paddedDims[paddedDims.size() - 3];
+    }
+
+    // Returns the height of the tensor
+    inline int getH() const
+    {
+        assert(dims.size() >= 2);
+        return dims[dims.size() - 2];
+    }
+
+    // Returns the width of the tensor
+    inline int getW() const
+    {
+        assert(dims.size() >= 2);
+        return dims[dims.size() - 1];
+    }
+
+    // Returns the number of elements in the tensor
+    inline size_t getNumElements() const
+    {
+        if (dims.empty())
+            return 0;
+        size_t num = 1;
+        for (size_t i = 0; i < dims.size(); ++i)
+            num *= size_t(dims[i]);
+        return num;
+    }
+
+    // Returns the size in bytes of the tensor
+    inline size_t getByteSize() const
+    {
+        if (paddedDims.empty())
+            return 0;
+        size_t num = 1;
+        for (size_t i = 0; i < paddedDims.size(); ++i)
+            num *= size_t(paddedDims[i]);
+        return num * getDataTypeSize(dataType);
+    }
+
+    bool operator ==(const TensorDesc& other) const
+    {
+        return (dims == other.dims) && (paddedDims == other.paddedDims) &&
+            (layout == other.layout) && (dataType == other.dataType);
+    }
+
+    bool operator !=(const TensorDesc& other) const
+    {
+        return (dims != other.dims) || (paddedDims != other.paddedDims) ||
+            (layout != other.layout) || (dataType != other.dataType);
+    }
+};
+
+
+// Checks for buffer overrun
+void checkBounds(const char* ptr, const char* end, size_t size)
+{
+    if (end - ptr < (ptrdiff_t)size)
+        HANDLE_FAILURE(); // invalid or corrupted weights blob
+}
+
+// Reads a value from a buffer (with bounds checking) and advances the pointer
+template<typename T>
+T read(const char*& ptr, const char* end)
+{
+    checkBounds(ptr, end, sizeof(T));
+    T value;
+    memcpy(&value, ptr, sizeof(T));
+    ptr += sizeof(T);
+    return value;
+}
+
+class Tensor : protected TensorDesc
+{
+public:
+    virtual void* getData() = 0;
+    virtual const void* getData() const = 0;
+
+    inline const TensorDesc& getDesc() const { return *this; }
+    inline const TensorDims& getDims() const { return dims; }
+    inline TensorLayout getLayout() const { return layout; }
+    inline DataType getDataType() const { return dataType; }
+
+    using TensorDesc::getRank;
+    using TensorDesc::getX;
+    using TensorDesc::getPaddedX;
+    using TensorDesc::getO;
+    using TensorDesc::getPaddedO;
+    using TensorDesc::getI;
+    using TensorDesc::getPaddedI;
+    using TensorDesc::getC;
+    using TensorDesc::getPaddedC;
+    using TensorDesc::getH;
+    using TensorDesc::getW;
+    using TensorDesc::getNumElements;
+    using TensorDesc::getByteSize;
+
+    inline operator bool() const { return getData() != nullptr; }
+
+protected:
+    explicit Tensor(const TensorDesc& desc);
+};
+
+Tensor::Tensor(const TensorDesc& desc)
+    : TensorDesc(desc)
+{
+    assert(desc.isValid());
+}
+
+class HostTensor final : public Tensor
+{
+public:
+    explicit HostTensor(const TensorDesc& desc);
+    HostTensor(const TensorDesc& desc, void* data);
+    ~HostTensor();
+
+    void* getData() override { return ptr; }
+    const void* getData() const override { return ptr; }
+
+private:
+    void* ptr;   // pointer to the tensor data
+    bool shared; // data owned and shared by the user
+};
+
+constexpr size_t memoryAlignment = 128;
+void* alignedMalloc(size_t size, size_t alignment = memoryAlignment);
+
+void* alignedMalloc(size_t size, size_t alignment)
+{
+    if (size == 0)
+        return nullptr;
+
+    assert((alignment & (alignment - 1)) == 0);
+    void* ptr = _mm_malloc(size, alignment);
+
+    if (ptr == nullptr)
+        throw std::bad_alloc();
+
+    return ptr;
+}
+
+void alignedFree(void* ptr)
+{
+    if (ptr)
+        _mm_free(ptr);
+}
+
+// -----------------------------------------------------------------------------------------------
+// HostTensor
+// -----------------------------------------------------------------------------------------------
+
+HostTensor::HostTensor(const TensorDesc& desc)
+    : Tensor(desc),
+    ptr(alignedMalloc(getByteSize())),
+    shared(false) {}
+
+HostTensor::HostTensor(const TensorDesc& desc, void* data)
+    : Tensor(desc),
+    ptr(data),
+    shared(true) {}
+
+HostTensor::~HostTensor()
+{
+    if (!shared)
+        alignedFree(ptr);
+}
+
+using TensorMap = std::unordered_map<std::string, std::shared_ptr<Tensor>>;
+
+void parseTZA(const void* buffer, size_t size, TensorMap &tensorMap)
+{
+    const char* input = static_cast<const char*>(buffer);
+    const char* const bufferEnd = input + size;
+
+    // Parse the magic value
+    const int magic = read<uint16_t>(input, bufferEnd);
+    if (magic != 0x41D7)
+        HANDLE_FAILURE(); // invalid or corrupted weights blob
+
+    // Parse the version
+    const int majorVersion = read<uint8_t>(input, bufferEnd);
+    const int minorVersion = read<uint8_t>(input, bufferEnd);
+    if (majorVersion != 2)
+        HANDLE_FAILURE(); // unsupported weights blob version
+
+    // Parse the table offset and jump to the table
+    const uint64_t tableOffset = read<uint64_t>(input, bufferEnd);
+    input = static_cast<const char*>(buffer) + tableOffset;
+
+    // Parse the number of tensors
+    const size_t numTensors = read<uint32_t>(input, bufferEnd);
+
+    // Parse the tensors
+    for (size_t i = 0; i < numTensors; ++i)
+    {
+        TensorDesc tensorDesc;
+
+        // Parse the name
+        const size_t nameLen = read<uint16_t>(input, bufferEnd);
+        checkBounds(input, bufferEnd, nameLen);
+        std::string name(input, nameLen);
+        input += nameLen;
+
+        // Parse the number of dimensions
+        const int ndims = read<uint8_t>(input, bufferEnd);
+
+        // Parse the shape of the tensor
+        tensorDesc.dims.resize(ndims);
+        for (int j = 0; j < ndims; ++j)
+            tensorDesc.dims[j] = read<uint32_t>(input, bufferEnd);
+        tensorDesc.paddedDims = tensorDesc.dims;
+
+        // Parse the layout of the tensor
+        checkBounds(input, bufferEnd, ndims);
+        std::string layout = std::string(input, input + ndims);
+        if (layout == "x")
+            tensorDesc.layout = TensorLayout::x;
+        else if (layout == "oihw")
+            tensorDesc.layout = TensorLayout::oihw;
+        else
+            HANDLE_FAILURE(); // invalid tensor layout");
+        input += ndims;
+
+        // Parse the data type of the tensor
+        const char dataType = read<char>(input, bufferEnd);
+        if (dataType == 'f')
+            tensorDesc.dataType = DataType::Float32;
+        else if (dataType == 'h')
+            tensorDesc.dataType = DataType::Float16;
+        else
+            HANDLE_FAILURE(); // invalid tensor data type
+
+        // Parse the offset to the tensor data
+        const uint64_t tensorOffset = read<uint64_t>(input, bufferEnd);
+        const char* tensorData = static_cast<const char*>(buffer) + tensorOffset;
+        checkBounds(tensorData, bufferEnd, tensorDesc.getByteSize());
+
+        // Add the tensor to the map
+        auto tensor = std::make_shared<HostTensor>(tensorDesc, const_cast<char*>(tensorData));
+        tensorMap.emplace(name, tensor);
+    }
+}
+
+
 // Float32 to float16 compressor
 // Code from here: https://stackoverflow.com/a/3542975
 // Used under the Unlicense: http://choosealicense.com/licenses/unlicense/
@@ -292,19 +809,72 @@ static void BindTempResourceIfNeeded(ID3D12Device& device, DML_BINDING_PROPERTIE
     }
 }
 
+void LoadBuffer(std::wstring fileName, std::vector<BYTE>& buffer)
+{
+	std::ifstream file(fileName, std::ios::binary | std::ios::ate); 
+    if (!file.is_open())
+    {
+		throw std::exception("Failed to open file");
+	}
+    size_t bufferSize = file.tellg();
+    buffer.resize(bufferSize);
+
+	file.seekg(0, std::ios::beg);
+	file.read((char*)buffer.data(), bufferSize);
+	file.close();
+}
+
 void OpenImageDenoise::OnResize(
     ID3D12GraphicsCommandList& commandList,
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptorHeapCPUBase,
     CD3DX12_GPU_DESCRIPTOR_HANDLE descriptorHeapGPUBase,
     UINT descriptorSize,
-    UINT UpscaledWidth,
-    UINT UpscaledHeight,
+    UINT Width,
+    UINT Height,
     float& OutDownscaleFactor)
 {
-    OutDownscaleFactor = 0.5f;
-    UINT Width = UpscaledWidth * OutDownscaleFactor;
-    UINT Height = UpscaledHeight * OutDownscaleFactor;
 
+    TensorMap tensorMap;
+    std::vector<BYTE> buffer;
+    LoadBuffer(L"rt_ldr.tza", buffer);
+    parseTZA(buffer.data(), buffer.size(), tensorMap);
+    
+#if 0
+    // Create the model graph
+    auto inputProcess = graph->addInputProcess("input", inputDims, tileAlignment, transferFunc, hdr, snorm);
+
+    auto encConv0 = graph->addConv("enc_conv0", inputProcess, Activation::ReLU);
+
+    auto pool1 = graph->addConv("enc_conv1", encConv0, Activation::ReLU, PostOp::Pool);
+
+    auto pool2 = graph->addConv("enc_conv2", pool1, Activation::ReLU, PostOp::Pool);
+
+    auto pool3 = graph->addConv("enc_conv3", pool2, Activation::ReLU, PostOp::Pool);
+
+    auto pool4 = graph->addConv("enc_conv4", pool3, Activation::ReLU, PostOp::Pool);
+
+    auto encConv5a = graph->addConv("enc_conv5a", pool4, Activation::ReLU);
+
+    auto upsample4 = graph->addConv("enc_conv5b", encConv5a, Activation::ReLU, PostOp::Upsample);
+    auto decConv4a = graph->addConcatConv("dec_conv4a", upsample4, pool3, Activation::ReLU);
+
+    auto upsample3 = graph->addConv("dec_conv4b", decConv4a, Activation::ReLU, PostOp::Upsample);
+    auto decConv3a = graph->addConcatConv("dec_conv3a", upsample3, pool2, Activation::ReLU);
+
+    auto upsample2 = graph->addConv("dec_conv3b", decConv3a, Activation::ReLU, PostOp::Upsample);
+    auto decConv2a = graph->addConcatConv("dec_conv2a", upsample2, pool1, Activation::ReLU);
+
+    auto upsample1 = graph->addConv("dec_conv2b", decConv2a, Activation::ReLU, PostOp::Upsample);
+    auto decConv1a = graph->addConcatConv("dec_conv1a", upsample1, inputProcess, Activation::ReLU);
+    auto decConv1b = graph->addConv("dec_conv1b", decConv1a, Activation::ReLU);
+
+    auto decConv0 = graph->addConv("dec_conv0", decConv1b, Activation::ReLU);
+
+    auto outputProcess = graph->addOutputProcess("output", decConv0, transferFunc, hdr, snorm);
+
+#endif
+
+    OutDownscaleFactor = 1.0f;
     WeightMapType weights;
     if (!LoadWeights("ML\\weights.bin", weights))
     {
@@ -321,14 +891,25 @@ void OpenImageDenoise::OnResize(
     uint32_t upscaledInputSizes[4];
     CreateUpsampleLayer(modelInputSizes, &modelInputBufferSize, &modelOutputBufferSize, upscaledInputSizes, &m_dmlUpsampleOps[0]);
 
-    uint32_t const filterSizes1[] = { 32, 3, 5, 5 };
     uint32_t intermediateInputSizes[2][4];
     uint32_t passIndex = 0;
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(modelInputSizes, filterSizes1, true, &modelInputBufferSize,
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv0.weight"].get(), *tensorMap["enc_conv0.bias"].get(), modelInputSizes, true, &modelInputBufferSize,
         &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[0]);
+
+#if 1
+    // Which intermediate resource to use as input for the current operation. The other will be
+    // used as output. Then the next op will swap the order.
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv1.weight"].get(), *tensorMap["enc_conv1.bias"].get(), intermediateInputSizes[0], true, &intermediateBufferMaxSize[0],
+        &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[1]);
+    //inputIndex = 1 - inputIndex;
+#endif 
+
+#if 0
     CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
         filterSizes1, &m_modelConvFilterWeights[0], &m_modelConvBiasWeights[0]);
+#endif
 
+#if 0
     // Which intermediate resource to use as input for the current operation. The other will be
     // used as output. Then the next op will swap the order.
     int inputIndex = 0;
@@ -379,6 +960,7 @@ void OpenImageDenoise::OnResize(
     inputIndex = 1 - inputIndex;
 
     VERIFY(passIndex == c_numConvLayers);
+#endif
 
     // Resource for input tensor
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(modelInputBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -404,30 +986,29 @@ void OpenImageDenoise::OnResize(
         IID_PPV_ARGS(&m_modelOutput)
     ));
 
-    // Finally add the residual to the original upsampled image
-    assert(memcmp(upscaledInputSizes, intermediateInputSizes[inputIndex], 4 * sizeof(uint16_t)) == 0);
-    CreateAdditionLayer(upscaledInputSizes, &m_dmlAddResidualOp);
+    //size_t upsampleOpDescriptorCount;
+    //size_t upsampleDescriptorsIdx;
+    size_t convOpDescriptorCount, convDescriptorsIdx;
 
-    size_t upsampleOpDescriptorCount, convOpDescriptorCount, additionOpDescriptorCount;
-    size_t upsampleDescriptorsIdx, convDescriptorsIdx, additionDescriptorsIdx;
-
-    VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opUpsample].GetAddressOf())));
-    upsampleOpDescriptorCount = GetDescriptorCount(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), m_dmlOpInitializers[e_opUpsample].Get());
+    //VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opUpsample].GetAddressOf())));
+    //upsampleOpDescriptorCount = GetDescriptorCount(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), m_dmlOpInitializers[e_opUpsample].Get());
 
     VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opConv].GetAddressOf())));
     convOpDescriptorCount = GetDescriptorCount(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), m_dmlOpInitializers[e_opConv].Get());
 
-    VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(1, m_dmlAddResidualOp.GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opAdd].GetAddressOf())));
-    additionOpDescriptorCount = GetDescriptorCount(1, m_dmlAddResidualOp.GetAddressOf(), m_dmlOpInitializers[e_opAdd].Get());
+    // TODO: Not sure why I need to do this, but stomps descriptors if I don't
+    //convOpDescriptorCount *= 2;
 
-    upsampleDescriptorsIdx = 0;
-    convDescriptorsIdx = upsampleDescriptorsIdx + upsampleOpDescriptorCount * c_numUpsampleLayers;
-    additionDescriptorsIdx = convDescriptorsIdx + convOpDescriptorCount * c_numConvLayers;
+    //upsampleDescriptorsIdx = 0;
+    size_t convInitializerDescriptorsIdx = 0;
+    size_t convOpInitializerDescriptorCount = m_dmlOpInitializers[e_opConv]->GetBindingProperties().RequiredDescriptorCount;
+
+    convDescriptorsIdx = convInitializerDescriptorsIdx + convOpInitializerDescriptorCount;
 
     UINT modelDescriptorCount = 2; // Model input and output
-    UINT requestedDescriptorCount = additionDescriptorsIdx + additionOpDescriptorCount + modelDescriptorCount;
+    UINT requestedDescriptorCount = (convDescriptorsIdx + convOpDescriptorCount * c_numConvLayers) + modelDescriptorCount;
 
-    UINT modelInputDescriptorIndex = additionDescriptorsIdx + additionOpDescriptorCount;
+    UINT modelInputDescriptorIndex = (convDescriptorsIdx + convOpDescriptorCount * c_numConvLayers);
     UINT modelOutputDescriptorIndex = modelInputDescriptorIndex + 1;
 
     UINT intermediateDescriptorsIdx = modelOutputDescriptorIndex + 1;
@@ -469,6 +1050,7 @@ void OpenImageDenoise::OnResize(
             nullptr,
             IID_PPV_ARGS(&m_modelIntermediateResult[i])
         ));
+        m_modelIntermediateResult[i]->SetName(L"Intermediate Buffer");
 
         srvDesc.Buffer.NumElements = static_cast<UINT>(intermediateBufferMaxSize[i] / sizeof(uint16_t));
 
@@ -482,24 +1064,21 @@ void OpenImageDenoise::OnResize(
 
     // Create any persistent resources required for the operators.
     {
-        for (int i = 0; i < c_numUpsampleLayers + c_numConvLayers + 1; i++)
+        for (int i = 0; i < c_numConvLayers; i++)
         {
             IDMLCompiledOperator* currentOp;
             ID3D12Resource** persistentResource;
+#if 0
             if (i < c_numUpsampleLayers)
             {
                 currentOp = m_dmlUpsampleOps[i].Get();
                 persistentResource = m_modelUpsamplePersistentResources[i].ReleaseAndGetAddressOf();
             }
-            else if (i < c_numUpsampleLayers + c_numConvLayers)
+            else 
+#endif
             {
-                currentOp = m_dmlConvOps[i - c_numUpsampleLayers].Get();
+                currentOp = m_dmlConvOps[i].Get();
                 persistentResource = m_modelConvPersistentResources[i - c_numUpsampleLayers].ReleaseAndGetAddressOf();
-            }
-            else
-            {
-                currentOp = m_dmlAddResidualOp.Get();
-                persistentResource = m_modelAddPersistentResource.ReleaseAndGetAddressOf();
             }
 
             auto bindingProps = currentOp->GetBindingProperties();
@@ -520,6 +1099,8 @@ void OpenImageDenoise::OnResize(
 
     Microsoft::WRL::ComPtr<IDMLBindingTable> initBindingTable;
     const DML_BINDING_DESC emptyBindingDesc = { DML_BINDING_TYPE_NONE, nullptr };
+
+#if 0
     // Upsample layers
     {
         // Bind resources for initialization.
@@ -586,6 +1167,7 @@ void OpenImageDenoise::OnResize(
                 m_dmlUpsampleBindings[i]->BindPersistentResource(&upsamplePersistentBindings[i]);
         }
     }
+#endif
 
     // Convolution layers
     {
@@ -595,11 +1177,12 @@ void OpenImageDenoise::OnResize(
 
         DML_BINDING_TABLE_DESC tableDesc = {
             m_dmlOpInitializers[e_opConv].Get(),
-            CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, convDescriptorsIdx, descriptorSize),
-            CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, convDescriptorsIdx, descriptorSize),
+            CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, convInitializerDescriptorsIdx, descriptorSize),
+            CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, convInitializerDescriptorsIdx, descriptorSize),
             bindingProps.RequiredDescriptorCount
         };
-        VERIFY_HRESULT(initBindingTable->Reset(&tableDesc));
+
+        VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(&initBindingTable)));
 
 
         const DML_BUFFER_BINDING emptyBufferBinding = { nullptr, 0, 0 };
@@ -688,21 +1271,15 @@ void OpenImageDenoise::OnResize(
             // The weights are stored in the persistent resource and shouldn't be bound separately.
             DML_BINDING_DESC inputBindings[] = { inputBinding, emptyBindingDesc, emptyBindingDesc };
 #else
+            auto pFilterWeights = m_ConvolutionPasses[i].m_pFilterWeightResource.Get();
+            auto pBiasWeights = m_ConvolutionPasses[i].m_pBiasWeightResource.Get();
+
             // Bind the weight resources
-            DML_BUFFER_BINDING filterBufferBinding = { m_modelConvFilterWeights[i].Get(), 0, m_modelConvFilterWeights[i]->GetDesc().Width };
+            DML_BUFFER_BINDING filterBufferBinding = { pFilterWeights, 0, pFilterWeights->GetDesc().Width };
             DML_BINDING_DESC filterBinding = { DML_BINDING_TYPE_BUFFER, &filterBufferBinding };
 
-            DML_BUFFER_BINDING biasBufferBinding;
-            DML_BINDING_DESC biasBinding;
-            if (i == 6)
-            {
-                biasBinding = emptyBindingDesc;	// last layer has no bias
-            }
-            else
-            {
-                biasBufferBinding = { m_modelConvBiasWeights[i].Get(), 0, m_modelConvBiasWeights[i]->GetDesc().Width };
-                biasBinding = { DML_BINDING_TYPE_BUFFER, &biasBufferBinding };
-            }
+            DML_BUFFER_BINDING biasBufferBinding = { pBiasWeights, 0, pBiasWeights->GetDesc().Width };
+            DML_BINDING_DESC biasBinding = { DML_BINDING_TYPE_BUFFER, &biasBufferBinding };
 
             DML_BINDING_DESC inputBindings[] = { inputBinding, filterBinding, biasBinding };
 #endif
@@ -712,69 +1289,6 @@ void OpenImageDenoise::OnResize(
 
             if (m_modelConvPersistentResources[i].Get() != nullptr)
                 m_dmlConvBindings[i]->BindPersistentResource(&convPersistentBindings[i]);
-        }
-    }
-
-    // Addition layer
-    {
-        // Bind resources for initialization.
-        auto bindingProps = m_dmlOpInitializers[e_opAdd]->GetBindingProperties();
-        assert(bindingProps.PersistentResourceSize == 0);
-
-        DML_BINDING_TABLE_DESC tableDesc = {
-            m_dmlOpInitializers[e_opAdd].Get(),
-            CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, additionDescriptorsIdx, descriptorSize),
-            CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, additionDescriptorsIdx, descriptorSize),
-            bindingProps.RequiredDescriptorCount
-        };
-        VERIFY_HRESULT(initBindingTable->Reset(&tableDesc));
-
-        // If the operator requires a persistent resource, it must be bound as output for the initializer.
-        DML_BUFFER_BINDING addPersistentBuffer;
-        DML_BINDING_DESC addPersistentBinding;
-        if (m_modelAddPersistentResource.Get() != nullptr)
-        {
-            addPersistentBuffer = { m_modelAddPersistentResource.Get(), 0, m_modelAddPersistentResource->GetDesc().Width };
-            addPersistentBinding = { DML_BINDING_TYPE_BUFFER, &addPersistentBuffer };
-        }
-        else
-            addPersistentBinding = emptyBindingDesc;
-
-        initBindingTable->BindInputs(0, nullptr);
-        initBindingTable->BindOutputs(1, &addPersistentBinding);
-        BindTempResourceIfNeeded(m_device, bindingProps, initBindingTable.Get(), m_modelInitTemporaryResources[e_opAdd].ReleaseAndGetAddressOf());
-
-        // Run initialization
-        m_pCommandRecorder->RecordDispatch(&commandList, m_dmlOpInitializers[e_opAdd].Get(), initBindingTable.Get());
-
-        // Bind resources for execution
-        {
-            bindingProps = m_dmlAddResidualOp->GetBindingProperties();
-
-            tableDesc = {
-                m_dmlAddResidualOp.Get(),
-                CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, additionDescriptorsIdx, descriptorSize),
-                CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, additionDescriptorsIdx, descriptorSize),
-                bindingProps.RequiredDescriptorCount
-            };
-            VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_dmlAddResidualBinding.ReleaseAndGetAddressOf())));
-
-            // m_modelOutput will already hold the result of the first upsample operation. We add the result of
-            // the last convolution (the residual) to it in-place to get the final result.
-            DML_BUFFER_BINDING input0BufferBinding = { m_modelIntermediateResult[1].Get(), 0, m_modelIntermediateResult[1]->GetDesc().Width };
-            DML_BINDING_DESC input0Binding = { DML_BINDING_TYPE_BUFFER, &input0BufferBinding };
-            DML_BUFFER_BINDING input1BufferBinding = { m_modelOutput.Get(), 0, m_modelOutput->GetDesc().Width };
-            DML_BINDING_DESC input1Binding = { DML_BINDING_TYPE_BUFFER, &input1BufferBinding };
-            DML_BUFFER_BINDING outputBufferBinding = { m_modelOutput.Get(), 0, m_modelOutput->GetDesc().Width };
-            DML_BINDING_DESC outputBinding = { DML_BINDING_TYPE_BUFFER, &outputBufferBinding };
-
-            DML_BINDING_DESC inputBindings[] = { input0Binding, input1Binding };
-            m_dmlAddResidualBinding->BindInputs(2, inputBindings);
-            m_dmlAddResidualBinding->BindOutputs(1, &outputBinding);
-            BindTempResourceIfNeeded(m_device, bindingProps, m_dmlAddResidualBinding.Get(), m_modelAddTemporaryResource.ReleaseAndGetAddressOf());
-
-            if (m_modelAddPersistentResource.Get() != nullptr)
-                m_dmlAddResidualBinding->BindPersistentResource(&addPersistentBinding);
         }
     }
 }
@@ -803,14 +1317,26 @@ void GetStrides(
 }
 
 OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
+    ID3D12GraphicsCommandList& commandList,
+    const Tensor& weights,
+    const Tensor& bias,
     _In_reads_(4) const uint32_t* inputSizes,
-    _In_reads_(4) const uint32_t* filterSizes,
     bool useBiasAndActivation,
     _Inout_updates_(1) uint64_t* inputBufferRequiredSize,
     _Inout_updates_(1) uint64_t* outputBufferRequiredSize,
     _Out_writes_(4) uint32_t* outputSizesOut,
     _Out_writes_(1) IDMLCompiledOperator** compiledOpOut)
 {
+
+    VERIFY(weights.getLayout() == ::TensorLayout::oihw);
+    VERIFY(weights.getDims()[1] == inputSizes[1]);
+
+    uint32_t filterSizes[4];
+    filterSizes[3] = weights.getDims()[3];
+    filterSizes[2] = weights.getDims()[2];
+    filterSizes[1] = weights.getDims()[1];
+    filterSizes[0] = weights.getDims()[0];
+
     // Describe input and output tensors    
     uint32_t inputStrides[4];
     GetStrides(inputSizes, m_tensorLayout, inputStrides);
@@ -913,6 +1439,8 @@ OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
     Pass.OutputChannelDepth = outputSizesOut[1];
     Pass.m_pOperator = *compiledOpOut;
 
+    CreateWeightTensors(commandList, weights, bias, filterSizes, Pass.m_pFilterWeightResource.ReleaseAndGetAddressOf(), Pass.m_pBiasWeightResource.ReleaseAndGetAddressOf());
+
     return Pass;
 }
 
@@ -983,15 +1511,60 @@ void OpenImageDenoise::CreateAdditionLayer(
 }
 
 
+void OpenImageDenoise::CreatePoolingLayer(
+    _In_reads_(4) const uint32_t* inputSizes,
+    _Out_writes_(4) uint32_t* outputSizesOut,
+    _Out_writes_(1) IDMLCompiledOperator** compiledOpOut)
+{
+    // Describe input and output tensors
+    uint32_t inputStrides[4];
+    GetStrides(inputSizes, m_tensorLayout, inputStrides);
+    uint64_t inputBufferSize = DMLCalcBufferTensorSize(DML_TENSOR_DATA_TYPE_FLOAT16, 4, inputSizes, inputStrides);
+
+    DML_BUFFER_TENSOR_DESC inputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, inputSizes, inputStrides, inputBufferSize, 0 };
+    DML_TENSOR_DESC inputTensorDesc = { DML_TENSOR_TYPE_BUFFER, &inputBufferDesc };
+
+    outputSizesOut[0] = inputSizes[0];
+    outputSizesOut[1] = inputSizes[1];
+    outputSizesOut[2] = inputSizes[2] / 2;
+    outputSizesOut[3] = inputSizes[3] / 2;
+
+    uint32_t outputStrides[4];
+    GetStrides(outputSizesOut, m_tensorLayout, outputStrides);
+    uint64_t outputBufferSize = DMLCalcBufferTensorSize(DML_TENSOR_DATA_TYPE_FLOAT16, 4, outputSizesOut, outputStrides);
+    DML_BUFFER_TENSOR_DESC outputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, outputSizesOut, outputStrides, outputBufferSize, 0 };
+    DML_TENSOR_DESC outputTensorDesc = { DML_TENSOR_TYPE_BUFFER, &outputBufferDesc };
+
+    uint32_t windowSize[] = { 2, 2 };
+    uint32_t startPadding[] = { 0, 0 };
+    uint32_t endPadding[] = { 0, 0 };
+    
+    // Describe, create, and compile max pooling operator
+    DML_MAX_POOLING_OPERATOR_DESC poolingDesc = {};
+    poolingDesc.InputTensor = &inputTensorDesc;
+    poolingDesc.OutputTensor = &outputTensorDesc;
+    poolingDesc.DimensionCount = 2;
+    poolingDesc.Strides = outputStrides;
+    poolingDesc.StartPadding = startPadding;
+    poolingDesc.EndPadding = endPadding;
+    poolingDesc.WindowSize = windowSize;
+    DML_OPERATOR_DESC opDesc = { DML_OPERATOR_MAX_POOLING, &poolingDesc };
+
+    ComPtr<IDMLOperator> op;
+    VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
+    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
 	ID3D12GraphicsCommandList& commandList,
 	PassResource OutputBuffer,
 	D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
 	UINT inputWidth,
 	UINT inputHeight,
-    UINT convolutionLayerToDebug)
+    UINT convolutionLayerToDebug,
+    UINT sliceToDebug)
 {
-	PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"DirectML Super Resolution");
+	PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Open Image Denoise");
 
 	auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
 
@@ -1007,6 +1580,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         constants.InputResolution = { inputWidth, inputHeight };
         constants.OutputResolution = { inputWidth, inputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
+        constants.SliceToDebug = sliceToDebug;
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
         commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, InputTexture);
@@ -1019,13 +1593,40 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         commandList.ResourceBarrier(1, &uavBarrier);
     }
 
-	// Create an upsampled (nearest neighbor) version of the image first
-	m_pCommandRecorder->RecordDispatch(&commandList, m_dmlUpsampleOps[0].Get(), m_dmlUpsampleBindings[0].Get());
-	// No UAV barrier is required here since we don't use the result right away.
-
 	// Run the intermediate model steps: 3 convolutions (with premultiplied batch normalization
 	// baked into the weights), an upsample, 3 convolutions w/ premultiplied batch norm, 1 final convolution.
 	// This generates a residual image.
+#if 0
+    // Create the model graph
+    auto inputProcess = graph->addInputProcess("input", inputDims, tileAlignment, transferFunc, hdr, snorm);
+
+    auto encConv0 = graph->addConv("enc_conv0", inputProcess, Activation::ReLU);
+
+    auto pool1 = graph->addConv("enc_conv1", encConv0, Activation::ReLU, PostOp::Pool);
+
+    auto pool2 = graph->addConv("enc_conv2", pool1, Activation::ReLU, PostOp::Pool);
+
+    auto pool3 = graph->addConv("enc_conv3", pool2, Activation::ReLU, PostOp::Pool);
+
+    auto pool4 = graph->addConv("enc_conv4", pool3, Activation::ReLU, PostOp::Pool)
+
+    auto encConv5a = graph->addConv("enc_conv5a", pool4, Activation::ReLU);
+
+    auto upsample4 = graph->addConv("enc_conv5b", encConv5a, Activation::ReLU, PostOp::Upsample);
+    auto decConv4a = graph->addConcatConv("dec_conv4a", upsample4, pool3, Activation::ReLU);
+
+    auto upsample3 = graph->addConv("dec_conv4b", decConv4a, Activation::ReLU, PostOp::Upsample);
+    auto decConv3a = graph->addConcatConv("dec_conv3a", upsample3, pool2, Activation::ReLU);
+
+    auto upsample2 = graph->addConv("dec_conv3b", decConv3a, Activation::ReLU, PostOp::Upsample);
+    auto decConv2a = graph->addConcatConv("dec_conv2a", upsample2, pool1, Activation::ReLU);
+
+    auto upsample1 = graph->addConv("dec_conv2b", decConv2a, Activation::ReLU, PostOp::Upsample);
+    auto decConv1a = graph->addConcatConv("dec_conv1a", upsample1, inputProcess, Activation::ReLU);
+    auto decConv1b = graph->addConv("dec_conv1b", decConv1a, Activation::ReLU);
+
+    auto decConv0 = graph->addConv("dec_conv0", decConv1b, Activation::ReLU);
+#endif
 
     D3D12_GPU_DESCRIPTOR_HANDLE OutputSRV = m_modelOutputSRV;
     UINT convolutionWidth = inputWidth;
@@ -1039,13 +1640,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         convolutionWidth = m_ConvolutionPasses[i].Width;
         convolutionHeight = m_ConvolutionPasses[i].Height;
 
-		if (i == 2)
-		{
-			// Intermediate upsample
-			m_pCommandRecorder->RecordDispatch(&commandList, m_dmlUpsampleOps[1].Get(), m_dmlUpsampleBindings[1].Get());
-			commandList.ResourceBarrier(1, &uavBarrier);
-		}
-
         OutputSRV = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
 
         if (i == convolutionLayerToDebug)
@@ -1054,13 +1648,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         }
 	}
 
-    if (convolutionLayerToDebug > c_numConvLayers)
-    {
-        // Add the residual image to the original nearest-neighbor upscale
-        m_pCommandRecorder->RecordDispatch(&commandList, m_dmlAddResidualOp.Get(), m_dmlAddResidualBinding.Get());
-        commandList.ResourceBarrier(1, &uavBarrier);
-        OutputSRV = m_modelOutputSRV;
-    }
 
     {
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Render to texture");
@@ -1068,13 +1655,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         commandList.SetPipelineState(m_pTensorToImagePSO.Get());
         commandList.SetComputeRootSignature(m_pRootSignature.Get());
 
-        UINT outputWidth = inputWidth * 2;
-        UINT outputHeight = inputHeight * 2;
+        UINT outputWidth = inputWidth;
+        UINT outputHeight = inputHeight;
 
         DirectMLConstants constants = {};
         constants.InputResolution = { convolutionWidth, convolutionHeight };
         constants.OutputResolution = { outputWidth, outputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
+        constants.SliceToDebug = sliceToDebug;
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
         commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, OutputSRV);
@@ -1127,48 +1715,28 @@ inline UINT64 UpdateSubresourcesHelper(
 
 void OpenImageDenoise::CreateWeightTensors(
     ID3D12GraphicsCommandList& commandList,
-    WeightMapType& weights,
-    const char* convLayerName,
-    const char* scaleLayerName,
-    const char* shiftLayerName,
+    const Tensor& weights,
+    const Tensor& bias,
     std::span<const uint32_t> filterSizes,
-    //DirectX::ResourceUploadBatch& uploadBatch,
     _Out_writes_(1) ID3D12Resource** filterWeightResourceOut,
     _Out_writes_opt_(1) ID3D12Resource** biasWeightResourceOut)
 {
-    // There are two types of weights for the convolutions: The convolution filters themselves, and scale/shift
-    // weights used to normalize and bias the results. The final layer doesn't use scale and shift weights, so
-    // these are optional.
+    VERIFY(weights.getDataType() == DataType::Float16);
+    VERIFY(bias.getDataType() == DataType::Float16);
+    VERIFY(weights.getLayout() == ::TensorLayout::oihw);
+    VERIFY(bias.getLayout() == ::TensorLayout::x);
 
-    bool useScaleShift = true;
-    if (scaleLayerName == nullptr)
-    {
-        assert(shiftLayerName == nullptr);
-        useScaleShift = false;
-    }
-
+    bool bHasBias = true;
     CreateWeightResource(filterSizes.data(), filterWeightResourceOut);
-    if (useScaleShift)
+    if (bHasBias)
     {
         uint32_t biasSizes[] = { 1, filterSizes[0], 1, 1 };	// One bias per output channel
         CreateWeightResource(biasSizes, biasWeightResourceOut);
-
-        // The scale weights will be premultiplied into the filter weights, so they don't need
-        // a separate resource.
     }
     else
     {
         if (biasWeightResourceOut)
             biasWeightResourceOut = nullptr;
-    }
-
-    // Convert weight values to FP16
-    WeightsType filterWeights = weights[convLayerName];
-    WeightsType scaleWeights, shiftWeights;
-    if (useScaleShift)
-    {
-        scaleWeights = weights[scaleLayerName];
-        shiftWeights = weights[shiftLayerName];
     }
 
     std::vector<uint16_t> filterWeightsFP16;
@@ -1179,6 +1747,9 @@ void OpenImageDenoise::CreateWeightTensors(
     const uint32_t H = filterSizes[2];
     const uint32_t W = filterSizes[3];
 
+    std::string Output;
+    std::string BiasOutput;
+
     for (uint32_t n = 0; n < N; n++)
     {
         switch (m_tensorLayout)
@@ -1186,16 +1757,20 @@ void OpenImageDenoise::CreateWeightTensors(
         case TensorLayout::NHWC:
             // We need to convert the weights from NCHW to NHWC.
             for (uint32_t h = 0; h < H; h++)
+            {
                 for (uint32_t w = 0; w < W; w++)
+                {
                     for (uint32_t c = 0; c < C; c++)
                     {
                         // Apply the scale weight now so we don't need a normalization layer
                         uint32_t idx = w + h * W + c * H * W + n * C * H * W;
-                        float scaledWeight = useScaleShift ?
-                            filterWeights[idx] * scaleWeights[n] :
-                            filterWeights[idx];
-                        filterWeightsFP16.push_back(Float16Compressor::compress(scaledWeight));
+                        //filterWeightsFP16.push_back(Float16Compressor::compress(weight));
+                        filterWeightsFP16.push_back(((uint16_t*)weights.getData())[idx]);
                     }
+                    Output += "\n";
+                }
+                Output += "\n\n";
+            }
             break;
 
         default:
@@ -1204,19 +1779,28 @@ void OpenImageDenoise::CreateWeightTensors(
             {
                 // Apply the scale weight now so we don't need a normalization layer
                 uint32_t idx = n * C * H * W + i;
-                float scaledWeight = useScaleShift ?
-                    filterWeights[idx] * scaleWeights[n] :
-                    filterWeights[idx];
-                filterWeightsFP16.push_back(Float16Compressor::compress(scaledWeight));
+                //filterWeightsFP16.push_back(Float16Compressor::compress(weight));
+                filterWeightsFP16.push_back(((uint16_t*)weights.getData())[idx]);
+
+                Output += std::to_string(Float16Compressor::decompress(((uint16_t*)weights.getData())[idx])) + " ";
+                if(idx % W == (W - 1))
+					Output += "\n";
+
+                if(idx % (W * H) == (W * H - 1))
+                    Output += "\n";
             }
         }
 
-        if (useScaleShift)
+        if (bHasBias)
         {
-            // Technically this is initialBias*scale+shift, but the initial bias is 0
-            biasWeightsFP16.push_back(Float16Compressor::compress(shiftWeights[n]));
+            biasWeightsFP16.push_back(((uint16_t*)bias.getData())[n]);
+            BiasOutput += std::to_string(half_to_float(((uint16_t*)bias.getData())[n])) + " ";
+
         }
     }
+
+    OutputDebugString(Output.c_str());
+    OutputDebugString(BiasOutput.c_str());
 
     // Upload to the GPU
     D3D12_SUBRESOURCE_DATA weightsData = {};
@@ -1241,7 +1825,7 @@ void OpenImageDenoise::CreateWeightTensors(
         0, 0, 1,
         &weightsData);
 
-    if (useScaleShift)
+    if (bHasBias)
     {
         weightsData.pData = biasWeightsFP16.data();
 
@@ -1262,6 +1846,14 @@ void OpenImageDenoise::CreateWeightTensors(
             0, 0, 1,
             &weightsData);
     }
+
+    // DirectML operators always want these resources in UAV state even if it's readonly
+    D3D12_RESOURCE_BARRIER barriers[] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(*filterWeightResourceOut, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+        CD3DX12_RESOURCE_BARRIER::Transition(*biasWeightResourceOut, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+    };
+
+    commandList.ResourceBarrier(ARRAYSIZE(barriers), barriers);
 }
 
 
@@ -1284,5 +1876,6 @@ void OpenImageDenoise::CreateWeightResource(
         nullptr,
         IID_PPV_ARGS(d3dResourceOut)
     ));
+    (*d3dResourceOut)->SetName(L"WeightResource");
 }
 #endif

@@ -2843,7 +2843,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
 				inputDesc.Width,
 				inputDesc.Height,
-				postProcessSettings.m_LayerToDebug >= 0 ? postProcessSettings.m_LayerToDebug : OpenImageDenoise::cDisableLayerDebugging);
+				postProcessSettings.m_LayerToDebug >= 0 ? postProcessSettings.m_LayerToDebug : OpenImageDenoise::cDisableLayerDebugging,
+				postProcessSettings.m_SliceToDebug);
 
 			FinalBuffer = m_pUpscaleOutput.m_pResource;
 			break;
