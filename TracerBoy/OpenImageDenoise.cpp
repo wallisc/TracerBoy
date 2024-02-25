@@ -833,6 +833,7 @@ void OpenImageDenoise::OnResize(
     UINT Height,
     float& OutDownscaleFactor)
 {
+    ResetDescriptorTable(descriptorHeapCPUBase, descriptorHeapGPUBase, descriptorSize);
 
     TensorMap tensorMap;
     std::vector<BYTE> buffer;
@@ -994,30 +995,16 @@ void OpenImageDenoise::OnResize(
 
     //size_t upsampleOpDescriptorCount;
     //size_t upsampleDescriptorsIdx;
-    size_t convOpDescriptorCount, convDescriptorsIdx;
 
     //VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opUpsample].GetAddressOf())));
     //upsampleOpDescriptorCount = GetDescriptorCount(c_numUpsampleLayers, m_dmlUpsampleOps[0].GetAddressOf(), m_dmlOpInitializers[e_opUpsample].Get());
 
     VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opConv].GetAddressOf())));
-    convOpDescriptorCount = GetDescriptorCount(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), m_dmlOpInitializers[e_opConv].Get());
-
-    // TODO: Not sure why I need to do this, but stomps descriptors if I don't
-    //convOpDescriptorCount *= 2;
-
-    //upsampleDescriptorsIdx = 0;
-    size_t convInitializerDescriptorsIdx = 0;
+    size_t convOpDescriptorCount = GetDescriptorCount(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), m_dmlOpInitializers[e_opConv].Get());
     size_t convOpInitializerDescriptorCount = m_dmlOpInitializers[e_opConv]->GetBindingProperties().RequiredDescriptorCount;
 
-    convDescriptorsIdx = convInitializerDescriptorsIdx + convOpInitializerDescriptorCount;
 
-    UINT modelDescriptorCount = 2; // Model input and output
-    UINT requestedDescriptorCount = (convDescriptorsIdx + convOpDescriptorCount * c_numConvLayers) + modelDescriptorCount;
-
-    UINT modelInputDescriptorIndex = (convDescriptorsIdx + convOpDescriptorCount * c_numConvLayers);
-    UINT modelOutputDescriptorIndex = modelInputDescriptorIndex + 1;
-
-    UINT intermediateDescriptorsIdx = modelOutputDescriptorIndex + 1;
+    auto modelInputDescriptorSlot = AllocateDescriptor();
 
     // Describe and create a UAV for the original input tensor.
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -1028,8 +1015,10 @@ void OpenImageDenoise::OnResize(
     uavDesc.Buffer.StructureByteStride = 0;
     uavDesc.Buffer.CounterOffsetInBytes = 0;
     uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-    m_device.CreateUnorderedAccessView(m_modelInput.Get(), nullptr, &uavDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, modelInputDescriptorIndex, descriptorSize));
-    m_modelInputUAV = CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, modelInputDescriptorIndex, descriptorSize);
+    m_device.CreateUnorderedAccessView(m_modelInput.Get(), nullptr, &uavDesc, modelInputDescriptorSlot.m_cpuHandle);
+    m_modelInputUAV = modelInputDescriptorSlot.m_gpuHandle;
+
+    auto modelOutputDescriptorSlot = AllocateDescriptor();
 
     // Describe and create a SRV for the final result tensor.
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -1040,8 +1029,8 @@ void OpenImageDenoise::OnResize(
     srvDesc.Buffer.NumElements = static_cast<UINT>(modelOutputBufferSize / sizeof(uint16_t));
     srvDesc.Buffer.StructureByteStride = 0;
     srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-    m_device.CreateShaderResourceView(m_modelOutput.Get(), &srvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, modelOutputDescriptorIndex, descriptorSize));
-    m_modelOutputSRV = CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, modelOutputDescriptorIndex, descriptorSize);
+    m_device.CreateShaderResourceView(m_modelOutput.Get(), &srvDesc, modelOutputDescriptorSlot.m_cpuHandle);
+    m_modelOutputSRV = modelOutputDescriptorSlot.m_gpuHandle;
 
     // Create two resources for intermediate layer results. Each layer will ping-pong between these. They're each large
     // enough to hold the largest intermediate result required.
@@ -1060,13 +1049,10 @@ void OpenImageDenoise::OnResize(
 
         srvDesc.Buffer.NumElements = static_cast<UINT>(intermediateBufferMaxSize[i] / sizeof(uint16_t));
 
-        UINT descriptorIndex = intermediateDescriptorsIdx + i;
-        m_device.CreateShaderResourceView(m_modelIntermediateResult[i].Get(), &srvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, descriptorIndex, descriptorSize));
-        m_modelIntermediateSRV[i] = CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, descriptorIndex, descriptorSize);
+        auto intermediateDescriptorRange = AllocateDescriptor();
+        m_device.CreateShaderResourceView(m_modelIntermediateResult[i].Get(), &srvDesc, intermediateDescriptorRange.m_cpuHandle);
+        m_modelIntermediateSRV[i] = intermediateDescriptorRange.m_gpuHandle;
     }
-
-    // Make sure the requested amount is lower than the hard-coded max amount
-    VERIFY(requestedDescriptorCount < m_RequiredDescriptors);
 
     // Create any persistent resources required for the operators.
     {
@@ -1181,10 +1167,12 @@ void OpenImageDenoise::OnResize(
         auto bindingProps = m_dmlOpInitializers[e_opConv]->GetBindingProperties();
         assert(bindingProps.PersistentResourceSize == 0);
 
+        auto convInitializerDescriptorTable = AllocateDescriptor(bindingProps.RequiredDescriptorCount);
+
         DML_BINDING_TABLE_DESC tableDesc = {
             m_dmlOpInitializers[e_opConv].Get(),
-            CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, convInitializerDescriptorsIdx, descriptorSize),
-            CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, convInitializerDescriptorsIdx, descriptorSize),
+            convInitializerDescriptorTable.m_cpuHandle,
+            convInitializerDescriptorTable.m_gpuHandle,
             bindingProps.RequiredDescriptorCount
         };
 
@@ -1257,10 +1245,12 @@ void OpenImageDenoise::OnResize(
 
             bindingProps = m_dmlConvOps[i]->GetBindingProperties();
 
+            auto descriptorTable = AllocateDescriptor(convOpDescriptorCount);
+
             tableDesc = {
                 m_dmlConvOps[i].Get(),
-                CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCPUBase, convDescriptorsIdx + i * convOpDescriptorCount, descriptorSize),
-                CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, convDescriptorsIdx + i * convOpDescriptorCount, descriptorSize),
+                descriptorTable.m_cpuHandle,
+                descriptorTable.m_gpuHandle,
                 bindingProps.RequiredDescriptorCount
             };
             VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_ConvolutionPasses[i].m_pBindingTable.ReleaseAndGetAddressOf())));

@@ -131,12 +131,46 @@ private:
 		e_opCount
 	};
 
+	void ResetDescriptorTable(
+		CD3DX12_CPU_DESCRIPTOR_HANDLE descriptorHeapCPUBase,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE descriptorHeapGPUBase,
+		UINT descriptorSize)
+	{
+		m_descriptorHeapCPUBase = descriptorHeapCPUBase;
+		m_descriptorHeapGPUBase = descriptorHeapGPUBase;
+		m_descriptorSize = descriptorSize;
+		m_descriptorHeapIndex = 0;
+	}
+
+	struct DescriptorHeapEntry
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE m_gpuHandle;
+		D3D12_CPU_DESCRIPTOR_HANDLE m_cpuHandle;
+	};
+
+	DescriptorHeapEntry AllocateDescriptor(uint NumDescriptors = 1)
+	{
+		DescriptorHeapEntry entry;
+		entry.m_cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_descriptorHeapCPUBase, m_descriptorHeapIndex, m_descriptorSize);
+		entry.m_gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_descriptorHeapGPUBase, m_descriptorHeapIndex, m_descriptorSize);
+		m_descriptorHeapIndex += NumDescriptors;
+
+		VERIFY(m_descriptorHeapIndex <= m_RequiredDescriptors);
+
+		return entry;
+	}
+		
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_descriptorHeapCPUBase;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE m_descriptorHeapGPUBase;
+	UINT m_descriptorSize;
+	UINT m_descriptorHeapIndex;
+
 	ComPtr<IDMLDevice> m_pDMLDevice;
 
 	ComPtr<IDMLCompiledOperator>    m_dmlUpsampleOps[c_numUpsampleLayers];
 	ComPtr<IDMLBindingTable>        m_dmlUpsampleBindings[c_numUpsampleLayers];
 	ComPtr<IDMLCompiledOperator>    m_dmlConvOps[c_numConvLayers];
-	ComPtr<IDMLBindingTable>        m_dmlConvBindings[c_numConvLayers];
 	ComPtr<IDMLCompiledOperator>    m_dmlPoolingOps[c_numPoolingLayers];
 	ComPtr<IDMLBindingTable>        m_dmlPoolingBindings[c_numPoolingLayers];
 	ComPtr<IDMLCompiledOperator>    m_dmlJoinOps[c_numJoinLayers];
