@@ -895,14 +895,20 @@ void OpenImageDenoise::OnResize(
     uint32_t passIndex = 0;
     m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv0.weight"].get(), *tensorMap["enc_conv0.bias"].get(), modelInputSizes, true, &modelInputBufferSize,
         &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[0]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
-#if 1
     // Which intermediate resource to use as input for the current operation. The other will be
     // used as output. Then the next op will swap the order.
     m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv1.weight"].get(), *tensorMap["enc_conv1.bias"].get(), intermediateInputSizes[0], true, &intermediateBufferMaxSize[0],
         &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[1]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
     //inputIndex = 1 - inputIndex;
-#endif 
+
+#if 0
+    uint32_t poolingPassIndex = 0;
+    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(intermediateInputSizes[1], &m_dmlPoolingOps[0]);
+    m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
+#endif
 
 #if 0
     CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
@@ -1247,6 +1253,8 @@ void OpenImageDenoise::OnResize(
         // Bind resources for execution
         for (int i = 0; i < c_numConvLayers; i++)
         {
+            m_ConvolutionPasses[i].m_OutputSRV = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
+
             bindingProps = m_dmlConvOps[i]->GetBindingProperties();
 
             tableDesc = {
@@ -1255,7 +1263,7 @@ void OpenImageDenoise::OnResize(
                 CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapGPUBase, convDescriptorsIdx + i * convOpDescriptorCount, descriptorSize),
                 bindingProps.RequiredDescriptorCount
             };
-            VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_dmlConvBindings[i].ReleaseAndGetAddressOf())));
+            VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_ConvolutionPasses[i].m_pBindingTable.ReleaseAndGetAddressOf())));
 
             // See table at the beginning of the function for the mapping of ops to resources.
             auto inputResource = (i == 0) ? m_modelInput : ((i == 1 || i == 4 || i == 6) ? m_modelIntermediateResult[0] : m_modelIntermediateResult[1]);
@@ -1283,12 +1291,12 @@ void OpenImageDenoise::OnResize(
 
             DML_BINDING_DESC inputBindings[] = { inputBinding, filterBinding, biasBinding };
 #endif
-            m_dmlConvBindings[i]->BindInputs(3, inputBindings);
-            m_dmlConvBindings[i]->BindOutputs(1, &outputBinding);
-            BindTempResourceIfNeeded(m_device, bindingProps, m_dmlConvBindings[i].Get(), m_modelConvTemporaryResources[i].ReleaseAndGetAddressOf());
+            m_ConvolutionPasses[i].m_pBindingTable->BindInputs(3, inputBindings);
+            m_ConvolutionPasses[i].m_pBindingTable->BindOutputs(1, &outputBinding);
+            BindTempResourceIfNeeded(m_device, bindingProps, m_ConvolutionPasses[i].GetBindingTable(), m_modelConvTemporaryResources[i].ReleaseAndGetAddressOf());
 
             if (m_modelConvPersistentResources[i].Get() != nullptr)
-                m_dmlConvBindings[i]->BindPersistentResource(&convPersistentBindings[i]);
+                m_ConvolutionPasses[i].m_pBindingTable->BindPersistentResource(&convPersistentBindings[i]);
         }
     }
 }
@@ -1433,10 +1441,10 @@ OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
     VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 
     ConvolutionPass Pass = {};
-    Pass.Width = inputSizes[3];
-    Pass.Height = inputSizes[2];
-    Pass.InputChannelDepth = inputSizes[1];
-    Pass.OutputChannelDepth = outputSizesOut[1];
+    Pass.m_InputWidth = Pass.m_OutputWidth = inputSizes[3];
+    Pass.m_InputHeight = Pass.m_OutputHeight = inputSizes[2];
+    Pass.m_InputChannelDepth = inputSizes[1];
+    Pass.m_OutputChannelDepth = outputSizesOut[1];
     Pass.m_pOperator = *compiledOpOut;
 
     CreateWeightTensors(commandList, weights, bias, filterSizes, Pass.m_pFilterWeightResource.ReleaseAndGetAddressOf(), Pass.m_pBiasWeightResource.ReleaseAndGetAddressOf());
@@ -1511,9 +1519,8 @@ void OpenImageDenoise::CreateAdditionLayer(
 }
 
 
-void OpenImageDenoise::CreatePoolingLayer(
+OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
     _In_reads_(4) const uint32_t* inputSizes,
-    _Out_writes_(4) uint32_t* outputSizesOut,
     _Out_writes_(1) IDMLCompiledOperator** compiledOpOut)
 {
     // Describe input and output tensors
@@ -1524,21 +1531,18 @@ void OpenImageDenoise::CreatePoolingLayer(
     DML_BUFFER_TENSOR_DESC inputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, inputSizes, inputStrides, inputBufferSize, 0 };
     DML_TENSOR_DESC inputTensorDesc = { DML_TENSOR_TYPE_BUFFER, &inputBufferDesc };
 
-    outputSizesOut[0] = inputSizes[0];
-    outputSizesOut[1] = inputSizes[1];
-    outputSizesOut[2] = inputSizes[2] / 2;
-    outputSizesOut[3] = inputSizes[3] / 2;
+    uint32_t outputSizes[] = {inputSizes[0], inputSizes[1], inputSizes[2] / 2, inputSizes[3] / 2};
 
     uint32_t outputStrides[4];
-    GetStrides(outputSizesOut, m_tensorLayout, outputStrides);
-    uint64_t outputBufferSize = DMLCalcBufferTensorSize(DML_TENSOR_DATA_TYPE_FLOAT16, 4, outputSizesOut, outputStrides);
-    DML_BUFFER_TENSOR_DESC outputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, outputSizesOut, outputStrides, outputBufferSize, 0 };
+    GetStrides(outputSizes, m_tensorLayout, outputStrides);
+    uint64_t outputBufferSize = DMLCalcBufferTensorSize(DML_TENSOR_DATA_TYPE_FLOAT16, 4, outputSizes, outputStrides);
+    DML_BUFFER_TENSOR_DESC outputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, outputSizes, outputStrides, outputBufferSize, 0 };
     DML_TENSOR_DESC outputTensorDesc = { DML_TENSOR_TYPE_BUFFER, &outputBufferDesc };
 
     uint32_t windowSize[] = { 2, 2 };
     uint32_t startPadding[] = { 0, 0 };
     uint32_t endPadding[] = { 0, 0 };
-    
+
     // Describe, create, and compile max pooling operator
     DML_MAX_POOLING_OPERATOR_DESC poolingDesc = {};
     poolingDesc.InputTensor = &inputTensorDesc;
@@ -1553,6 +1557,29 @@ void OpenImageDenoise::CreatePoolingLayer(
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
     VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+
+    PoolingPass Pass = {};
+    Pass.m_InputHeight = inputSizes[2];
+    Pass.m_InputWidth = inputSizes[3];
+    Pass.m_OutputHeight = outputSizes[2];
+    Pass.m_OutputWidth = outputSizes[3];
+    Pass.m_OutputChannelDepth = Pass.m_InputChannelDepth = inputSizes[1];
+    Pass.m_pOperator = *compiledOpOut;
+
+    D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(outputBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+    auto heapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    VERIFY_HRESULT(m_device.CreateCommittedResource(
+        &heapDesc,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(Pass.m_pOutputResource.ReleaseAndGetAddressOf())
+    ));
+    Pass.m_pOutputResource->SetName(L"PoolingOutput");
+
+    return Pass;
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
@@ -1628,19 +1655,12 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
     auto decConv0 = graph->addConv("dec_conv0", decConv1b, Activation::ReLU);
 #endif
 
-    D3D12_GPU_DESCRIPTOR_HANDLE OutputSRV = m_modelOutputSRV;
-    UINT convolutionWidth = inputWidth;
-    UINT convolutionHeight = inputHeight;
-	for (int i = 0; i < c_numConvLayers; i++)
+	for (int i = 0; i < m_DMLPasses.size(); i++)
 	{
-		// Convolution
-		m_pCommandRecorder->RecordDispatch(&commandList, m_ConvolutionPasses[i].m_pOperator.Get(), m_dmlConvBindings[i].Get());
+        DirectMLPass& pass = *m_DMLPasses[i];
+
+		m_pCommandRecorder->RecordDispatch(&commandList, pass.GetOperator(), pass.GetBindingTable());
 		commandList.ResourceBarrier(1, &uavBarrier);
-
-        convolutionWidth = m_ConvolutionPasses[i].Width;
-        convolutionHeight = m_ConvolutionPasses[i].Height;
-
-        OutputSRV = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
 
         if (i == convolutionLayerToDebug)
         {
@@ -1652,6 +1672,13 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
     {
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Render to texture");
 
+        int LastPassIndex = convolutionLayerToDebug < m_DMLPasses.size() ? convolutionLayerToDebug : m_DMLPasses.size() - 1;
+        DirectMLPass& pass = *m_DMLPasses[LastPassIndex];
+
+        D3D12_GPU_DESCRIPTOR_HANDLE OutputSRV = pass.m_OutputSRV;
+        UINT passWidth = pass.m_OutputWidth;
+        UINT passHeight = pass.m_OutputHeight;
+
         commandList.SetPipelineState(m_pTensorToImagePSO.Get());
         commandList.SetComputeRootSignature(m_pRootSignature.Get());
 
@@ -1659,7 +1686,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         UINT outputHeight = inputHeight;
 
         DirectMLConstants constants = {};
-        constants.InputResolution = { convolutionWidth, convolutionHeight };
+        constants.InputResolution = { passWidth, passHeight };
         constants.OutputResolution = { outputWidth, outputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
         constants.SliceToDebug = sliceToDebug;

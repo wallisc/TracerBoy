@@ -46,15 +46,31 @@ public:
 		NHWC
 	};
 
-	struct ConvolutionPass
+	class DirectMLPass
 	{
-		UINT Width, Height;
-		UINT InputChannelDepth;
-		UINT OutputChannelDepth;
-		ComPtr<IDMLCompiledOperator> m_pOperator;
+	public:
+		IDMLCompiledOperator *GetOperator() { return m_pOperator.Get(); }
+		IDMLBindingTable *GetBindingTable() { return m_pBindingTable.Get(); }
 
+		ComPtr<IDMLCompiledOperator> m_pOperator;
+		ComPtr<IDMLBindingTable> m_pBindingTable;
+
+		UINT m_InputWidth, m_InputHeight, m_InputChannelDepth;
+		UINT m_OutputWidth, m_OutputHeight, m_OutputChannelDepth;
+		D3D12_GPU_DESCRIPTOR_HANDLE m_OutputSRV;
+	};
+
+	class ConvolutionPass : public DirectMLPass
+	{
+	public:		
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_pFilterWeightResource;
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_pBiasWeightResource;
+	};
+
+	class PoolingPass : public DirectMLPass
+	{
+	public:
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pOutputResource;
 	};
 
 private:
@@ -73,9 +89,8 @@ private:
 		_In_reads_(4) const uint32_t* inputSizes,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
-	void CreatePoolingLayer(
+	PoolingPass CreatePoolingLayer(
 		_In_reads_(4) const uint32_t* inputSizes,
-		_Out_writes_(4) uint32_t* outputSizesOut,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
 	void CreateUpsampleLayer(
@@ -128,6 +143,8 @@ private:
 	ComPtr<IDMLBindingTable>        m_dmlJoinBindings[c_numJoinLayers];
 
 	ConvolutionPass					m_ConvolutionPasses[c_numConvLayers];
+	PoolingPass						m_PoolingPass[c_numConvLayers];
+	std::vector<DirectMLPass*>		m_DMLPasses;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsamplePersistentResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvPersistentResources[c_numConvLayers];
