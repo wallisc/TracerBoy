@@ -117,7 +117,8 @@ private:
 	//static const size_t                             c_numConvLayers = 16;
 	static const size_t                             c_numConvLayers = 2;
 	static const size_t                             c_numJoinLayers = 4;
-	static const size_t                             c_numPoolingLayers = 4;
+	//static const size_t                             c_numPoolingLayers = 4;
+	static const size_t                             c_numPoolingLayers = 1;
 	static const size_t                             c_numIntermediateBuffers = 2;
 
 	// Hard-coded so that we don't need to recreate the descriptor heap on window resize
@@ -128,6 +129,7 @@ private:
 		e_opUpsample,
 		e_opConv,
 		e_opAdd,
+		e_opPooling,
 		e_opCount
 	};
 
@@ -182,10 +184,12 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsamplePersistentResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvPersistentResources[c_numConvLayers];
+	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingPersistentResources[c_numPoolingLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddPersistentResource;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInitTemporaryResources[e_opCount];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsampleTemporaryResources[c_numUpsampleLayers];
+	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingTemporaryResources[c_numPoolingLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvTemporaryResources[c_numConvLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddTemporaryResource;
 

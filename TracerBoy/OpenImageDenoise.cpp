@@ -2,6 +2,13 @@
 
 #if USE_OIDN
 
+#define DISABLE_META_COMMANDS 0
+#if DISABLE_META_COMMANDS
+#define DML_OPERATOR_FLAGS DML_EXECUTION_FLAG_DISABLE_META_COMMANDS
+#else
+#define DML_OPERATOR_FLAGS DML_EXECUTION_FLAG_NONE
+#endif
+
 #include "TensorToImageCS.h"
 #include "ImageToTensorCS.h"
 #include "DirectMLSharedShaderStructs.h"
@@ -905,11 +912,9 @@ void OpenImageDenoise::OnResize(
     m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
     //inputIndex = 1 - inputIndex;
 
-#if 0
     uint32_t poolingPassIndex = 0;
     m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(intermediateInputSizes[1], &m_dmlPoolingOps[0]);
     m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
-#endif
 
 #if 0
     CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
@@ -1003,6 +1008,7 @@ void OpenImageDenoise::OnResize(
     size_t convOpDescriptorCount = GetDescriptorCount(c_numConvLayers, m_dmlConvOps[0].GetAddressOf(), m_dmlOpInitializers[e_opConv].Get());
     size_t convOpInitializerDescriptorCount = m_dmlOpInitializers[e_opConv]->GetBindingProperties().RequiredDescriptorCount;
 
+    VERIFY_HRESULT(m_pDMLDevice->CreateOperatorInitializer(c_numPoolingLayers, m_dmlPoolingOps[0].GetAddressOf(), IID_PPV_ARGS(m_dmlOpInitializers[e_opPooling].GetAddressOf())));
 
     auto modelInputDescriptorSlot = AllocateDescriptor();
 
@@ -1045,7 +1051,9 @@ void OpenImageDenoise::OnResize(
             nullptr,
             IID_PPV_ARGS(&m_modelIntermediateResult[i])
         ));
-        m_modelIntermediateResult[i]->SetName(L"Intermediate Buffer");
+
+        std::wstring name = L"Intermediate Buffer " + std::to_wstring(i);
+        m_modelIntermediateResult[i]->SetName(name.c_str());
 
         srvDesc.Buffer.NumElements = static_cast<UINT>(intermediateBufferMaxSize[i] / sizeof(uint16_t));
 
@@ -1056,21 +1064,20 @@ void OpenImageDenoise::OnResize(
 
     // Create any persistent resources required for the operators.
     {
-        for (int i = 0; i < c_numConvLayers; i++)
+        for (int i = 0; i < c_numConvLayers + c_numPoolingLayers; i++)
         {
             IDMLCompiledOperator* currentOp;
             ID3D12Resource** persistentResource;
-#if 0
-            if (i < c_numUpsampleLayers)
+     
+            if (i < c_numPoolingLayers)
             {
-                currentOp = m_dmlUpsampleOps[i].Get();
-                persistentResource = m_modelUpsamplePersistentResources[i].ReleaseAndGetAddressOf();
+                currentOp = m_dmlPoolingOps[i].Get();
+                persistentResource = m_modelPoolingPersistentResources[i].ReleaseAndGetAddressOf();
             }
             else 
-#endif
             {
-                currentOp = m_dmlConvOps[i].Get();
-                persistentResource = m_modelConvPersistentResources[i - c_numUpsampleLayers].ReleaseAndGetAddressOf();
+                currentOp = m_dmlConvOps[i - c_numPoolingLayers].Get();
+                persistentResource = m_modelConvPersistentResources[i - c_numPoolingLayers].ReleaseAndGetAddressOf();
             }
 
             auto bindingProps = currentOp->GetBindingProperties();
@@ -1289,6 +1296,81 @@ void OpenImageDenoise::OnResize(
                 m_ConvolutionPasses[i].m_pBindingTable->BindPersistentResource(&convPersistentBindings[i]);
         }
     }
+
+    // Pooling layers
+    {
+        // Bind resources for initialization.
+        auto bindingProps = m_dmlOpInitializers[e_opPooling]->GetBindingProperties();
+        // The DML API guarantees that initialization never uses a persistent resource.
+        assert(bindingProps.PersistentResourceSize == 0);
+
+        auto poolingInitializerDescriptorTable = AllocateDescriptor(bindingProps.RequiredDescriptorCount);
+
+        DML_BINDING_TABLE_DESC tableDesc = {
+            m_dmlOpInitializers[e_opPooling].Get(),
+            poolingInitializerDescriptorTable.m_cpuHandle,
+            poolingInitializerDescriptorTable.m_gpuHandle,
+            bindingProps.RequiredDescriptorCount
+        };
+        initBindingTable->Reset(&tableDesc);
+
+        // If the operator requires a persistent resource, it must be bound as output for the initializer.
+        DML_BUFFER_BINDING poolingPersistentBuffers[c_numPoolingLayers];
+        DML_BINDING_DESC poolingPersistentBindings[c_numPoolingLayers];
+        for (int i = 0; i < c_numPoolingLayers; i++)
+        {
+            if (m_modelPoolingPersistentResources[i].Get() != nullptr)
+            {
+                poolingPersistentBuffers[i] = { m_modelPoolingPersistentResources[i].Get(), 0, m_modelPoolingPersistentResources[i]->GetDesc().Width };
+                poolingPersistentBindings[i] = { DML_BINDING_TYPE_BUFFER, &poolingPersistentBuffers[i] };
+            }
+            else
+                poolingPersistentBindings[i] = emptyBindingDesc;
+        }
+
+        // The inputs will vary each frame, so don't bind inputs at initialization.
+        initBindingTable->BindInputs(0, nullptr);
+        initBindingTable->BindOutputs(c_numPoolingLayers, poolingPersistentBindings);
+        BindTempResourceIfNeeded(m_device, bindingProps, initBindingTable.Get(), m_modelInitTemporaryResources[e_opPooling].ReleaseAndGetAddressOf());
+
+        // Run initialization
+        m_pCommandRecorder->RecordDispatch(&commandList, m_dmlOpInitializers[e_opPooling].Get(), initBindingTable.Get());
+
+        // Bind resources for execution
+        for (int i = 0; i < c_numPoolingLayers; i++)
+        {
+            PoolingPass &pass = m_PoolingPass[i];
+
+            bindingProps = m_dmlPoolingOps[i]->GetBindingProperties();
+
+            auto descriptorTable = AllocateDescriptor(bindingProps.RequiredDescriptorCount);
+
+            tableDesc = {
+                m_dmlPoolingOps[i].Get(),
+                descriptorTable.m_cpuHandle,
+                descriptorTable.m_gpuHandle,
+                bindingProps.RequiredDescriptorCount
+            };
+            VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_dmlPoolingBindings[i].ReleaseAndGetAddressOf())));
+
+            auto inputResource = m_modelIntermediateResult[1];
+            auto outputResource = pass.m_pOutputResource.Get();
+
+            DML_BUFFER_BINDING inputBufferBinding = { inputResource.Get(), 0, inputResource->GetDesc().Width };
+            DML_BINDING_DESC inputBinding = { DML_BINDING_TYPE_BUFFER, &inputBufferBinding };
+            DML_BUFFER_BINDING outputBufferBinding = { outputResource, 0, outputResource->GetDesc().Width };
+            DML_BINDING_DESC outputBinding = { DML_BINDING_TYPE_BUFFER, &outputBufferBinding };
+
+            m_dmlPoolingBindings[i]->BindInputs(1, &inputBinding);
+            m_dmlPoolingBindings[i]->BindOutputs(1, &outputBinding);
+            BindTempResourceIfNeeded(m_device, bindingProps, m_dmlPoolingBindings[i].Get(), m_modelPoolingTemporaryResources[i].ReleaseAndGetAddressOf());
+
+            if (m_modelPoolingPersistentResources[i].Get() != nullptr)
+                m_dmlPoolingBindings[i]->BindPersistentResource(&poolingPersistentBindings[i]);
+
+            pass.m_pBindingTable = m_dmlPoolingBindings[i];
+        }
+    }
 }
 
 void GetStrides(
@@ -1428,7 +1510,7 @@ OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
 
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
-    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_OPERATOR_FLAGS | DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 
     ConvolutionPass Pass = {};
     Pass.m_InputWidth = Pass.m_OutputWidth = inputSizes[3];
@@ -1482,7 +1564,7 @@ void OpenImageDenoise::CreateUpsampleLayer(
 
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
-    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_OPERATOR_FLAGS | DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 }
 
 
@@ -1505,7 +1587,7 @@ void OpenImageDenoise::CreateAdditionLayer(
 
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
-    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_OPERATOR_FLAGS | DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 }
 
 
@@ -1532,13 +1614,14 @@ OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
     uint32_t windowSize[] = { 2, 2 };
     uint32_t startPadding[] = { 0, 0 };
     uint32_t endPadding[] = { 0, 0 };
+    uint32_t strides[] = { 2, 2 };
 
     // Describe, create, and compile max pooling operator
     DML_MAX_POOLING_OPERATOR_DESC poolingDesc = {};
     poolingDesc.InputTensor = &inputTensorDesc;
     poolingDesc.OutputTensor = &outputTensorDesc;
     poolingDesc.DimensionCount = 2;
-    poolingDesc.Strides = outputStrides;
+    poolingDesc.Strides = strides;
     poolingDesc.StartPadding = startPadding;
     poolingDesc.EndPadding = endPadding;
     poolingDesc.WindowSize = windowSize;
@@ -1546,7 +1629,8 @@ OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
 
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
-    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
+    // TODO: How to use meta commands?
+    VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_OPERATOR_FLAGS | DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 
     PoolingPass Pass = {};
     Pass.m_InputHeight = inputSizes[2];
@@ -1568,6 +1652,18 @@ OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
         IID_PPV_ARGS(Pass.m_pOutputResource.ReleaseAndGetAddressOf())
     ));
     Pass.m_pOutputResource->SetName(L"PoolingOutput");
+
+    auto DescriptorTable = AllocateDescriptor();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_R16_FLOAT;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.NumElements = static_cast<UINT>(outputBufferSize / sizeof(uint16_t));
+    srvDesc.Buffer.StructureByteStride = 0;
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    m_device.CreateShaderResourceView(Pass.m_pOutputResource.Get(), &srvDesc, DescriptorTable.m_cpuHandle);
+    Pass.m_OutputSRV = DescriptorTable.m_gpuHandle;
 
     return Pass;
 }
