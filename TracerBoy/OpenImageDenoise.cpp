@@ -901,13 +901,19 @@ void OpenImageDenoise::OnResize(
 
     uint32_t intermediateInputSizes[2][4];
     uint32_t passIndex = 0;
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv0.weight"].get(), *tensorMap["enc_conv0.bias"].get(), modelInputSizes, true, &modelInputBufferSize,
+    
+    DirectMLPass ModelInputPass = {};
+    ModelInputPass.m_OutputHeight = ModelInputPass.m_InputHeight = Height;
+    ModelInputPass.m_OutputWidth = ModelInputPass.m_InputWidth = Width;
+    ModelInputPass.m_InputChannelDepth = ModelInputPass.m_OutputChannelDepth = 3;
+
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv0.weight"].get(), *tensorMap["enc_conv0.bias"].get(), ModelInputPass, &modelInputBufferSize,
         &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[0]);
     m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
     // Which intermediate resource to use as input for the current operation. The other will be
     // used as output. Then the next op will swap the order.
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv1.weight"].get(), *tensorMap["enc_conv1.bias"].get(), intermediateInputSizes[0], true, &intermediateBufferMaxSize[0],
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv1.weight"].get(), *tensorMap["enc_conv1.bias"].get(), *m_DMLPasses.back(), &intermediateBufferMaxSize[0],
         &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[1]);
     m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
     //inputIndex = 1 - inputIndex;
@@ -915,8 +921,12 @@ void OpenImageDenoise::OnResize(
     uint32_t poolingPassIndex = 0;
     m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(intermediateInputSizes[1], &m_dmlPoolingOps[0]);
     m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
-
+    
 #if 0
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv2.weight"].get(), *tensorMap["enc_conv2.bias"].get(), *m_DMLPasses.back(), nullptr,
+        &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[2]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
+
     CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
         filterSizes1, &m_modelConvFilterWeights[0], &m_modelConvBiasWeights[0]);
 #endif
@@ -1400,16 +1410,19 @@ OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
     ID3D12GraphicsCommandList& commandList,
     const Tensor& weights,
     const Tensor& bias,
-    _In_reads_(4) const uint32_t* inputSizes,
-    bool useBiasAndActivation,
+    DirectMLPass &pass,
     _Inout_updates_(1) uint64_t* inputBufferRequiredSize,
     _Inout_updates_(1) uint64_t* outputBufferRequiredSize,
     _Out_writes_(4) uint32_t* outputSizesOut,
     _Out_writes_(1) IDMLCompiledOperator** compiledOpOut)
 {
 
+    uint32_t inputSizes[] = { 1, pass.m_OutputChannelDepth, pass.m_OutputHeight, pass.m_OutputWidth };
+
     VERIFY(weights.getLayout() == ::TensorLayout::oihw);
     VERIFY(weights.getDims()[1] == inputSizes[1]);
+
+    bool useBiasAndActivation = true;
 
     uint32_t filterSizes[4];
     filterSizes[3] = weights.getDims()[3];
@@ -1422,7 +1435,10 @@ OpenImageDenoise::ConvolutionPass OpenImageDenoise::CreateConvolutionLayer(
     GetStrides(inputSizes, m_tensorLayout, inputStrides);
 
     uint64_t inputBufferSize = DMLCalcBufferTensorSize(DML_TENSOR_DATA_TYPE_FLOAT16, 4, inputSizes, inputStrides);
-    *inputBufferRequiredSize = std::max(inputBufferSize, *inputBufferRequiredSize);
+    if (inputBufferRequiredSize)
+    {
+        *inputBufferRequiredSize = std::max(inputBufferSize, *inputBufferRequiredSize);
+    }
 
     DML_BUFFER_TENSOR_DESC inputBufferDesc = { DML_TENSOR_DATA_TYPE_FLOAT16, DML_TENSOR_FLAG_NONE, 4, inputSizes, inputStrides, inputBufferSize, 0 };
     DML_TENSOR_DESC inputDesc = { DML_TENSOR_TYPE_BUFFER, &inputBufferDesc };
