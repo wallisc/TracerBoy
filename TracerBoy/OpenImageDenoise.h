@@ -89,7 +89,7 @@ private:
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
 	PoolingPass CreatePoolingLayer(
-		_In_reads_(4) const uint32_t* inputSizes,
+		DirectMLPass& InputPass,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
 	void CreateUpsampleLayer(
@@ -114,10 +114,9 @@ private:
 	// Model layer sizes and indices
 	static const size_t                             c_numUpsampleLayers = 4;
 	//static const size_t                             c_numConvLayers = 16;
-	static const size_t                             c_numConvLayers = 2;
+	static const size_t                             c_numConvLayers = 7;
 	static const size_t                             c_numJoinLayers = 4;
-	//static const size_t                             c_numPoolingLayers = 4;
-	static const size_t                             c_numPoolingLayers = 1;
+	static const size_t                             c_numPoolingLayers = 4;
 	static const size_t                             c_numIntermediateBuffers = 2;
 
 	// Hard-coded so that we don't need to recreate the descriptor heap on window resize

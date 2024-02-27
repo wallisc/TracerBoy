@@ -2,7 +2,7 @@
 
 #if USE_OIDN
 
-#define DISABLE_META_COMMANDS 0
+#define DISABLE_META_COMMANDS 1
 #if DISABLE_META_COMMANDS
 #define DML_OPERATOR_FLAGS DML_EXECUTION_FLAG_DISABLE_META_COMMANDS
 #else
@@ -919,70 +919,37 @@ void OpenImageDenoise::OnResize(
     //inputIndex = 1 - inputIndex;
 
     uint32_t poolingPassIndex = 0;
-    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(intermediateInputSizes[1], &m_dmlPoolingOps[0]);
+    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(*m_DMLPasses.back(), &m_dmlPoolingOps[0]);
     m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
     
-#if 0
     m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv2.weight"].get(), *tensorMap["enc_conv2.bias"].get(), *m_DMLPasses.back(), nullptr,
-        &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[2]);
+        &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[2]);
     m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
-    CreateWeightTensors(commandList, weights, "conv1/weights", "conv1/BatchNorm/scale", "conv1/BatchNorm/shift",
-        filterSizes1, &m_modelConvFilterWeights[0], &m_modelConvBiasWeights[0]);
-#endif
+    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(*m_DMLPasses.back(), &m_dmlPoolingOps[1]);
+    m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
 
-#if 0
-    // Which intermediate resource to use as input for the current operation. The other will be
-    // used as output. Then the next op will swap the order.
-    int inputIndex = 0;
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv3.weight"].get(), *tensorMap["enc_conv3.bias"].get(), *m_DMLPasses.back(), nullptr,
+        &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[3]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
-    uint32_t const filterSizes2[] = { 64, 32, 3, 3 };	// output filters
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes2, true, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[1]);
-    CreateWeightTensors(commandList, weights, "conv2/weights", "conv2/BatchNorm/scale", "conv2/BatchNorm/shift",
-        filterSizes2, &m_modelConvFilterWeights[1], &m_modelConvBiasWeights[1]);
-    inputIndex = 1 - inputIndex;
+    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(*m_DMLPasses.back(), &m_dmlPoolingOps[2]);
+    m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
 
-    uint32_t const filterSizes3[] = { 64, 64, 3, 3 };
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes3, true, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[2]);
-    CreateWeightTensors(commandList, weights, "conv3/weights", "conv3/BatchNorm/scale", "conv3/BatchNorm/shift",
-        filterSizes3, &m_modelConvFilterWeights[2], &m_modelConvBiasWeights[2]);
-    inputIndex = 1 - inputIndex;
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv4.weight"].get(), *tensorMap["enc_conv4.bias"].get(), *m_DMLPasses.back(), nullptr,
+        &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[4]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
-    CreateUpsampleLayer(intermediateInputSizes[inputIndex], &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlUpsampleOps[1]);
-    inputIndex = 1 - inputIndex;
+    m_PoolingPass[poolingPassIndex++] = CreatePoolingLayer(*m_DMLPasses.back(), &m_dmlPoolingOps[3]);
+    m_DMLPasses.push_back(&m_PoolingPass[poolingPassIndex - 1]);
 
-    uint32_t const filterSizes4[] = { 32, 64, 5, 5 };
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes4, true, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[3]);
-    CreateWeightTensors(commandList, weights, "conv_up1/conv/weights", "conv_up1/conv/BatchNorm/scale", "conv_up1/conv/BatchNorm/shift",
-        filterSizes4, &m_modelConvFilterWeights[3], &m_modelConvBiasWeights[3]);
-    inputIndex = 1 - inputIndex;
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv5a.weight"].get(), *tensorMap["enc_conv5a.bias"].get(), *m_DMLPasses.back(), nullptr,
+        &intermediateBufferMaxSize[0], intermediateInputSizes[0], &m_dmlConvOps[5]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
-    uint32_t const filterSizes5[] = { 32, 32, 3, 3 };
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[4]);
-    CreateWeightTensors(commandList, weights, "conv4/weights", "conv4/BatchNorm/scale", "conv4/BatchNorm/shift",
-        filterSizes5, &m_modelConvFilterWeights[4], &m_modelConvBiasWeights[4]);
-    inputIndex = 1 - inputIndex;
-
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes5, true, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[5]);
-    CreateWeightTensors(commandList, weights, "conv5/weights", "conv5/BatchNorm/scale", "conv5/BatchNorm/shift",
-        filterSizes5, &m_modelConvFilterWeights[5], &m_modelConvBiasWeights[5]);
-    inputIndex = 1 - inputIndex;
-
-    uint32_t const filterSizes6[] = { 3, 32, 3, 3 };
-    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(intermediateInputSizes[inputIndex], filterSizes6, false, &intermediateBufferMaxSize[inputIndex],
-        &intermediateBufferMaxSize[1 - inputIndex], intermediateInputSizes[1 - inputIndex], &m_dmlConvOps[6]);
-    CreateWeightTensors(commandList, weights, "conv6/weights", nullptr, nullptr, filterSizes6,
-        &m_modelConvFilterWeights[6], nullptr);
-    inputIndex = 1 - inputIndex;
-
-    VERIFY(passIndex == c_numConvLayers);
-#endif
+    m_ConvolutionPasses[passIndex++] = CreateConvolutionLayer(commandList, *tensorMap["enc_conv5b.weight"].get(), *tensorMap["enc_conv5b.bias"].get(), *m_DMLPasses.back(), nullptr,
+        &intermediateBufferMaxSize[1], intermediateInputSizes[1], &m_dmlConvOps[6]);
+    m_DMLPasses.push_back(&m_ConvolutionPasses[passIndex - 1]);
 
     // Resource for input tensor
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(modelInputBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -1258,7 +1225,7 @@ void OpenImageDenoise::OnResize(
         // Bind resources for execution
         for (int i = 0; i < c_numConvLayers; i++)
         {
-            m_ConvolutionPasses[i].m_OutputSRV = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
+            m_ConvolutionPasses[i].m_OutputSRV = (i == 1) ? m_modelIntermediateSRV[1] : m_modelIntermediateSRV[0];
 
             bindingProps = m_dmlConvOps[i]->GetBindingProperties();
 
@@ -1273,8 +1240,31 @@ void OpenImageDenoise::OnResize(
             VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_ConvolutionPasses[i].m_pBindingTable.ReleaseAndGetAddressOf())));
 
             // See table at the beginning of the function for the mapping of ops to resources.
-            auto inputResource = (i == 0) ? m_modelInput : ((i == 1 || i == 4 || i == 6) ? m_modelIntermediateResult[0] : m_modelIntermediateResult[1]);
-            auto outputResource = (i == 1 || i == 4 || i == 6) ? m_modelIntermediateResult[1] : m_modelIntermediateResult[0];
+            auto inputResource = m_modelInput;
+            if (i > 0)
+            {
+                if (i == 1 || i == 6)
+                {
+                    inputResource = m_modelIntermediateResult[0];
+				}
+                else if (i == 2)
+                {
+                    inputResource = m_PoolingPass[0].m_pOutputResource;
+                }
+                else if (i == 3)
+                {
+                    inputResource = m_PoolingPass[1].m_pOutputResource;
+                }
+                else if (i == 4)
+                {
+                    inputResource = m_PoolingPass[2].m_pOutputResource;
+                }
+                else if (i == 5)
+                {
+                    inputResource = m_PoolingPass[3].m_pOutputResource;
+                }
+            }
+            auto outputResource = (i == 1 || i == 6) ? m_modelIntermediateResult[1] : m_modelIntermediateResult[0];
 
             DML_BUFFER_BINDING inputBufferBinding = { inputResource.Get(), 0, inputResource->GetDesc().Width };
             DML_BINDING_DESC inputBinding = { DML_BINDING_TYPE_BUFFER, &inputBufferBinding };
@@ -1363,7 +1353,7 @@ void OpenImageDenoise::OnResize(
             };
             VERIFY_HRESULT(m_pDMLDevice->CreateBindingTable(&tableDesc, IID_PPV_ARGS(m_dmlPoolingBindings[i].ReleaseAndGetAddressOf())));
 
-            auto inputResource = m_modelIntermediateResult[1];
+            auto inputResource = i == 0 ? m_modelIntermediateResult[1] : m_modelIntermediateResult[0];
             auto outputResource = pass.m_pOutputResource.Get();
 
             DML_BUFFER_BINDING inputBufferBinding = { inputResource.Get(), 0, inputResource->GetDesc().Width };
@@ -1608,9 +1598,12 @@ void OpenImageDenoise::CreateAdditionLayer(
 
 
 OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
-    _In_reads_(4) const uint32_t* inputSizes,
+    DirectMLPass& InputPass,
     _Out_writes_(1) IDMLCompiledOperator** compiledOpOut)
 {
+
+    uint32_t inputSizes[] = { 1, InputPass.m_OutputChannelDepth, InputPass.m_OutputHeight, InputPass.m_OutputWidth };
+
     // Describe input and output tensors
     uint32_t inputStrides[4];
     GetStrides(inputSizes, m_tensorLayout, inputStrides);
@@ -1645,7 +1638,6 @@ OpenImageDenoise::PoolingPass OpenImageDenoise::CreatePoolingLayer(
 
     ComPtr<IDMLOperator> op;
     VERIFY_HRESULT(m_pDMLDevice->CreateOperator(&opDesc, IID_PPV_ARGS(op.ReleaseAndGetAddressOf())));
-    // TODO: How to use meta commands?
     VERIFY_HRESULT(m_pDMLDevice->CompileOperator(op.Get(), DML_OPERATOR_FLAGS | DML_EXECUTION_FLAG_ALLOW_HALF_PRECISION_COMPUTATION, IID_PPV_ARGS(compiledOpOut)));
 
     PoolingPass Pass = {};
@@ -1722,41 +1714,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         commandList.ResourceBarrier(1, &uavBarrier);
     }
 
-	// Run the intermediate model steps: 3 convolutions (with premultiplied batch normalization
-	// baked into the weights), an upsample, 3 convolutions w/ premultiplied batch norm, 1 final convolution.
-	// This generates a residual image.
-#if 0
-    // Create the model graph
-    auto inputProcess = graph->addInputProcess("input", inputDims, tileAlignment, transferFunc, hdr, snorm);
-
-    auto encConv0 = graph->addConv("enc_conv0", inputProcess, Activation::ReLU);
-
-    auto pool1 = graph->addConv("enc_conv1", encConv0, Activation::ReLU, PostOp::Pool);
-
-    auto pool2 = graph->addConv("enc_conv2", pool1, Activation::ReLU, PostOp::Pool);
-
-    auto pool3 = graph->addConv("enc_conv3", pool2, Activation::ReLU, PostOp::Pool);
-
-    auto pool4 = graph->addConv("enc_conv4", pool3, Activation::ReLU, PostOp::Pool)
-
-    auto encConv5a = graph->addConv("enc_conv5a", pool4, Activation::ReLU);
-
-    auto upsample4 = graph->addConv("enc_conv5b", encConv5a, Activation::ReLU, PostOp::Upsample);
-    auto decConv4a = graph->addConcatConv("dec_conv4a", upsample4, pool3, Activation::ReLU);
-
-    auto upsample3 = graph->addConv("dec_conv4b", decConv4a, Activation::ReLU, PostOp::Upsample);
-    auto decConv3a = graph->addConcatConv("dec_conv3a", upsample3, pool2, Activation::ReLU);
-
-    auto upsample2 = graph->addConv("dec_conv3b", decConv3a, Activation::ReLU, PostOp::Upsample);
-    auto decConv2a = graph->addConcatConv("dec_conv2a", upsample2, pool1, Activation::ReLU);
-
-    auto upsample1 = graph->addConv("dec_conv2b", decConv2a, Activation::ReLU, PostOp::Upsample);
-    auto decConv1a = graph->addConcatConv("dec_conv1a", upsample1, inputProcess, Activation::ReLU);
-    auto decConv1b = graph->addConv("dec_conv1b", decConv1a, Activation::ReLU);
-
-    auto decConv0 = graph->addConv("dec_conv0", decConv1b, Activation::ReLU);
-#endif
-
 	for (int i = 0; i < m_DMLPasses.size(); i++)
 	{
         DirectMLPass& pass = *m_DMLPasses[i];
@@ -1769,7 +1726,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
             break;
         }
 	}
-
 
     {
         PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Render to texture");
