@@ -58,19 +58,32 @@ public:
 		UINT m_InputWidth, m_InputHeight, m_InputChannelDepth;
 		UINT m_OutputWidth, m_OutputHeight, m_OutputChannelDepth;
 		D3D12_GPU_DESCRIPTOR_HANDLE m_OutputSRV;
+
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pOutputResource;
 	};
 
 	class ConvolutionPass : public DirectMLPass
 	{
 	public:		
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pInputResource;
+
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_pFilterWeightResource;
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_pBiasWeightResource;
 	};
 
 	class PoolingPass : public DirectMLPass
 	{
+	};
+
+	class UpsamplePass : public DirectMLPass
+	{
+	};
+
+	class JoinPass : public DirectMLPass
+	{
 	public:
-		Microsoft::WRL::ComPtr<ID3D12Resource> m_pOutputResource;
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pInputResource1;
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_pInputResource2;
 	};
 
 private:
@@ -92,11 +105,13 @@ private:
 		DirectMLPass& InputPass,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
-	void CreateUpsampleLayer(
-		_In_reads_(4) const uint32_t* inputSizes,
-		_Inout_updates_(1) uint64_t* inputBufferRequiredSize,
-		_Inout_updates_(1) uint64_t* outputBufferRequiredSize,
-		_Out_writes_(4) uint32_t* outputSizesOut,
+	JoinPass CreateJoinLayer(
+		DirectMLPass& InputPass1,
+		DirectMLPass& InputPass2,
+		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
+
+	UpsamplePass CreateUpsampleLayer(
+		DirectMLPass& InputPass,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
 	void CreateWeightTensors(
@@ -112,10 +127,12 @@ private:
 		_Out_writes_(1) ID3D12Resource** d3dResourceOut);
 
 	// Model layer sizes and indices
-	static const size_t                             c_numUpsampleLayers = 4;
+	//static const size_t                             c_numUpsampleLayers = 4;
+	static const size_t                             c_numUpsampleLayers = 2;
 	//static const size_t                             c_numConvLayers = 16;
-	static const size_t                             c_numConvLayers = 7;
-	static const size_t                             c_numJoinLayers = 4;
+	static const size_t                             c_numConvLayers = 9;
+	//static const size_t                             c_numJoinLayers = 4;
+	static const size_t                             c_numJoinLayers = 2;
 	static const size_t                             c_numPoolingLayers = 4;
 	static const size_t                             c_numIntermediateBuffers = 2;
 
@@ -128,6 +145,7 @@ private:
 		e_opConv,
 		e_opAdd,
 		e_opPooling,
+		e_opJoin,
 		e_opCount
 	};
 
@@ -178,17 +196,21 @@ private:
 
 	ConvolutionPass					m_ConvolutionPasses[c_numConvLayers];
 	PoolingPass						m_PoolingPass[c_numConvLayers];
+	JoinPass						m_JoinPass[c_numJoinLayers];
+	UpsamplePass					m_UpsamplePass[c_numUpsampleLayers];
 	std::vector<DirectMLPass*>		m_DMLPasses;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsamplePersistentResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvPersistentResources[c_numConvLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingPersistentResources[c_numPoolingLayers];
+	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelJoinPersistentResources[c_numJoinLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddPersistentResource;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInitTemporaryResources[e_opCount];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsampleTemporaryResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingTemporaryResources[c_numPoolingLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvTemporaryResources[c_numConvLayers];
+	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelJoinTemporaryResources[c_numJoinLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddTemporaryResource;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInput;
