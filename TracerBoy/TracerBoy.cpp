@@ -11,7 +11,6 @@
 #if SUPPORT_SW_RAYTRACING
 #include "SoftwareRaytraceCS.h"
 #endif
-#include "FullscreenVS.h"
 #include "CompositeAlbedoCS.h"
 #include "XInput.h"
 #include <mutex>

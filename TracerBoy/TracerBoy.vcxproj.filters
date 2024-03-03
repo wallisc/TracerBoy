@@ -193,9 +193,6 @@
     <FxCompile Include="SoftwareRayTraceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="FullScreenVS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="GenerateMotionVectorsCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>

@@ -154,6 +154,7 @@ void D3D12App::Render()
 	UINT backBufferIndex = m_deviceWrapper.GetBackBufferIndex();
 	WaitForFenceValue(m_FrameFence[backBufferIndex]);
 	
+#if ENABLE_UI
 	if (m_pUIController->HasSceneChangeRequest())
 	{
 		WaitForGPUIdle();
@@ -162,6 +163,7 @@ void D3D12App::Render()
 
 		InitializeTracerBoy(m_pUIController->GetRequestedSceneName());
 	}
+#endif
 
 	ComPtr<ID3D12Resource> pBackBuffer = &m_deviceWrapper.GetBackBuffer(backBufferIndex);
 
@@ -253,12 +255,14 @@ void D3D12App::Render()
 			bConverged = false;
 		}
 
+#if ENABLE_UI
 		static UIController::PixelSelection pixelSelection = {};
 		bool bPixelSelectionQueryFinished = m_FramesSincePixelSelection == cNumBackBuffers;
 		if (bPixelSelectionQueryFinished)
 		{
 			pixelSelection.DistanceFromCamera = TracerStats.SelectedPixelDistance;
 		}
+#endif
 		m_FramesSincePixelSelection++;
 
 #if ENABLE_UI
@@ -292,7 +296,9 @@ void D3D12App::Render()
 			const std::lock_guard<std::mutex> lock(m_sceneLoadStatusUpdateLock);
 			sceneLoadStatus = m_sceneLoadStatus;
 		}
+#if ENABLE_UI
 		m_pUIController->RenderLoadingScreen(commandList, sceneLoadStatus);
+#endif
 	}
 
 	commandList.Close();
