@@ -212,7 +212,7 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelIntermediateResult[c_numIntermediateBuffers];
 
-	TensorLayout m_tensorLayout = TensorLayout::Default;
+	TensorLayout m_tensorLayout = TensorLayout::NHWC;
 
 	ComPtr<IDMLOperatorInitializer> m_dmlOpInitializers[e_opCount];
 	ComPtr<IDMLCommandRecorder>     m_pCommandRecorder;
