@@ -270,7 +270,7 @@ public:
 #endif
 #if USE_OIDN
 		postProcessSettings.m_bEnableOpenImageDenoise = true;
-		postProcessSettings.m_LayerToDebug = 0;
+		postProcessSettings.m_LayerToDebug = -1;
 		postProcessSettings.m_SliceToDebug = 0;
 #endif
 

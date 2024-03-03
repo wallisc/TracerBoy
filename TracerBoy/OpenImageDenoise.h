@@ -97,10 +97,6 @@ private:
 		_Out_writes_(4) uint32_t* outputSizesOut,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
 
-	void CreateAdditionLayer(
-		_In_reads_(4) const uint32_t* inputSizes,
-		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
-
 	PoolingPass CreatePoolingLayer(
 		DirectMLPass& InputPass,
 		_Out_writes_(1) IDMLCompiledOperator** compiledOpOut);
@@ -127,23 +123,19 @@ private:
 		_Out_writes_(1) ID3D12Resource** d3dResourceOut);
 
 	// Model layer sizes and indices
-	//static const size_t                             c_numUpsampleLayers = 4;
-	static const size_t                             c_numUpsampleLayers = 2;
-	//static const size_t                             c_numConvLayers = 16;
-	static const size_t                             c_numConvLayers = 9;
-	//static const size_t                             c_numJoinLayers = 4;
-	static const size_t                             c_numJoinLayers = 2;
+	static const size_t                             c_numUpsampleLayers = 4;
+	static const size_t                             c_numConvLayers = 16;
+	static const size_t                             c_numJoinLayers = 4;
 	static const size_t                             c_numPoolingLayers = 4;
 	static const size_t                             c_numIntermediateBuffers = 2;
 
 	// Hard-coded so that we don't need to recreate the descriptor heap on window resize
-	const UINT m_RequiredDescriptors = 256;
+	const UINT m_RequiredDescriptors = 512;
 
 	enum OpTypes : uint32_t
 	{
 		e_opUpsample,
 		e_opConv,
-		e_opAdd,
 		e_opPooling,
 		e_opJoin,
 		e_opCount
@@ -204,14 +196,12 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvPersistentResources[c_numConvLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingPersistentResources[c_numPoolingLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelJoinPersistentResources[c_numJoinLayers];
-	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddPersistentResource;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInitTemporaryResources[e_opCount];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelUpsampleTemporaryResources[c_numUpsampleLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelPoolingTemporaryResources[c_numPoolingLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelConvTemporaryResources[c_numConvLayers];
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelJoinTemporaryResources[c_numJoinLayers];
-	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelAddTemporaryResource;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>          m_modelInput;
 	D3D12_GPU_DESCRIPTOR_HANDLE						m_modelInputUAV;
