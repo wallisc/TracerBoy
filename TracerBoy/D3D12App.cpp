@@ -1,7 +1,7 @@
 #include "pch.h"
 
 const DXGI_FORMAT cBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine) : 
+D3D12App::D3D12App(DeviceWrapper &deviceWrapper, LPCSTR pCommandLine) : 
 	m_deviceWrapper(deviceWrapper),
 	m_mouseX(0), 
 	m_mouseY(0),
