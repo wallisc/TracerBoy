@@ -21,9 +21,9 @@ void main( uint3 DTid : SV_DispatchThreadID )
         uint index = DTid.y * Constants.InputResolution.x + DTid.x;
         if (Constants.UseNHWC)
         {
-            color.b = Tensor[index * 3];
+            color.r = Tensor[index * 3];
             color.g = Tensor[index * 3 + 1];
-            color.r = Tensor[index * 3 + 2];
+            color.b = Tensor[index * 3 + 2];
             color.a = 1.0f;
         }
         else
