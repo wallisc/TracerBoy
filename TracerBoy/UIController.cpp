@@ -1,7 +1,7 @@
 #include "pch.h"
-#include <shobjidl.h> 
 
 #if ENABLE_UI
+#include <shobjidl.h> 
 
 UIController::UIController(HWND hwnd, ID3D12Device& device, IDXGISwapChain3 &swapchain) :
 	m_pSwapchain(&swapchain),

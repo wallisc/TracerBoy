@@ -5,7 +5,7 @@ class D3D12App
 public:
 	const static UINT cNumBackBuffers = 2;
 
-	D3D12App(DeviceWrapper &deviceWrapper, LPSTR pCommandLine);
+	D3D12App(DeviceWrapper &deviceWrapper, LPCSTR pCommandLine);
 
 	~D3D12App() 
 	{
