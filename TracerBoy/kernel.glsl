@@ -1579,7 +1579,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
                     float DistancePerScatter =  1.0 / ((material.scattering.r + material.scattering.g + material.scattering.b) / 3.0);
                     #endif
                     float maxTravelDistance = noScatter ? LARGE_NUMBER : DistancePerScatter;
-                    bool exittingPrimitive = false;
+
+                    // If the material is single sided, exit immediately since we're guaranteed to not hit anything
+                    bool exittingPrimitive = (material.Flags & SINGLE_SIDED_MATERIAL_FLAG) != 0;
 
                     for(int i = 0; i < MAX_SSS_BOUNCES && !exittingPrimitive; i++)
                     {

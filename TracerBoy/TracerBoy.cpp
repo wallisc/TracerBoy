@@ -376,7 +376,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 
 		if (ChannelAverage(pUberMaterial->opacity) < 1.0)
 		{
-			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG | SINGLE_SIDED_MATERIAL_FLAG;
 			material.IOR = pUberMaterial->index;
 			material.absorption = ConvertFloat3(pUberMaterial->kt); // absorption != transmission but need oh well
 		}
@@ -393,6 +393,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	else if (pMirrorMaterial)
 	{
 		material.albedo = ConvertFloat3(pMirrorMaterial->kr);
+		material.SpecularCoef = 1.0f;
 		material.roughness = 0.0;
 		material.Flags |= METALLIC_MATERIAL_FLAG;
 	}
@@ -400,10 +401,10 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	{
 		// TODO: need to support real albedo
 		material.albedo = { 1.0, 1.0, 1.0 };
-		//material.IOR = ChannelAverage(pMetalMaterial->eta);
+		material.IOR = ChannelAverage(pMetalMaterial->eta);
 		VERIFY(!pMetalMaterial->map_uRoughness); // Not supporting textures
 		VERIFY(pMetalMaterial->uRoughness == pMetalMaterial->vRoughness); // Not supporting multi dimension rougness
-		material.roughness = 0.5;
+		material.roughness = pMetalMaterial->uRoughness;
 		material.Flags |= METALLIC_MATERIAL_FLAG;
 	}
 	else if (pSubstrateMaterial)
