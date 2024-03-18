@@ -1954,6 +1954,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
 
         DirectMLConstants constants = {};
         constants.InputResolution = { inputWidth, inputHeight };
+        constants.InputChannelDepth = 3;
         constants.OutputResolution = { inputWidth, inputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
         constants.SliceToDebug = sliceToDebug;
@@ -2000,6 +2001,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
 
         DirectMLConstants constants = {};
         constants.InputResolution = { passWidth, passHeight };
+        constants.InputChannelDepth = pass.m_OutputChannelDepth;
         constants.OutputResolution = { outputWidth, outputHeight };
         constants.UseNHWC = (m_tensorLayout == TensorLayout::NHWC);
         constants.SliceToDebug = sliceToDebug;

@@ -15,15 +15,19 @@ void main( uint3 DTid : SV_DispatchThreadID )
     if (DTid.x >= Constants.OutputResolution.x || DTid.y >= Constants.OutputResolution.y)
         return;
     
+    float InputToOutputScaler = Constants.OutputResolution.x / Constants.InputResolution.x;
+    uint2 InputIndex = uint2(DTid.xy / InputToOutputScaler);
+    
     float4 color;
-    if (DTid.x < Constants.InputResolution.x && DTid.y < Constants.InputResolution.y)
+    if (InputIndex.x < Constants.InputResolution.x && InputIndex.y < Constants.InputResolution.y)
     {
-        uint index = DTid.y * Constants.InputResolution.x + DTid.x;
+        uint index = InputIndex.y * Constants.InputResolution.x + InputIndex.x;
+        uint channelOffset = Constants.SliceToDebug * 3;
         if (Constants.UseNHWC)
         {
-            color.r = Tensor[index * 3];
-            color.g = Tensor[index * 3 + 1];
-            color.b = Tensor[index * 3 + 2];
+            color.r = Tensor[index * Constants.InputChannelDepth + channelOffset + 0];
+            color.g = Tensor[index * Constants.InputChannelDepth + channelOffset + 1];
+            color.b = Tensor[index * Constants.InputChannelDepth + channelOffset + 2];
             color.a = 1.0f;
         }
         else
