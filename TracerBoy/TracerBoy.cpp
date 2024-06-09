@@ -1383,6 +1383,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				for (UINT i = 0; i < numTriangles; i++)
 				{
 					Light light = {};
+					light.LightType = LIGHT_TYPE_AREA;
 					light.LightColor = ConvertFloat3(emissive);
 
 					pbrt::math::vec3f p0 = pTriangleMesh->vertex[pTriangleMesh->index[i].x];
@@ -1688,14 +1689,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		materialListSRV.Buffer.NumElements =  materialTracker.MaterialList.size();
 		materialListSRV.Buffer.StructureByteStride = sizeof(Material);
 		m_pDevice->CreateShaderResourceView(m_pMaterialList.Get(), &materialListSRV, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MaterialListSRV));
-		
-		m_LightCount = lightList.size();
-		if (m_LightCount > 0)
-		{
-			ComPtr<ID3D12Resource> pUploadLightList;
-			AllocateBufferWithData(commandList, lightList.data(), lightList.size() * sizeof(Light), m_pLightList, pUploadLightList);
-			resourcesToDelete.push_back(pUploadLightList);
-		}
 
 		resourcesToDelete.push_back(pUploadMaterialList);
 
@@ -1720,12 +1713,22 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		{
 			auto& pLight = pScene->world->lightSources[lightIndex];
 			pbrt::InfiniteLightSource::SP pInfiniteLightSource = std::dynamic_pointer_cast<pbrt::InfiniteLightSource>(pLight);
+			pbrt::DistantLightSource::SP pDistantLightSource = std::dynamic_pointer_cast<pbrt::DistantLightSource>(pLight);
 			if (pInfiniteLightSource)
 			{
 				std::wstring textureName(pInfiniteLightSource->mapName.begin(), pInfiniteLightSource->mapName.end()); 
 				InitializeTexture(textureName, *pCommandList.Get(), m_pEnvironmentMap, ViewDescriptorHeapSlots::EnvironmentMapSRVSlot, pEnvironmentMapScratchBuffer);
 				m_EnvironmentMapTransform = pInfiniteLightSource->transform.l;
 				m_EnvironmentMapColorScale = pInfiniteLightSource->scale;
+			}
+			else if (pDistantLightSource)
+			{
+				Light light = {};
+				light.LightColor = ConvertFloat3(pDistantLightSource->L);
+				light.LightType = LIGHT_TYPE_DIRECTIONAL;
+				light.Direction = ConvertFloat3(pbrt::math::normalize(pDistantLightSource->to - pDistantLightSource->from));
+
+				lightList.push_back(light);
 			}
 		}
 
@@ -1747,6 +1750,15 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		}
 
 		resourcesToDelete.push_back(pEnvironmentMapScratchBuffer);
+
+		m_LightCount = lightList.size();
+		if (m_LightCount > 0)
+		{
+			ComPtr<ID3D12Resource> pUploadLightList;
+			AllocateBufferWithData(commandList, lightList.data(), lightList.size() * sizeof(Light), m_pLightList, pUploadLightList);
+			resourcesToDelete.push_back(pUploadLightList);
+		}
+
 #if SUPPORT_SW_RAYTRACING
 		ComPtr<ID3D12RaytracingFallbackCommandList> m_fallbackCommandList;
 		if (EmulateRaytracing())

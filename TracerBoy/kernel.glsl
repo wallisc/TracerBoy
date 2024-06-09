@@ -1418,19 +1418,15 @@ vec4 Trace(Ray ray, Ray neighborRay)
 				break;
 			}
 
-            float lightPDF;
-            vec3 lightPosition, lightColor, lightNormal;
-            GetOneLightSample(RayPoint, lightPosition, lightColor, lightPDF, lightNormal);
+            float lightPDF, lightAttenuation;
+            vec3 lightDirection, lightColor, lightNormal;
+            GetOneLightSample(RayPoint, lightDirection, lightColor, lightPDF, lightNormal, lightAttenuation);
 
             // No point doing NEEE for a mirror reflection because the chance of picking a correct point is 0
             if(!bUsePerfectSpecularOptimization)
             {
-                vec3 lightDirection = lightPosition - RayPoint;
 				if(lightPDF > EPSILON && dot(lightDirection, lightNormal) < 0.0)
 				{
-            		float lightDistance = length(lightDirection);
-            		lightDirection = lightDirection / lightDistance;
-
 					#define SHADOW_BOUNCES 1
 					vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
 					Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
@@ -1496,7 +1492,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						}
 					}
                 
-            		float lightMultiplier = DiffuseBRDF(lightDirection, detailNormal) * abs(dot(lightNormal, lightDirection)) / (lightPDF * lightDistance * lightDistance);
+            		float lightMultiplier = lightAttenuation * DiffuseBRDF(lightDirection, detailNormal) * abs(dot(lightNormal, lightDirection)) / (lightPDF);
 					accumulatedColor += accumulatedIndirectLightMultiplier * material.albedo * lightMultiplier * ShadowMultiplier * lightColor;
                 }
             }

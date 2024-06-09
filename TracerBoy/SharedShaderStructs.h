@@ -91,10 +91,16 @@ struct Vertex
 
 struct Light
 {
+	uint LightType;
 	float3 LightColor;
+
 	float SurfaceArea;
 	float3 P0, P1, P2;
+	
 	float3 N0, N1, N2;
+	
+	// TODO: Union!
+	float3 Direction;
 
 #ifdef HLSL
 	float3 GetPosition(float3 Barycentric)
@@ -103,6 +109,9 @@ struct Light
 	}
 #endif
 };
+
+#define LIGHT_TYPE_AREA 0
+#define LIGHT_TYPE_DIRECTIONAL 1
 
 #define DEFAULT_MATERIAL_FLAG 0x0
 #define METALLIC_MATERIAL_FLAG 0x1

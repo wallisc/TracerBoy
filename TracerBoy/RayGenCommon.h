@@ -167,10 +167,11 @@ float GetLightTargetPDF(Light light, float3 barycentric, float3 PositionToLight)
 	return (light.SurfaceArea * ColorToLuma(light.LightColor)) / DistanceToLight * DistanceToLight;
 }
 
-void GetOneLightSample(in float3 PositionToLight, out float3 LightPosition, out float3 LightColor, out float PDFValue, out float3 LightNormal)
+void GetOneLightSample(in float3 PositionToLight, out float3 LightDirection, out float3 LightColor, out float PDFValue, out float3 LightNormal, out float LightAttenuation)
 {
 	// Initialize
-	LightPosition = LightColor = LightNormal = float3(0, 0, 0);
+	LightDirection = LightColor = LightNormal = float3(0, 0, 0);
+	LightAttenuation = 0.0f;
 	PDFValue = 0.0f;
 
 	const uint lightCount = perFrameConstants.LightCount;
@@ -203,7 +204,8 @@ void GetOneLightSample(in float3 PositionToLight, out float3 LightPosition, out 
 			PDFValue = SamplingImportanceResamplingPDF / (light.SurfaceArea);
 
 
-			LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+			float3 LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+			LightDirection = LightPosition - PositionToLight;
 			LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
 			LightColor = light.LightColor;
 		}
@@ -213,11 +215,47 @@ void GetOneLightSample(in float3 PositionToLight, out float3 LightPosition, out 
 			Light light = LightList[lightIndex];
 			float3 barycentric = GetRandomBarycentric();
 
-			LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
-			LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
+			switch (light.LightType)
+			{
+			case LIGHT_TYPE_AREA:
+			{
+				float3 LightPosition = light.P0 * barycentric.x + light.P1 * barycentric.y + light.P2 * barycentric.z;
+				LightDirection = LightPosition - PositionToLight;
+
+				LightNormal = light.N0 * barycentric.x + light.N1 * barycentric.y + light.N2 * barycentric.z;
+
+				float DistanceToLight = length(LightDirection);
+				LightAttenuation = 1.0 / (DistanceToLight * DistanceToLight);
+				LightDirection /= DistanceToLight;
+				break;
+			}
+			case LIGHT_TYPE_DIRECTIONAL:
+			{
+				LightDirection = -light.Direction;
+
+				if (perFrameConstants.DebugValue > 0.0)
+				{
+					LightDirection.x = sin(perFrameConstants.DebugValue);
+					LightDirection.y = sin(perFrameConstants.DebugValue2);
+					LightDirection = normalize(LightDirection);
+				}
+
+				LightNormal = -LightDirection;
+				LightAttenuation = 1.0f;
+				break;
+			}
+			default:
+				break;
+				// Should never get hit...
+			}
+
 			LightColor = light.LightColor;
 
-			PDFValue = 1.0 / (light.SurfaceArea * lightCount);
+			PDFValue = 1.0 / (lightCount);
+			if (light.LightType == LIGHT_TYPE_AREA)
+			{
+				PDFValue /= light.SurfaceArea;
+			}
 		}
 	}
 }
@@ -615,7 +653,7 @@ void RayTraceCommon()
 	float2 dispatchUV = float2(GetDispatchIndex().xy + 0.5) / float2(GetResolution().xy);
 	float2 uv = vec2(0, 1) + dispatchUV * vec2(1, -1);
 
-	const uint NumSamples = 1;
+	const uint NumSamples = 16;
 	float4 outputColor = float4(0, 0, 0, 0); 
 	for (uint i = 0; i < NumSamples; i++)
 	{

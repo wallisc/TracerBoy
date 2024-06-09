@@ -297,7 +297,7 @@ public:
 		performanceSettings.m_ConvergencePercentage = 0.001;
 		performanceSettings.m_bEnableBlueNoise = true;
 		performanceSettings.m_bEnableNextEventEstimation = true;
-		performanceSettings.m_bEnableSamplingImportanceResampling = true;
+		performanceSettings.m_bEnableSamplingImportanceResampling = false;
 		performanceSettings.m_bEnableInlineRaytracing = true;
 		performanceSettings.m_bEnableExecuteIndirect = false;
 		performanceSettings.m_OccupancyMultiplier = 10;
