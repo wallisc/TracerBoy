@@ -186,6 +186,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdS
 	RegisterClassEx(&windowClass);
 
 	RECT windowRect = { 0, 0, 1920, 1080};
+
+	// My OIDN implementation currently only handles images that are divisible by 16
+	windowRect.left = (windowRect.left / 16) * 16;
+	windowRect.bottom = (windowRect.bottom / 16) * 16;
+
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	g_hwnd = CreateWindow(
