@@ -1942,8 +1942,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 	{
 		ComPtr<ID3D12Resource> pBlueNoise0UploadHeap;
 		ComPtr<ID3D12Resource> pBlueNoise1UploadHeap;
-		InitializeTexture(L"Textures/LDR_RGBA_0.png", commandList, m_pBlueNoise0Texture, ViewDescriptorHeapSlots::BlueNoise0SRVSlot, pBlueNoise0UploadHeap, true);
-		InitializeTexture(L"Textures/LDR_RGBA_1.png", commandList, m_pBlueNoise1Texture, ViewDescriptorHeapSlots::BlueNoise1SRVSlot, pBlueNoise1UploadHeap, true);
+		InitializeTexture(L"LDR_RGBA_0.png", commandList, m_pBlueNoise0Texture, ViewDescriptorHeapSlots::BlueNoise0SRVSlot, pBlueNoise0UploadHeap, true);
+		InitializeTexture(L"LDR_RGBA_1.png", commandList, m_pBlueNoise1Texture, ViewDescriptorHeapSlots::BlueNoise1SRVSlot, pBlueNoise1UploadHeap, true);
 
 		resourcesToDelete.push_back(pBlueNoise0UploadHeap);
 		resourcesToDelete.push_back(pBlueNoise1UploadHeap);

@@ -884,7 +884,7 @@ void OpenImageDenoise::OnResize(
 
     OutDownscaleFactor = 1.0f;
     WeightMapType weights;
-    if (!LoadWeights("ML\\weights.bin", weights))
+    if (!LoadWeights("weights.bin", weights))
     {
         // implement
         throw std::exception("loadWeights");
