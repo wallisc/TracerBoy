@@ -11,6 +11,15 @@ void ConvertToPBRTTexture(aiMaterial &AiMaterial, const char *key, UINT type, UI
 	}
 }
 
+pbrt::vec3f ConvertToPBRT(aiColor3D& color)
+{
+	return pbrt::vec3f(color.r, color.g, color.b);
+}
+
+pbrt::vec3f ConvertToPBRT(aiVector3D& direction)
+{
+	return pbrt::vec3f(direction.x, direction.y, direction.z);
+}
 
 void ConvertToFloat(aiMaterial& AiMaterial, const char* key, UINT type, UINT idx, float &f)
 {
@@ -57,10 +66,38 @@ std::shared_ptr<pbrt::Scene> AssimpImporter::LoadScene(
 	pCamera->frame = pbrt::affine3f::identity();
 	pScene->cameras.push_back(pCamera);
 
+#if 0
 	std::shared_ptr<pbrt::InfiniteLightSource> pLight = std::make_shared<pbrt::InfiniteLightSource>();
 	pLight->mapName = "../bistro/san_giuseppe_bridge_4k.hdr";
 	pLight->transform.l = pbrt::math::mat3f(pbrt::math::vec3f(1));
 	pScene->world->lightSources.push_back(pLight);
+#endif
+	for (UINT lightIndex = 0; lightIndex < pAiScene->mNumLights; lightIndex++)
+	{
+		auto &light = *pAiScene->mLights[lightIndex];
+		switch (light.mType)
+		{
+		case aiLightSource_DIRECTIONAL:
+		{
+			std::shared_ptr<pbrt::DistantLightSource> pDirectionalLight = std::make_shared<pbrt::DistantLightSource>();
+			pDirectionalLight->L = ConvertToPBRT(light.mColorDiffuse);
+			pDirectionalLight->scale = pbrt::vec3f(1.0f);
+
+			pbrt::vec3f direction = pbrt::math::normalize(ConvertToPBRT(light.mDirection));
+
+			constexpr float bigNumber = 10000000.0f;
+			pDirectionalLight->from = direction * bigNumber;
+			pDirectionalLight->to = -direction * bigNumber;
+
+			pScene->world->lightSources.push_back(pDirectionalLight);
+			break;
+		}
+		default:
+			// unsupported light type
+			VERIFY(false);
+		}
+	}
+
 	UINT numMaterials = pAiScene->mNumMaterials;
 
 	std::vector<std::shared_ptr<pbrt::Material>> materialList;
