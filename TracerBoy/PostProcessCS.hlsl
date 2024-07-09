@@ -23,16 +23,14 @@ float3 GammaCorrect(float3 color)
     DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     RootConstants(num32BitConstants=8, b0)"
 
+
 float3 ProcessLit(float4 color)
 {
 	float FrameCount = color.w;
 	float3 outputColor = color / FrameCount;
 
-	if (Constants.UseToneMapping)
-	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
+	outputColor *= Constants.ExposureMultiplier;
+	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
 	if (Constants.UseGammaCorrection)
 	{
@@ -45,11 +43,8 @@ float3 ProcessLuminance(float4 color) {
 	float FrameCount = color.w;
 	float3 outputColor = color / FrameCount;
 
-	if (Constants.UseToneMapping)
-	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
+	outputColor *= Constants.ExposureMultiplier;
+	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
 	outputColor = ColorToLuma(outputColor);
 
@@ -63,11 +58,9 @@ float3 ProcessLuminance(float4 color) {
 float3 ProcessAlbedo(float4 color)
 {
 	float3 outputColor = color;
-	if (Constants.UseToneMapping)
-	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
+	
+	outputColor *= Constants.ExposureMultiplier;
+	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
 	if (Constants.UseGammaCorrection)
 	{
@@ -112,11 +105,9 @@ float3 ProcessMotionVectors(float4 color)
 float3 PassThroughColor(float4 color)
 {
 	float3 outputColor = color;
-	if (Constants.UseToneMapping)
-	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
+	
+	outputColor *= Constants.ExposureMultiplier;
+	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
 	if (Constants.UseGammaCorrection)
 	{
@@ -146,11 +137,8 @@ float3 ProcessHeatmap(float4 color)
 	
 	float3 outputColor = Lerp3(float3(0, 1, 0), float3(1, 1, 0), float3(1, 0, 0), lerpValue);
 
-	if (Constants.UseToneMapping)
-	{
-		outputColor *= Constants.ExposureMultiplier;
-		outputColor = Tonemap(outputColor);
-	}
+	outputColor *= Constants.ExposureMultiplier;
+	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
 	if (Constants.UseGammaCorrection)
 	{

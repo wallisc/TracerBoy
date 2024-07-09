@@ -5,7 +5,7 @@ struct PostProcessConstants
 	uint2 Resolution;
 	uint FramesRendered;
 	float ExposureMultiplier;
-	uint UseToneMapping;
+	uint TonemapType;
 	uint UseGammaCorrection;
 	uint OutputType;
 	float VarianceMultiplier;

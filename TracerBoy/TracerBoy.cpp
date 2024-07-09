@@ -2764,7 +2764,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		postProcessConstants.Resolution.y = static_cast<UINT32>(outputDesc.Height);
 		postProcessConstants.ExposureMultiplier = postProcessSettings.m_ExposureMultiplier;
 		postProcessConstants.UseGammaCorrection = postProcessSettings.m_bEnableGammaCorrection;
-		postProcessConstants.UseToneMapping = postProcessSettings.m_bEnableToneMapping;
+		postProcessConstants.TonemapType = static_cast<UINT32>(postProcessSettings.m_TonemapType);
 		postProcessConstants.OutputType = ShaderOutputType(outputSettings.m_OutputType);
 		postProcessConstants.VarianceMultiplier = outputSettings.m_debugSettings.m_VarianceMultiplier;
 

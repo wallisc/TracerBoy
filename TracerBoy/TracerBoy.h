@@ -167,6 +167,13 @@ public:
 		Gaussian
 	};
 
+	enum class TonemapType : uint
+	{
+		ACES,
+		Reinhard,
+		Clamp
+	};
+
 	struct CameraOutputSettings
 	{
 		float m_FocalDistance;
@@ -180,9 +187,10 @@ public:
 	struct PostProcessSettings
 	{
 		float m_ExposureMultiplier;
-		bool m_bEnableToneMapping;
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
+
+		TonemapType m_TonemapType;
 #if USE_XESS
 		bool m_bEnableXeSS;
 #endif
@@ -255,7 +263,7 @@ public:
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
-		postProcessSettings.m_bEnableToneMapping = false;
+		postProcessSettings.m_TonemapType = TonemapType::Clamp;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
 #if USE_XESS
