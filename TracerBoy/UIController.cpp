@@ -241,7 +241,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		auto& postProcessSettings = m_outputSettings.m_postProcessSettings;
 		ImGui::InputFloat("Exposure Multiplier", &postProcessSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 
-		const char* TonemapperTypes[] = { "Reinhard", "ACES", "Clamp" };
+		const char* TonemapperTypes[] = { "Reinhard", "ACES", "Clamp", "Uncharted"};
 		ImGui::Combo("Tonemapper Type", (int*)&postProcessSettings.m_TonemapType, TonemapperTypes, IM_ARRAYSIZE(TonemapperTypes));
 
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);

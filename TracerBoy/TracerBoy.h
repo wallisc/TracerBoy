@@ -171,7 +171,8 @@ public:
 	{
 		ACES,
 		Reinhard,
-		Clamp
+		Clamp,
+		Uncharted
 	};
 
 	struct CameraOutputSettings
