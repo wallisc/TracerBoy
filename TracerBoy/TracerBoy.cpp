@@ -7,6 +7,10 @@
 #include "ClosestHit.h"
 #include "AnyHit.h"
 #include "Miss.h"
+#include "CalculateAveragedLuminanceSharedShaderStructs.h"
+#include "CalculateAveragedLuminanceCS.h"
+#include "GenerateHistogramSharedShaderStructs.h"
+#include "GenerateHistogramCS.h"
 #include "RaytraceCS.h"
 #if SUPPORT_SW_RAYTRACING
 #include "SoftwareRaytraceCS.h"
@@ -802,6 +806,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		outputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 		Parameters[PostProcessRootSignatureParameters::InputTexture].InitAsDescriptorTable(1, &InputTextureDescriptor);
 		Parameters[PostProcessRootSignatureParameters::AuxTexture].InitAsDescriptorTable(1, &AuxTextureDescriptor);
+		Parameters[PostProcessRootSignatureParameters::AveragedLuminance].InitAsShaderResourceView(2);
 		Parameters[PostProcessRootSignatureParameters::OutputTexture].InitAsDescriptorTable(1, &outputTextureDescriptor);
 		Parameters[PostProcessRootSignatureParameters::Constants].InitAsConstants(sizeof(PostProcessConstants) / sizeof(UINT32), 0);
 
@@ -818,6 +823,106 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 		psoDesc.pRootSignature = m_pPostProcessRootSignature.Get();
 		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_PostProcessCS, ARRAYSIZE(g_PostProcessCS));
 		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pPostProcessPSO.ReleaseAndGetAddressOf())));
+	}
+
+	{
+		{
+			D3D12_RESOURCE_DESC histogramBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT32) * 256, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+			srvDesc.Buffer.NumElements = histogramBufferDesc.Width / sizeof(UINT32);
+			srvDesc.Buffer.FirstElement = 0;
+			srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+			m_pLuminanceHistogram = CreateSRV(
+				L"Luminance Histogram",
+				histogramBufferDesc,
+				srvDesc,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramSRV),
+				D3D12_RESOURCE_STATE_COMMON);
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavViewDesc = {};
+			uavViewDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			uavViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+			uavViewDesc.Buffer.NumElements = histogramBufferDesc.Width / sizeof(UINT32);
+			uavViewDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+
+			m_pDevice->CreateUnorderedAccessView(m_pLuminanceHistogram.Get(), nullptr, &uavViewDesc, GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramUAV));
+			m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramUAV), GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramUAV), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		}
+		
+		{
+			D3D12_RESOURCE_DESC averagedLuminanceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT32), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+			srvDesc.Buffer.NumElements = averagedLuminanceDesc.Width / sizeof(UINT32);
+			srvDesc.Buffer.FirstElement = 0;
+			srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+			m_pAveragedLuminance = CreateSRV(
+				L"Averaged Luminance",
+				averagedLuminanceDesc,
+				srvDesc,
+				GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceSRV),
+				D3D12_RESOURCE_STATE_COMMON);
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavViewDesc = {};
+			uavViewDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			uavViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+			uavViewDesc.Buffer.NumElements = averagedLuminanceDesc.Width / sizeof(UINT32);
+			uavViewDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+
+			m_pDevice->CreateUnorderedAccessView(m_pAveragedLuminance.Get(), nullptr, &uavViewDesc, GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceUAV));
+			m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceUAV), GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceUAV), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		}
+
+		{
+			CD3DX12_ROOT_PARAMETER1 Parameters[GenerateHistogramNumParameters];
+			CD3DX12_DESCRIPTOR_RANGE1 InputTextureDescriptor;
+			InputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+			Parameters[GenerateHistogramInputTextureSRV].InitAsDescriptorTable(1, &InputTextureDescriptor);
+			Parameters[GenerateHistogramConstantsParam].InitAsConstants(sizeof(GenerateHistogramConstants) / sizeof(UINT32), 0);
+			Parameters[GenerateHistogramLuminanceHistogramUAV].InitAsUnorderedAccessView(0);
+			
+			D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+			rootSignatureDesc.NumParameters = GenerateHistogramNumParameters;
+			rootSignatureDesc.pParameters = Parameters;
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
+
+			ComPtr<ID3DBlob> pRootSignatureBlob;
+			VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
+			VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_pGenerateHistogramRootSignature.ReleaseAndGetAddressOf())));
+
+			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+			psoDesc.pRootSignature = m_pGenerateHistogramRootSignature.Get();
+			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pGenerateHistogramCS, ARRAYSIZE(g_pGenerateHistogramCS));
+			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pGenerateHistogramPSO.ReleaseAndGetAddressOf())));
+		}
+
+		{
+			CD3DX12_ROOT_PARAMETER1 Parameters[AverageLuminanceNumParameters];
+			Parameters[AverageLuminanceConstantsParam].InitAsConstants(sizeof(CalculateAveragedLuminanceConstants) / sizeof(UINT32), 0);
+			Parameters[AverageLuminanceHistogramSRV].InitAsShaderResourceView(0);
+			Parameters[AverageLuminanceOutputUAV].InitAsUnorderedAccessView(0);
+
+			D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+			rootSignatureDesc.NumParameters = AverageLuminanceNumParameters;
+			rootSignatureDesc.pParameters = Parameters;
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
+
+			ComPtr<ID3DBlob> pRootSignatureBlob;
+			VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
+			VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_pAverageLuminanceRootSignature.ReleaseAndGetAddressOf())));
+
+			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+			psoDesc.pRootSignature = m_pAverageLuminanceRootSignature.Get();
+			psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_pCalculateAveragedLuminanceCS, ARRAYSIZE(g_pCalculateAveragedLuminanceCS));
+			VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pAverageLuminancePSO.ReleaseAndGetAddressOf())));
+		}
 	}
 
 	m_pDenoiserPass = std::unique_ptr<DenoiserPass>(new DenoiserPass(*m_pDevice.Get()));
@@ -2628,6 +2733,99 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	commandList.ResourceBarrier(ARRAYSIZE(postDispatchRaysBarrier), postDispatchRaysBarrier);
 	commandList.CopyBufferRegion(pReadbackStats, 0, m_pStatsBuffer.Get(), 0, sizeof(ReadbackStats));
 
+	if (outputSettings.m_postProcessSettings.m_bEnableAutoExposure)
+	{
+		float MinLogLuminance = -10.0f;
+		float LogLuminanceRange = 16.0f;
+
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Auto Exposure");
+
+		auto outputDesc = m_pPostProcessOutput->GetDesc();
+		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
+		{
+			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Generate Luminance Histogram");
+
+			UINT ClearValues[4] = {};
+			commandList.ClearUnorderedAccessViewUint(
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramUAV),
+				GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::LuminanceHistogramUAV),
+				m_pLuminanceHistogram.Get(),
+				ClearValues,
+				0,
+				nullptr);
+
+			commandList.ClearUnorderedAccessViewUint(
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceUAV),
+				GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::AveragedLuminanceUAV),
+				m_pAveragedLuminance.Get(),
+				ClearValues,
+				0,
+				nullptr);
+
+			commandList.ResourceBarrier(1, &uavBarrier);
+
+			commandList.SetComputeRootSignature(m_pGenerateHistogramRootSignature.Get());
+			commandList.SetPipelineState(m_pGenerateHistogramPSO.Get());
+
+			GenerateHistogramConstants histogramConstants;
+			histogramConstants.Resolution.x = static_cast<UINT32>(outputDesc.Width);
+			histogramConstants.Resolution.y = static_cast<UINT32>(outputDesc.Height);
+			histogramConstants.minLogLuminance = MinLogLuminance;
+			histogramConstants.oneOverLogLuminanceRange = 1.0f / LogLuminanceRange;
+
+			commandList.SetComputeRoot32BitConstants(GenerateHistogramConstantsParam, sizeof(histogramConstants) / sizeof(UINT32), &histogramConstants, 0);
+			commandList.SetComputeRootDescriptorTable(
+				GenerateHistogramInputTextureSRV,
+				GetOutputSRV(outputSettings.m_OutputType));
+
+			commandList.SetComputeRootUnorderedAccessView(
+				GenerateHistogramLuminanceHistogramUAV, 
+				m_pLuminanceHistogram->GetGPUVirtualAddress());
+
+			UINT DispatchWidth = (histogramConstants.Resolution.x - 1) / GENERATE_HISTOGRAM_THREAD_GROUP_WIDTH + 1;
+			UINT DispatchHeight = (histogramConstants.Resolution.y - 1) / GENERATE_HISTOGRAM_THREAD_GROUP_HEIGHT + 1;
+
+			commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+		}
+
+		D3D12_RESOURCE_BARRIER postGenerateHistogramBarriers[] =
+		{
+			uavBarrier,
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pLuminanceHistogram.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		commandList.ResourceBarrier(ARRAYSIZE(postGenerateHistogramBarriers), postGenerateHistogramBarriers);
+
+		{
+			PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Average Luminance");
+
+			commandList.SetComputeRootSignature(m_pAverageLuminanceRootSignature.Get());
+			commandList.SetPipelineState(m_pAverageLuminancePSO.Get());
+
+			CalculateAveragedLuminanceConstants averagedLuminanceConstants;
+			averagedLuminanceConstants.PixelCount = outputDesc.Width * outputDesc.Height;
+			averagedLuminanceConstants.LogLuminanceRange = LogLuminanceRange;
+			averagedLuminanceConstants.MinLogLuminance = MinLogLuminance;
+
+			commandList.SetComputeRoot32BitConstants(AverageLuminanceConstantsParam, sizeof(averagedLuminanceConstants) / sizeof(UINT32), &averagedLuminanceConstants, 0);
+			commandList.SetComputeRootShaderResourceView(
+				AverageLuminanceHistogramSRV,
+				m_pLuminanceHistogram->GetGPUVirtualAddress());
+
+			commandList.SetComputeRootUnorderedAccessView(
+				AverageLuminanceOutputUAV,
+				m_pAveragedLuminance->GetGPUVirtualAddress());
+
+			commandList.Dispatch(1, 1, 1);
+		}
+
+		D3D12_RESOURCE_BARRIER postAverageLuminanceBarriers[] =
+		{
+			uavBarrier,
+			CD3DX12_RESOURCE_BARRIER::Transition(m_pAveragedLuminance.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		commandList.ResourceBarrier(ARRAYSIZE(postAverageLuminanceBarriers), postAverageLuminanceBarriers);
+	}
+
 	if (bNeedsMotionVectors)
 	{
 		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Generate Motion Vectors");
@@ -2767,6 +2965,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		postProcessConstants.TonemapType = static_cast<UINT32>(postProcessSettings.m_TonemapType);
 		postProcessConstants.OutputType = ShaderOutputType(outputSettings.m_OutputType);
 		postProcessConstants.VarianceMultiplier = outputSettings.m_debugSettings.m_VarianceMultiplier;
+		postProcessConstants.UseAutoExposure = outputSettings.m_postProcessSettings.m_bEnableAutoExposure;
 
 		commandList.SetComputeRoot32BitConstants(PostProcessRootSignatureParameters::Constants, sizeof(postProcessConstants) / sizeof(UINT32), &postProcessConstants, 0);
 		commandList.SetComputeRootDescriptorTable(
@@ -2775,6 +2974,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::AuxTexture,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputSRV));
+		commandList.SetComputeRootShaderResourceView(PostProcessRootSignatureParameters::AveragedLuminance, m_pAveragedLuminance->GetGPUVirtualAddress());
 		commandList.SetComputeRootDescriptorTable(
 			PostProcessRootSignatureParameters::OutputTexture,
 			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV));
@@ -3091,12 +3291,12 @@ ComPtr<ID3D12Resource> TracerBoy::CreateSRV(
 
 ComPtr<ID3D12Resource> TracerBoy::CreateUAVandSRV(
 	const std::wstring &resourceName,
-	const D3D12_RESOURCE_DESC& uavDesc, 
+	const D3D12_RESOURCE_DESC& resourceDesc, 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavHandle, 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle, 
 	D3D12_RESOURCE_STATES defaultState)
 {
-	ComPtr<ID3D12Resource> pResource = CreateUAV(resourceName, uavDesc, &uavHandle, defaultState);
+	ComPtr<ID3D12Resource> pResource = CreateUAV(resourceName, resourceDesc, &uavHandle, defaultState);
 	m_pDevice->CreateShaderResourceView(pResource.Get(), nullptr, srvHandle);
 	return pResource;
 }

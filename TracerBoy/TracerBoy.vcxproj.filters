@@ -155,6 +155,15 @@
     <ClInclude Include="DirectMLSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="GenerateHistogramSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="CalculateAveragedLuminanceSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="HistogramSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -200,6 +209,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="ImageToTensorCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="GenerateHistogramCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="CalculateAveragedLuminanceCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

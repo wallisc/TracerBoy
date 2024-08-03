@@ -190,6 +190,7 @@ public:
 		float m_ExposureMultiplier;
 		bool m_bEnableGammaCorrection;
 		bool m_bEnableFSR;
+		bool m_bEnableAutoExposure;
 
 		TonemapType m_TonemapType;
 #if USE_XESS
@@ -267,6 +268,7 @@ public:
 		postProcessSettings.m_TonemapType = TonemapType::Clamp;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
+		postProcessSettings.m_bEnableAutoExposure = true;
 #if USE_XESS
 		postProcessSettings.m_bEnableXeSS = false;
 #endif
@@ -498,6 +500,7 @@ private:
 	{
 		InputTexture = 0,
 		AuxTexture,
+		AveragedLuminance,
 		OutputTexture,
 		Constants,
 		NumParameters
@@ -516,10 +519,33 @@ private:
 	ComPtr<ID3D12RootSignature> m_pCompositeAlbedoRootSignature;
 	ComPtr<ID3D12PipelineState> m_pCompositeAlbedoPSO;
 
+	enum GenerateHistogramRootSignatureParameters
+	{
+		GenerateHistogramConstantsParam = 0,
+		GenerateHistogramInputTextureSRV,
+		GenerateHistogramLuminanceHistogramUAV,
+		GenerateHistogramNumParameters
+	};
+	ComPtr<ID3D12RootSignature> m_pGenerateHistogramRootSignature;
+	ComPtr<ID3D12PipelineState> m_pGenerateHistogramPSO;
+
+	enum AverageLuminanceRootSignatureParameters
+	{
+		AverageLuminanceConstantsParam = 0,
+		AverageLuminanceHistogramSRV,
+		AverageLuminanceOutputUAV,
+		AverageLuminanceNumParameters
+	};
+	ComPtr<ID3D12RootSignature> m_pAverageLuminanceRootSignature;
+	ComPtr<ID3D12PipelineState> m_pAverageLuminancePSO;
+
 	UINT32 m_mouseX, m_mouseY;
 	UINT32 m_selectedPixelX, m_selectedPixelY;
 	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
+
+	ComPtr<ID3D12Resource> m_pLuminanceHistogram;
+	ComPtr<ID3D12Resource> m_pAveragedLuminance;
 
 	ComPtr<ID3D12Resource> m_pPostProcessOutput;
 	ComPtr<ID3D12Resource> m_pMotionVectors;
@@ -606,6 +632,10 @@ private:
 		StatsBufferUAV,
 		MotionVectorsSRV,
 		MotionVectorsUAV,
+		LuminanceHistogramSRV,
+		LuminanceHistogramUAV,
+		AveragedLuminanceSRV,
+		AveragedLuminanceUAV,
 #if SUPPORT_SW_RAYTRACING
 		TopLevelAccelerationStructureUAV,
 #endif

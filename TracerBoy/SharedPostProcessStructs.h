@@ -7,6 +7,7 @@ struct PostProcessConstants
 	float ExposureMultiplier;
 	uint TonemapType;
 	uint UseGammaCorrection;
+	uint UseAutoExposure;
 	uint OutputType;
 	float VarianceMultiplier;
 };

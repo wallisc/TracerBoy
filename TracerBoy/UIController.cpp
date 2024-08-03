@@ -241,9 +241,10 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		auto& postProcessSettings = m_outputSettings.m_postProcessSettings;
 		ImGui::InputFloat("Exposure Multiplier", &postProcessSettings.m_ExposureMultiplier, 0.1f, 1.0f, "%.2f");
 
-		const char* TonemapperTypes[] = { "Reinhard", "ACES", "Clamp", "Uncharted"};
+		const char* TonemapperTypes[] = { "Reinhard", "ACES", "Clamp", "Uncharted", "Khronos PBR Neutral", "AGX", "AGX Punchy", "GT"};
 		ImGui::Combo("Tonemapper Type", (int*)&postProcessSettings.m_TonemapType, TonemapperTypes, IM_ARRAYSIZE(TonemapperTypes));
 
+		ImGui::Checkbox("Enable Auto-Exposure", &postProcessSettings.m_bEnableAutoExposure);
 		ImGui::Checkbox("Enable Gamma Correction", &postProcessSettings.m_bEnableGammaCorrection);
 		ImGui::Checkbox("Enable FidelityFX Super Resolution", &postProcessSettings.m_bEnableFSR);
 #if USE_XESS

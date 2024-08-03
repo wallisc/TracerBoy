@@ -1,0 +1,4 @@
+#pragma once
+
+#define NUM_HISTOGRAM_BINS 256
+#define BYTE_ADDRESS_BUFFER_STRIDE 4

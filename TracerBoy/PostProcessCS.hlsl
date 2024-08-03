@@ -9,18 +9,14 @@ cbuffer RootConstants
 
 Texture2D InputTexture : register(t0);
 Texture2D AuxilaryTexture: register(t1);
+ByteAddressBuffer AveragedLuminance : register(t2);
 RWTexture2D<float4> OutputTexture;
-
-float3 GammaCorrect(float3 color)
-{
-	return pow(color, float4(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2, 1));
-
-}
 
 #define ComputeRS \
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
     DescriptorTable(SRV(t1, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),\
+    SRV(t2),\
     RootConstants(num32BitConstants=8, b0)"
 
 
@@ -29,13 +25,24 @@ float3 ProcessLit(float4 color)
 	float FrameCount = color.w;
 	float3 outputColor = color / FrameCount;
 
-	outputColor *= Constants.ExposureMultiplier;
+	float Exposure; 
+	if(Constants.UseAutoExposure)
+	{
+		float averagedLuminance = asfloat(AveragedLuminance.Load(0));
+
+		float LinearGray = pow(0.5, 2.2);
+
+		// Shift the exposure curve so that the average luminance lands around half way in the 0-1 range
+		// Tonemapping will handle things that go above/below 0-1
+		Exposure = LinearGray / averagedLuminance;
+	}
+	else
+	{
+		Exposure = Constants.ExposureMultiplier;
+	}
+	outputColor *= Exposure;
 	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
-	if (Constants.UseGammaCorrection)
-	{
-		outputColor = GammaCorrect(outputColor);
-	}
 	return outputColor;
 }
 
@@ -108,11 +115,6 @@ float3 PassThroughColor(float4 color)
 	
 	outputColor *= Constants.ExposureMultiplier;
 	outputColor = Tonemap(Constants.TonemapType, outputColor);
-
-	if (Constants.UseGammaCorrection)
-	{
-		outputColor = GammaCorrect(outputColor);
-	}
 	return outputColor;
 }
 
@@ -140,14 +142,9 @@ float3 ProcessHeatmap(float4 color)
 	outputColor *= Constants.ExposureMultiplier;
 	outputColor = Tonemap(Constants.TonemapType, outputColor);
 
-	if (Constants.UseGammaCorrection)
-	{
-		outputColor = GammaCorrect(outputColor);
-	}
 	return outputColor;
 }
 
-[RootSignature(ComputeRS)]
 [numthreads(8, 8, 1)]
 void main( uint2 DTid : SV_DispatchThreadID )
 {
