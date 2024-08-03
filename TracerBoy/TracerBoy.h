@@ -167,12 +167,17 @@ public:
 		Gaussian
 	};
 
+
 	enum class TonemapType : uint
 	{
 		ACES,
 		Reinhard,
 		Clamp,
-		Uncharted
+		Uncharted,
+		KhronosPBRNeutral,
+		AGX,
+		AGXPunchy,
+		GT
 	};
 
 	struct CameraOutputSettings
@@ -265,7 +270,7 @@ public:
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
-		postProcessSettings.m_TonemapType = TonemapType::Clamp;
+		postProcessSettings.m_TonemapType = TonemapType::AGXPunchy;
 		postProcessSettings.m_bEnableGammaCorrection = true;
 		postProcessSettings.m_bEnableFSR = false;
 		postProcessSettings.m_bEnableAutoExposure = true;
