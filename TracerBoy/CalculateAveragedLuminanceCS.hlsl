@@ -29,7 +29,7 @@ void main(uint Gid : SV_GroupIndex )
 
 	if(bIsFirstThread)
 	{
-		float averagedLogLuminance = ((AveragedHistogramCount / Constants.PixelCount) - 1.0f) / 254.0f;
+		float averagedLogLuminance = ((AveragedHistogramCount / (Constants.PixelCount - BinCount)) - 1.0f) / 254.0f;
 		AveragedLuminance.Store(0, asuint(exp2(averagedLogLuminance * Constants.LogLuminanceRange + Constants.MinLogLuminance)));
 	}
 }
