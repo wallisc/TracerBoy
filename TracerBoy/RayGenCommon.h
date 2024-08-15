@@ -361,12 +361,13 @@ void OutputRayStats(uint TrianglesTested, uint BoxesTested);
 #include "..\D3D12RaytracingFallback\src\TraverseShader.hlsli"
 #endif
 
+#define MIN_T 0.001f
 float2 IntersectWithMaxDistance(Ray ray, float maxT, out float3 normal, out float3 tangent, out float2 uv, out uint PrimitiveID)
 {
 	RayDesc dxrRay;
 	dxrRay.Origin = ray.origin;
 	dxrRay.Direction = ray.direction;
-	dxrRay.TMin = EPSILON;
+	dxrRay.TMin = MIN_T;
 	dxrRay.TMax = maxT;
 
 #if USE_INLINE_RAYTRACING
@@ -495,7 +496,7 @@ float2 IntersectAnything(Ray ray, float maxT, out float3 normal, out float3 tang
 	RayDesc dxrRay;
 	dxrRay.Origin = ray.origin;
 	dxrRay.Direction = ray.direction;
-	dxrRay.TMin = 0.001;
+	dxrRay.TMin = MIN_T;
 	dxrRay.TMax = maxT;
 
 	RayPayload payload = { float2(0, 0), uint(-1), maxT, float3(0, 0, 0), 0, float3(0, 0, 0), 0 };
