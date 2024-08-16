@@ -78,6 +78,7 @@ namespace pbrt {
       checking whether that was already created */
     Texture::SP createTextureFrom(pbrt::syntactic::Texture::SP in);
     /*! @{ specializing parsing function for given texture type */
+    Texture::SP createTexture_image(pbrt::syntactic::Texture::SP in);
     Texture::SP createTexture_mix(pbrt::syntactic::Texture::SP in);
     Texture::SP createTexture_scale(pbrt::syntactic::Texture::SP in);
     Texture::SP createTexture_ptex(pbrt::syntactic::Texture::SP in);
@@ -105,6 +106,8 @@ namespace pbrt {
     LightSource::SP findOrCreateLightSource(pbrt::syntactic::LightSource::SP in);
     LightSource::SP createLightSource_infinite(pbrt::syntactic::LightSource::SP in);
     LightSource::SP createLightSource_distant(pbrt::syntactic::LightSource::SP in);
+    LightSource::SP createLightSource_point(pbrt::syntactic::LightSource::SP in);
+    LightSource::SP createLightSource_spot(pbrt::syntactic::LightSource::SP in);
 
     // ==================================================================
     // Materials
@@ -114,6 +117,7 @@ namespace pbrt {
     /*! @{ type-specific extraction routines (ie, we already know the
         type, and only have to extract the potential/expected
         parameters) */
+    Material::SP createMaterial_hair(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_uber(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_metal(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_matte(pbrt::syntactic::Material::SP in);
@@ -125,7 +129,6 @@ namespace pbrt {
     Material::SP createMaterial_plastic(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_translucent(pbrt::syntactic::Material::SP in);
     Material::SP createMaterial_glass(pbrt::syntactic::Material::SP in);
-    Material::SP createMaterial_subsurface(pbrt::syntactic::Material::SP in);
     /*! @} */
     
     /*! do create a track representation of given material, _without_
@@ -212,7 +215,13 @@ namespace pbrt {
 
   /*! parse syntactic camera's 'film' value */
   void createFilm(Scene::SP ours, pbrt::syntactic::Scene::SP pbrt);
-  
+
+  void createSampler(Scene::SP ours, pbrt::syntactic::Scene::SP pbrt);
+
+  void createIntegrator(Scene::SP ours, pbrt::syntactic::Scene::SP pbrt);
+
+  void createPixelFilter(Scene::SP ours, pbrt::syntactic::Scene::SP pbrt);
+
   /*! create a scene->camera from the pbrt model, if specified, or
     leave unchanged if not */
   void createCamera(Scene::SP scene, pbrt::syntactic::Scene::SP pbrt);

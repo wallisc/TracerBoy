@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2015-2019 Ingo Wald                                            //
+// Copyright 2015-2020 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -20,6 +20,11 @@
 #include <sstream>
 #include <utility>
 
+#ifndef PRINT
+# define PRINT(var) std::cout << #var << "=" << var << std::endl;
+# define PING std::cout << __FILE__ << "::" << __LINE__ << ": " << __PRETTY_FUNCTION__ << std::endl;
+#endif
+
 /*! namespace for all things pbrt parser, both syntactical *and* semantical parser */
 namespace pbrt {
   /*! namespace for syntactic-only parser - this allows to distringuish
@@ -31,9 +36,9 @@ namespace pbrt {
   namespace syntactic {
   
     /*! parse the given file name, return parsed scene */
-    std::shared_ptr<Scene> Scene::parse(const std::string &fileName)
+    std::shared_ptr<Scene> Scene::parse(const std::string &fileName, const std::string &basePath)
     {
-      std::shared_ptr<Parser> parser = std::make_shared<Parser>();
+      std::shared_ptr<Parser> parser = std::make_shared<Parser>(basePath);
       parser->parse(fileName);
       return parser->getScene();
     }
@@ -64,7 +69,7 @@ namespace pbrt {
     // Param
     // ==================================================================
     template<> void ParamArray<float>::add(const std::string &text)
-    { this->push_back(atof(text.c_str())); }
+    { this->push_back(std::stof(text.c_str())); }
 
     template<> void ParamArray<int>::add(const std::string &text)
     { this->push_back(atoi(text.c_str())); }
@@ -350,5 +355,37 @@ namespace pbrt {
       return ss.str();
     }
 
+    /*! when shapes etc get created, they need a copy of the full
+      attribute stack; and in a way that future changes to any
+      attributes, list of names somethigs, etc, will not reversely
+      affect already created objects. To do this, we allow
+      attribtues to be 'cloned', in which case a new set of
+      attribtues gets created that's a full copy of the current
+      attribute stack. as this operation is expensive, we cache
+      the last clone'd object */
+    Attributes::SP Attributes::getClone()
+    {
+      if (!lastClone) {
+        lastClone = std::make_shared<Attributes>();
+        lastClone->mediumInterface = mediumInterface;
+        lastClone->reverseOrientation = reverseOrientation;
+        lastClone->areaLightSources = areaLightSources;
+        std::stack<Attributes *> fullHistory;
+        for (Attributes *s = this; s; s = s->parent.get())
+          fullHistory.push(s);
+        while (!fullHistory.empty()) {
+          Attributes *att = fullHistory.top();
+          fullHistory.pop();
+          for (auto it : att->namedMaterial) {
+            lastClone->namedMaterial[it.first] = it.second;
+          }
+          for (auto it : att->namedMedium)
+            lastClone->namedMedium[it.first] = it.second;
+          for (auto it : att->namedTexture)
+            lastClone->namedTexture[it.first] = it.second;
+        }
+      }
+      return lastClone;
+    }
   } // ::pbrt::syntactic
 } // ::pbrt

@@ -24,6 +24,7 @@
 // stl
 #include <map>
 #include <vector>
+#include <stack>
 #include <string>
 #include <memory>
 #include <assert.h>
@@ -97,26 +98,128 @@ namespace pbrt {
       affine3f atStart;
       affine3f atEnd;
     };
-
-    struct PBRT_PARSER_INTERFACE Attributes {
-
+    
+    class Attributes
+    {
+    public:
       /*! a "Type::SP" shorthand for std::shared_ptr<Type> - makes code
         more concise, and easier to read */
       typedef std::shared_ptr<Attributes> SP;
-    
-      Attributes();
-      Attributes(Attributes &&other) = default;
-      Attributes(const Attributes &other) = default;
+      
 
-      virtual std::shared_ptr<Attributes> clone() const
-      { return std::make_shared<Attributes>(*this); }
+      // NOT copyable!
+      Attributes() = default;
+      Attributes(const Attributes&) = delete;
+      Attributes& operator=(const Attributes&) = delete;
+      Attributes(Attributes::SP _parent)
+        : parent(_parent),
+          areaLightSources(_parent->areaLightSources),
+          mediumInterface(_parent->mediumInterface),
+          reverseOrientation(_parent->reverseOrientation)
+      {}
+
+      /*! Save the current graphics state and initialize a new one */
+      static void push(Attributes::SP &current) {
+        // Attributes::SP newGraphicsState = std::make_shared<Attributes>();
+        // newGraphicsState->areaLightSources = graphicsState->areaLightSources;
+        // newGraphicsState->mediumInterface = graphicsState->mediumInterface;
+        // newGraphicsState->reverseOrientation = graphicsState->reverseOrientation;
+        // newGraphicsState->parent = graphicsState;
+        // graphicsState = newGraphicsState;
+        current 
+          = current.get()
+          ? std::make_shared<Attributes>(current)
+          : std::make_shared<Attributes>();
+      }
+
+      Attributes::SP getClone();
+
+      /*! clear the cache of the last clone - see 'lastClone' */
+      void modified() { lastClone = nullptr; }
+
+      /*! when shapes etc get created, they need a copy of the full
+          attribute stack; and in a way that future changes to any
+          attributes, list of names somethigs, etc, will not reversely
+          affect already created objects. To do this, we allow
+          attribtues to be 'cloned', in which case a new set of
+          attribtues gets created that's a full copy of the current
+          attribute stack. as this operation is expensive, we cache
+          the last clone'd object */
+      Attributes::SP lastClone = nullptr;
+      
+      /*! Restore the parent graphics state */
+      static void pop(Attributes::SP &current) {
+        if (!current)
+          throw std::runtime_error("Invalid graphics state");
+        current = current->parent;
+      }
+
+      /*! Insert named material */
+      void insertNamedMaterial(std::string name,
+                               std::shared_ptr<Material> material) {
+        namedMaterial[name] = material;
+        modified();
+      }
+
+      /*! Insert named medium */
+      void insertNamedMedium(std::string name, std::shared_ptr<Medium> medium) {
+        namedMedium[name] = medium;
+        modified();
+      }
+
+      /*! Insert named texture */
+      void insertNamedTexture(std::string name, std::shared_ptr<Texture> texture) {
+        namedTexture[name] = texture;
+        modified();
+      }
+
+      /*! Find named material either in this or in a parent scope */
+      std::shared_ptr<Material> findNamedMaterial(std::string name) {
+        return findNamedItem(std::shared_ptr<Material>{}, name);
+      }
+
+      /*! Find named medium either in this or in a parent scope */
+      std::shared_ptr<Medium> findNamedMedium(std::string name) {
+        return findNamedItem(std::shared_ptr<Medium>{}, name);
+      }
+
+      /*! Find named texture either in this or in a parent scope */
+      std::shared_ptr<Texture> findNamedTexture(std::string name) {
+        return findNamedItem(std::shared_ptr<Texture>{}, name);
+      }
 
       std::vector<std::shared_ptr<AreaLightSource>>    areaLightSources;
       std::pair<std::string,std::string>               mediumInterface;
+      bool reverseOrientation { false };
+
+    // private:
+      /*! Parent graphics state */
+      Attributes::SP parent = nullptr;
+
       std::map<std::string,std::shared_ptr<Material> > namedMaterial;
       std::map<std::string,std::shared_ptr<Medium> >   namedMedium;
       std::map<std::string,std::shared_ptr<Texture> >  namedTexture;
-      bool reverseOrientation { false };
+
+      /*! get reference to namedMedium */
+      decltype(namedMedium)& get(std::shared_ptr<Medium>) { return namedMedium; }
+
+      /*! get reference to namedMaterial */
+      decltype(namedMaterial)& get(std::shared_ptr<Material>) { return namedMaterial; }
+
+      /*! get reference to namedTexture */
+      decltype(namedTexture)& get(std::shared_ptr<Texture>) { return namedTexture; }
+      
+      /*! search this scope for the named item, descend into
+        parent scopes if not found. Also search prior versions */
+      template <typename Item>
+      Item findNamedItem(Item item, std::string name) {
+        auto &items = get(Item{});
+        auto it = items.find(name);
+        if (it != items.end()) return it->second;
+        if (parent) return parent->findNamedItem(item,name);
+        return nullptr;
+      }
+
     };
 
     /*! forward definition of a typed parameter */
@@ -192,7 +295,7 @@ namespace pbrt {
     };
 
     /*! any class that can store (and query) parameters */
-    struct PBRT_PARSER_INTERFACE ParamSet {
+    struct ParamSet {
 
       ParamSet() = default;
       ParamSet(ParamSet &&) = default;
@@ -272,7 +375,7 @@ namespace pbrt {
         'type' parameter */
       std::string type;
 
-    /*! the logical name that this was defined under, such as
+      /*! the logical name that this was defined under, such as
         "BackWall". Note this may be an empty string for some scenes
         (it is only defined for 'NamedMaterial's) */
       std::string name;
@@ -301,7 +404,7 @@ namespace pbrt {
               const std::string &texelType,
               const std::string &mapType) 
         : name(name), texelType(texelType), mapType(mapType)
-      {};
+        {};
 
       /*! pretty-print this medium (for debugging) */
       virtual std::string toString() const { return "Texture(name="+name+",texelType="+texelType+",mapType="+mapType+")"; }
@@ -310,8 +413,8 @@ namespace pbrt {
       std::string texelType;
       std::string mapType;
       /*! the attributes active when this was created - some texture
-          use implicitly named textures, so have to keep this
-          around */
+        use implicitly named textures, so have to keep this
+        around */
       Attributes::SP attributes;
     };
 
@@ -455,29 +558,32 @@ namespace pbrt {
       virtual std::string toString() const override { return "Volume<"+type+">"; }
     };
 
-    struct PBRT_PARSER_INTERFACE LightSource : public Node {
+    struct LightSource : public Node {
 
       /*! a "Type::SP" shorthand for std::shared_ptr<Type> - makes code
         more concise, and easier to read */
       typedef std::shared_ptr<LightSource> SP;
     
       LightSource(const std::string &type, 
-                  const Transform &transform)
+                  const Transform &transform,
+                  Attributes::SP  attributes)
         : Node(type),
-        transform(transform)
+          transform(transform),
+          attributes(attributes)
       {}
 
       /*! pretty-printing, for debugging */
       virtual std::string toString() const override { return "LightSource<"+type+">"; }
-
+      
       const Transform transform;
+      Attributes::SP  attributes;
     };
 
     /*! area light sources are different from regular light sources in
-        that they get attached to getometry (shapes), whereas regular
-        light sources are not. Thus, from a type perspective a
-        AreaLightSource is _not_ "related" to a LightSource, which is
-        why we don't have one derived from the other. */
+      that they get attached to getometry (shapes), whereas regular
+      light sources are not. Thus, from a type perspective a
+      AreaLightSource is _not_ "related" to a LightSource, which is
+      why we don't have one derived from the other. */
     struct PBRT_PARSER_INTERFACE AreaLightSource : public Node {
 
       /*! a "Type::SP" shorthand for std::shared_ptr<Type> - makes code
@@ -528,24 +634,24 @@ namespace pbrt {
     };
 
     //! what's in a objectbegin/objectned, as well as the root object
-    struct PBRT_PARSER_INTERFACE Object {
-    
+    struct /* PBRT_PARSER_INTERFACE */ Object {
+      
       /*! allows for writing pbrt::syntactic::Scene::SP, which is somewhat
         more concise than std::shared_ptr<pbrt::syntactic::Scene> */
       typedef std::shared_ptr<Object> SP;
     
       Object(const std::string &name) : name(name) {}
-    
+      
       struct PBRT_PARSER_INTERFACE Instance {
 
         /*! allows for writing pbrt::syntactic::Scene::SP, which is somewhat
           more concise than std::shared_ptr<pbrt::syntactic::Scene> */
         typedef std::shared_ptr<Instance> SP;
       
-        Instance(const std::shared_ptr<Object> &object,
+        Instance(std::shared_ptr<Object> object,
                  const Transform  &xfm)
           : object(object), xfm(xfm)
-        {}
+          {}
       
         std::string toString() const;
 
@@ -573,19 +679,25 @@ namespace pbrt {
       scene contains all kind of global settings (such as integrator
       to use, cameras defined in this scene, which pixel filter to
       use, etc, plus some shape. */
-    struct PBRT_PARSER_INTERFACE Scene {
-
+    struct /* PBRT_PARSER_INTERFACE */ Scene {
+      
       /*! allows for writing pbrt::syntactic::Scene::SP, which is somewhat more concise
         than std::shared_ptr<pbrt::syntactic::Scene> */
       typedef std::shared_ptr<Scene> SP;
-    
+      
       /*! default constructor - creates a new (and at first, empty) scene */
       Scene()
         : world(std::make_shared<Object>("<root>"))
-        {}
-
+      {}
+      
+      virtual ~Scene()
+      {
+        world = nullptr;
+      }
+      
       /*! parse the given file name, return parsed scene */
-      static std::shared_ptr<Scene> parse(const std::string &fileName);
+      static std::shared_ptr<Scene> parse(const std::string &fileName, const std::string &basePath = "");
+      
     
       //! pretty-print scene info into a std::string 
       std::string toString(const int depth = 0) { return world->toString(depth); }
@@ -621,7 +733,7 @@ namespace pbrt {
       { return basePath + relativePath; }
     
 
-    /*! the base path for all filenames defined in this scene. In
+      /*! the base path for all filenames defined in this scene. In
         pbrt, lots of objects (a ply mesh shape, a texture, etc)
         will require additional files in other formats (e.g., the
         actual .ply file that the ply shape refers to; and the file

@@ -19,6 +19,9 @@
     <Filter Include="Source Files\Semantic">
       <UniqueIdentifier>{cac385f4-53a1-46a9-a3e4-7a9449d8f179}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\3rdParty">
+      <UniqueIdentifier>{1db78542-5d96-40f4-bb89-680499951373}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\pbrtParser\Scene.h">
@@ -42,6 +45,18 @@
     <ClInclude Include="impl\syntactic\Lexer.h">
       <Filter>Source Files\Syntactic</Filter>
     </ClInclude>
+    <ClInclude Include="impl\syntactic\Buffer.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\syntactic\FileMapping.h">
+      <Filter>Source Files\Syntactic</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\3rdParty\rplyfile.h">
+      <Filter>Source Files\3rdParty</Filter>
+    </ClInclude>
+    <ClInclude Include="impl\3rdParty\rply.h">
+      <Filter>Source Files\3rdParty</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="impl\semantic\BinaryFileFormat.cpp">
@@ -62,20 +77,40 @@
     <ClCompile Include="impl\semantic\Materials.cpp">
       <Filter>Source Files\Semantic</Filter>
     </ClCompile>
-    <ClCompile Include="impl\semantic\Scene.cpp">
-      <Filter>Source Files\Semantic</Filter>
-    </ClCompile>
     <ClCompile Include="impl\semantic\Textures.cpp">
       <Filter>Source Files\Semantic</Filter>
     </ClCompile>
-    <ClCompile Include="impl\syntactic\Parser.cpp">
+    <ClCompile Include="impl\semantic\PixelFilter.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Sampler.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\semantic\Integrator.cpp">
+      <Filter>Source Files\Semantic</Filter>
+    </ClCompile>
+    <ClCompile Include="impl\syntactic\Scene.cpp">
       <Filter>Source Files\Syntactic</Filter>
     </ClCompile>
-    <ClCompile Include="impl\syntactic\Scene2.cpp">
+    <ClCompile Include="impl\syntactic\FileMapping.cpp">
       <Filter>Source Files\Syntactic</Filter>
     </ClCompile>
-    <ClCompile Include="impl\syntactic\Lexer.cpp">
-      <Filter>Source Files\Syntactic</Filter>
+    <ClCompile Include="impl\semantic\Scene2.cpp">
+      <Filter>Source Files\Semantic</Filter>
     </ClCompile>
+    <ClCompile Include="impl\3rdParty\rply.c">
+      <Filter>Source Files\3rdParty</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="impl\syntactic\Buffer.inl">
+      <Filter>Source Files\Syntactic</Filter>
+    </None>
+    <None Include="impl\syntactic\Lexer.inl">
+      <Filter>Source Files\Syntactic</Filter>
+    </None>
+    <None Include="impl\syntactic\Parser.inl">
+      <Filter>Source Files\Syntactic</Filter>
+    </None>
   </ItemGroup>
 </Project>

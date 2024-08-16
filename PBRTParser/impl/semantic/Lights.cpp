@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2019 Ingo Wald                                                 //
+// Copyright 2019-2020 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -56,6 +56,87 @@ namespace pbrt {
       }
       throw std::runtime_error("unknown 'infinite' light source param '"+name+"'");
     }
+
+    std::cout << "found infinite light source w/ map " << light->mapName << std::endl;
+    return light;
+  }
+  
+  LightSource::SP SemanticParser::createLightSource_point
+  (pbrt::syntactic::LightSource::SP in)
+  {
+    PointLightSource::SP light = std::make_shared<PointLightSource>();
+    affine3f transform = in->transform.atStart;
+    for (auto it : in->param) {
+      const std::string name = it.first;
+      if (name == "from") {
+        in->getParam3f(&light->from.x,name);
+        light->from = xfmPoint(transform,light->from);
+        continue;
+      }
+      if (name == "scale") {
+        in->getParam3f(&light->scale.x,name);
+        continue;
+      }
+      if (name == "I") {
+        if (in->hasParam3f(name)) 
+          in->getParam3f(&light->I.x,name);
+        else {
+          std::size_t N=0;
+          in->getParamPairNf(nullptr,&N,name);
+          light->Ispectrum.spd.resize(N);
+          in->getParamPairNf(light->Ispectrum.spd.data(),&N,name);
+        }
+        continue;
+      }
+      throw std::runtime_error("unknown 'point' light source param '"+name+"'");
+    }
+    
+    return light;
+  }
+  
+  LightSource::SP SemanticParser::createLightSource_spot
+  (pbrt::syntactic::LightSource::SP in)
+  {
+    SpotLightSource::SP light = std::make_shared<SpotLightSource>();
+    affine3f transform = in->transform.atStart;
+
+    for (auto it : in->param) {
+      const std::string name = it.first;
+      if (name == "from") {
+        in->getParam3f(&light->from.x,name);
+        light->from = xfmPoint(transform,light->from);
+        continue;
+      }
+      if (name == "to") {
+        in->getParam3f(&light->to.x,name);
+        light->to = xfmPoint(transform,light->to);
+        continue;
+      }
+      if (name == "scale") {
+        in->getParam3f(&light->scale.x,name);
+        continue;
+      }
+      if (name == "conedeltaangle") {
+        light->coneDeltaAngle = in->getParam1f(name,light->coneDeltaAngle);
+        continue;
+      }
+      if (name == "coneangle") {
+        light->coneAngle = in->getParam1f(name,light->coneAngle);
+        continue;
+      }
+      if (name == "I") {
+        if (in->hasParam3f(name)) 
+          in->getParam3f(&light->I.x,name);
+        else {
+          std::size_t N=0;
+          in->getParamPairNf(nullptr,&N,name);
+          light->Ispectrum.spd.resize(N);
+          in->getParamPairNf(light->Ispectrum.spd.data(),&N,name);
+        }
+        continue;
+      }
+      throw std::runtime_error("unknown 'spot' light source param '"+name+"'");
+    }
     
     return light;
   }
@@ -64,6 +145,7 @@ namespace pbrt {
   (pbrt::syntactic::LightSource::SP in)
   {
     DistantLightSource::SP light = std::make_shared<DistantLightSource>();
+    light->transform = in->transform.atStart;
     for (auto it : in->param) {
       std::string name = it.first;
       if (name == "from") {
@@ -106,6 +188,14 @@ namespace pbrt {
     if (type == "distant") 
       return createLightSource_distant(in);
 
+    // ==================================================================
+    if (type == "spot") 
+      return createLightSource_spot(in);
+
+    // ==================================================================
+    if (type == "point") 
+      return createLightSource_point(in);
+ 
     // ==================================================================
 #ifndef NDEBUG
     std::cout << "Warning: un-recognized light type '"+type+"'" << std::endl;
@@ -173,9 +263,9 @@ namespace pbrt {
   {
       // Assume sRGB working space and D65 reference white
       return mat3f(
-          {  3.2404542, -0.9692660,  0.0556434 },
-          { -1.5371385,  1.8760108, -0.2040259 },
-          { -0.4985314,  0.0415560,  1.0572252 }
+          {  3.2404542f, -0.9692660f,  0.0556434f },
+          { -1.5371385f,  1.8760108f, -0.2040259f },
+          { -0.4985314f,  0.0415560f,  1.0572252f }
           ) * xyz;
   }
 
@@ -187,13 +277,13 @@ namespace pbrt {
   vec3f DiffuseAreaLightBB::LinRGB() const
   {
     // Doubles: c (speed of light) is huge, h (Planck's constant) is small..
-    static double const k = 1.3806488E-23;
-    static double const h = 6.62606957E-34;
-    static double const c = 2.99792458E8;
+    static float const k = 1.3806488E-23f;
+    static float const h = 6.62606957E-34f;
+    static float const c = 2.99792458E8f;
 
-    static double const lmin = 400.0;
-    static double const lmax = 700.0;
-    static double const step = 1.0;
+    static float const lmin = 400.0f;
+    static float const lmax = 700.0f;
+    static float const step = 1.0f;
 
     float x = 0.0f;
     float y = 0.0f;
@@ -202,19 +292,19 @@ namespace pbrt {
 
     // Evaluate blackbody spd at lambda nm
     auto bb = [this](float lambda) {
-      lambda *= 1E-3; // nm to microns
+      lambda *= 1E-3f; // nm to microns
 
-      return ( ( 2.0 * 1E24 * h * c * c ) / std::pow(lambda, 5.0) )
-           * ( 1.0 / (std::exp((1E6 * h * c) / (lambda * k * temperature)) - 1.0) );
+      return float(( ( 2.0f * 1E24f * h * c * c ) / powf(lambda, 5.0f) )
+           * ( 1.0f / (expf((1E6f * h * c) / (lambda * k * temperature)) - 1.0f) ));
     };
 
     // lambda where radiance is max
-    float lambda_max_radiance = 2.8977721e-3 / temperature * 1e9 /* m2nm */;
+    float lambda_max_radiance = 2.8977721e-3f / temperature * 1e9f /* m2nm */;
 
     float max_radiance = bb(lambda_max_radiance);
 
     // Evaluate blackbody spd and convert to xyz
-    for (double lambda = lmin; lambda <= lmax; lambda += step)
+    for (float lambda = lmin; lambda <= lmax; lambda += step)
     {
         float p = bb(lambda) / max_radiance;
 

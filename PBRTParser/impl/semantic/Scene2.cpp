@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2015-2019 Ingo Wald                                            //
+// Copyright 2015-2020 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -62,7 +62,10 @@ namespace pbrt {
       std::lock_guard<std::mutex> lock(mutex);
       if (haveComputedBounds) return bounds;
       bounds = box3f::empty_box();
-      for (auto v : vertex) bounds.extend(v);
+      for (auto v : vertex) {
+        bounds.extend(v);
+      }
+      
       haveComputedBounds = true;
       return bounds;
     }
@@ -211,23 +214,29 @@ namespace pbrt {
   // Object
   // ==================================================================
 
-  box3f Object::getBounds() const
+  box3f Object::getBounds() 
   {
-    box3f bounds = box3f::empty_box();
-    for (auto inst : instances) {
+    if (haveComputedBounds) return bounds;
+
+    std::lock_guard<std::mutex> lock(mutex);
+    if (haveComputedBounds) return bounds;
+    
+    bounds = box3f::empty_box();
+    for (auto &inst : instances) {
       if (inst) {
         const box3f ib = inst->getBounds();
         if (!ib.empty())
           bounds.extend(ib);
       }
     }
-    for (auto geom : shapes) {
+    for (auto &geom : shapes) {
       if (geom) {
         const box3f gb = geom->getBounds();
         if (!gb.empty())
           bounds.extend(gb);
       }
     }
+    haveComputedBounds = true;
     return bounds;
   }
 
@@ -235,21 +244,32 @@ namespace pbrt {
   /*! compute (conservative but possibly approximate) bbox of this
     instance in world space. This box is not necessarily tight, as
     it getsc omputed by transforming the object's bbox */
-  box3f Instance::getBounds() const
+  box3f Instance::getBounds() 
   {
-    box3f ob = object->getBounds();
-    if (ob.empty()) 
-      return ob;
+    assert(object);
+    
+    if (haveComputedBounds) return bounds;
 
-    box3f bounds = box3f::empty_box();
-    bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.lower.y,ob.lower.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.lower.y,ob.upper.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.upper.y,ob.lower.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.upper.y,ob.upper.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.lower.y,ob.lower.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.lower.y,ob.upper.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.upper.y,ob.lower.z)));
-    bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.upper.y,ob.upper.z)));
+    std::lock_guard<std::mutex> lock(mutex);
+    if (haveComputedBounds) return bounds;
+    const box3f ob = object->getBounds();
+    if (ob.empty()) {
+      this->bounds = ob;
+      haveComputedBounds = true;
+      return ob;
+    }
+
+    box3f _bounds = box3f::empty_box();
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.lower.y,ob.lower.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.lower.y,ob.upper.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.upper.y,ob.lower.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.lower.x,ob.upper.y,ob.upper.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.lower.y,ob.lower.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.lower.y,ob.upper.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.upper.y,ob.lower.z)));
+    _bounds.extend(xfmPoint(xfm,vec3f(ob.upper.x,ob.upper.y,ob.upper.z)));
+    this->bounds = _bounds;
+    haveComputedBounds = true;
     return bounds;
   }
     
@@ -266,9 +286,9 @@ namespace pbrt {
       some fitting of these parameters, and probably make it
       primtype- and material/shading-data dependent (textures ...),
       but for now any approximateion will do */
-    static const int primWeight = 100.f;
-    static const int instWeight = 4000.f;
-    static const int geomWeight = 4000.f;
+    static const float primWeight = 100.f;
+    static const float instWeight = 4000.f;
+    static const float geomWeight = 4000.f;
     
     std::set<Shape::SP> activeShapes;
     for (auto inst : scene->world->instances) 
@@ -303,7 +323,7 @@ namespace pbrt {
 
       auto it = vertexID.find(oldVertex);
       if (it == vertexID.end()) {
-        int newID = out->vertex.size();
+        int newID = (int)out->vertex.size();
         out->vertex.push_back(in->vertex[i]);
         if (!in->normal.empty())
           out->normal.push_back(in->normal[i]);
@@ -368,7 +388,10 @@ namespace pbrt {
     SingleLevelFlattener(Object::SP world)
       : result(std::make_shared<Object>())
     {
+      for (auto lightSource : world->lightSources)
+        result->lightSources.push_back(lightSource);
       traverse(world, affine3f::identity());
+      result->lightSources = world->lightSources;
     }
     
     Object::SP
@@ -380,8 +403,10 @@ namespace pbrt {
       Object::SP ours = std::make_shared<Object>("ShapeFrom:"+object->name);
       for (auto geom : object->shapes)
         ours->shapes.push_back(geom);
-      for (auto lightSource : object->lightSources)
-        ours->lightSources.push_back(lightSource);
+      // light sources in instantiated objects aren't handled yet ...
+      // for (auto lightSource : object->lightSources)
+      //   ours->lightSources.push_back(lightSource);
+
       return alreadyEmitted[object] = ours;
     }
     
@@ -424,7 +449,7 @@ namespace pbrt {
     if (!world->shapes.empty())
       return false;
     for (auto inst : world->instances)
-      if (!inst->object->instances.empty())
+      if (inst && inst->object && !inst->object->instances.empty())
         return false;
     return true;
   }
