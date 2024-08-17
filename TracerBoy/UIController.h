@@ -26,8 +26,8 @@ public:
 	const TracerBoy::OutputSettings& GetOutputSettings() { return m_outputSettings;  }
 	float GetCameraSpeed() { return m_cameraSpeed; }
 	float GetCaptureLengthInSeconds() { return m_captureLengthInSeconds; }
-	float GetCaptureFramesPerSecond() { return m_captureFramesPerSecond; }
-	float GetCaptureSamplesPerFrame() { return m_captureSamplesPerFrame; }
+	float GetCaptureFramesPerSecond() { return (float)m_captureFramesPerSecond; }
+	float GetCaptureSamplesPerFrame() { return (float)m_captureSamplesPerFrame; }
 
 	bool HasSceneChangeRequest() { return m_bHasSceneChangeRequest; }
 	

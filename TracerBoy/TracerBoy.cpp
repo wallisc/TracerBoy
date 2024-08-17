@@ -476,6 +476,8 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 	}
 	else if (pSubsurfaceMaterial)
 	{
+		HANDLE_FAILURE();
+#if 0
 		{
 			if (pSubsurfaceMaterial->map_kd)
 			{
@@ -493,6 +495,7 @@ Material CreateMaterial(pbrt::Material::SP& pPbrtMaterial, pbrt::Texture::SP *pA
 			// Disabling specular because it currently over-darkens
 			material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG | NO_SPECULAR_MATERIAL_FLAG;
 		}
+#endif
 	}
 	else if (pTranslucentMaterial)
 	{
@@ -1208,8 +1211,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 #endif
 		}
 
-		int instanceCount = pScene->world->shapes.size() + pScene->world->instances.size();
-		instanceCount = std::min(instanceCount, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
+		int totalSceneInstances = pScene->world->shapes.size() + pScene->world->instances.size();
+		int instanceCount = std::min(totalSceneInstances, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 
 		sceneLoadStatus.State = LoadingD3D12OnCPU;
 		sceneLoadStatus.TotalInstances = instanceCount;
@@ -1330,8 +1333,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		};
 		std::vector<CopyJob> CopyJobs;
 
-		bool bInsertInstancesIntoBLAS = true;
-		for (UINT i = 0; i < instanceCount; i++)
+		int numInstancesCreated = 0;
+		bool bInsertInstancesIntoBLAS = false;
+		for (UINT i = 0; i < totalSceneInstances; i++)
 		{
 			pbrt::Shape::SP pGeometry;
 			pbrt::affine3f transform = pbrt::affine3f::identity();
@@ -1456,6 +1460,15 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			bool bShapeAlreadyCreated = !bInsertIntoGlobalBLAS;
 			bool bCreateShapeCacheEntry = !bInsertIntoGlobalBLAS || bNeedToCreateGlobalBLAS;
 
+			if (bNeedToCreateGlobalBLAS || !bInsertIntoGlobalBLAS)
+			{
+				numInstancesCreated++;
+			}
+			if (numInstancesCreated == instanceCount)
+			{
+				break;
+			}
+
 			if (bCreateShapeCacheEntry)
 			{
 				auto shapeCacheEntryIter = shapeCache.find(pGeometry.get());
@@ -1512,11 +1525,20 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 					light.P1 = ConvertFloat3(p1);
 					light.P2 = ConvertFloat3(p2);
 
+					if (pTriangleMesh->normal.size() > 0)
+					{
+						light.N0 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].x]);
+						light.N1 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].y]);
+						light.N2 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].z]);
+					}
+					else
+					{
+						pbrt::math::vec3f n = pbrt::math::normalize(pbrt::math::cross(p1 - p0, p2 - p0));
+						light.N0 = light.N1 = light.N2 = ConvertFloat3(n);
+					}
 
 
-					light.N0 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].x]);
-					light.N1 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].y]);
-					light.N2 = ConvertFloat3(pTriangleMesh->normal[pTriangleMesh->index[i].z]);
+
 
 					lightList.push_back(light);
 				}
@@ -3053,6 +3075,8 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 				commandList,
 				m_pUpscaleOutput,
 				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputSRV),
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVNormalsSRV),
+				GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVCustomOutputSRV),
 				inputDesc.Width,
 				inputDesc.Height,
 				postProcessSettings.m_LayerToDebug >= 0 ? postProcessSettings.m_LayerToDebug : OpenImageDenoise::cDisableLayerDebugging,

@@ -179,7 +179,8 @@ xcopy /y  "$(ProjectDir)..\bin\dlss\*.dll" "$(OutDir)"
 xcopy /y  "$(ProjectDir)Textures\LDR_RGBA_0.png" "$(OutDir)"
 xcopy /y  "$(ProjectDir)Textures\LDR_RGBA_1.png" "$(OutDir)"
 xcopy /y  "$(ProjectDir)ML\weights.bin" "$(OutDir)"
-xcopy /y  "$(ProjectDir)ML\rt_ldr.tza" "$(OutDir)"</Command>
+xcopy /y  "$(ProjectDir)ML\rt_ldr.tza" "$(OutDir)"
+xcopy /y  "$(ProjectDir)ML\rt_ldr_alb_nrm.tza" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

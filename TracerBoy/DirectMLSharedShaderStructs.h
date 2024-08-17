@@ -10,5 +10,6 @@ struct DirectMLConstants
 	uint UseNHWC;
 	uint SliceToDebug;
 	uint InputChannelDepth;
+	uint UseNormalsAndAlbedo;
 };
 

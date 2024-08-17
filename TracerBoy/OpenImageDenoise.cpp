@@ -755,7 +755,15 @@ OpenImageDenoise::OpenImageDenoise(ID3D12Device& device) :
 
     CD3DX12_DESCRIPTOR_RANGE1 InputTextureDescriptor;
     InputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
-    Parameters[DirectMLSuperResolutionRootSignatureParameters::Input].InitAsDescriptorTable(1, &InputTextureDescriptor);
+    Parameters[DirectMLSuperResolutionRootSignatureParameters::Input0].InitAsDescriptorTable(1, &InputTextureDescriptor);
+
+    CD3DX12_DESCRIPTOR_RANGE1 InputTextureDescriptor1 = InputTextureDescriptor;
+    InputTextureDescriptor1.BaseShaderRegister = 1;
+    Parameters[DirectMLSuperResolutionRootSignatureParameters::Input1].InitAsDescriptorTable(1, &InputTextureDescriptor1);
+
+    CD3DX12_DESCRIPTOR_RANGE1 InputTextureDescriptor2 = InputTextureDescriptor;
+    InputTextureDescriptor2.BaseShaderRegister = 2;
+    Parameters[DirectMLSuperResolutionRootSignatureParameters::Input2].InitAsDescriptorTable(1, &InputTextureDescriptor2);
 
     CD3DX12_DESCRIPTOR_RANGE1 OutputUAVDescriptor;
     OutputUAVDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
@@ -844,7 +852,7 @@ void OpenImageDenoise::OnResize(
 
     TensorMap tensorMap;
     std::vector<BYTE> buffer;
-    LoadBuffer(L"rt_ldr.tza", buffer);
+    LoadBuffer(m_bUseNormalsAndAlbedo ? L"rt_ldr_alb_nrm.tza" : L"rt_ldr.tza", buffer);
     parseTZA(buffer.data(), buffer.size(), tensorMap);
     
 #if 0
@@ -902,7 +910,7 @@ void OpenImageDenoise::OnResize(
     DirectMLPass ModelInputPass = {};
     ModelInputPass.m_OutputHeight = ModelInputPass.m_InputHeight = Height;
     ModelInputPass.m_OutputWidth = ModelInputPass.m_InputWidth = Width;
-    ModelInputPass.m_InputChannelDepth = ModelInputPass.m_OutputChannelDepth = 3;
+    ModelInputPass.m_InputChannelDepth = ModelInputPass.m_OutputChannelDepth = m_bUseNormalsAndAlbedo ? 9 : 3;
 
     m_DMLPasses.clear();
     m_DMLPasses.reserve(100); // TODO: How many?
@@ -1935,6 +1943,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
 	ID3D12GraphicsCommandList& commandList,
 	PassResource OutputBuffer,
 	D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
+    D3D12_GPU_DESCRIPTOR_HANDLE NormalsTexture,
+    D3D12_GPU_DESCRIPTOR_HANDLE AlbedoTexture,
 	UINT inputWidth,
 	UINT inputHeight,
     UINT convolutionLayerToDebug,
@@ -1960,7 +1970,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         constants.SliceToDebug = sliceToDebug;
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
-        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, InputTexture);
+        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input0, InputTexture);
+        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input1, AlbedoTexture);
+        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input2, NormalsTexture);
         commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Output, m_modelInputUAV);
 
         UINT DispatchWidth = (inputWidth - 1) / DIRECTML_THREAD_GROUP_WIDTH + 1;
@@ -2007,7 +2019,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE OpenImageDenoise::Run(
         constants.SliceToDebug = sliceToDebug;
         commandList.SetComputeRoot32BitConstants(DirectMLSuperResolutionRootSignatureParameters::ConstantsParam, sizeof(constants) / sizeof(UINT32), &constants, 0);
 
-        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input, OutputSRV);
+        commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Input0, OutputSRV);
         commandList.SetComputeRootDescriptorTable(DirectMLSuperResolutionRootSignatureParameters::Output, OutputBuffer.m_uavHandle);
 
         UINT DispatchWidth = (outputWidth - 1) / DIRECTML_THREAD_GROUP_WIDTH + 1;

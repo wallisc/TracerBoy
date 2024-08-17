@@ -35,6 +35,8 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE Run(ID3D12GraphicsCommandList& commandList,
 		PassResource OutputBuffer,
 		D3D12_GPU_DESCRIPTOR_HANDLE InputTexture,
+		D3D12_GPU_DESCRIPTOR_HANDLE NormalsTexture,
+		D3D12_GPU_DESCRIPTOR_HANDLE AlbedoTexture,
 		UINT inputWidth,
 		UINT inputHeight,
 		UINT convolutionLayerToDebug = cDisableLayerDebugging,
@@ -214,6 +216,8 @@ private:
 
 	TensorLayout m_tensorLayout = TensorLayout::NHWC;
 
+	bool m_bUseNormalsAndAlbedo = false;
+
 	ComPtr<IDMLOperatorInitializer> m_dmlOpInitializers[e_opCount];
 	ComPtr<IDMLCommandRecorder>     m_pCommandRecorder;
 	ID3D12Device& m_device;
@@ -221,7 +225,9 @@ private:
 	enum DirectMLSuperResolutionRootSignatureParameters
 	{
 		ConstantsParam = 0,
-		Input,
+		Input0,
+		Input1,
+		Input2,
 		Output,
 		NumRootSignatureParameters
 	};
