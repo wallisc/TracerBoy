@@ -1222,6 +1222,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			for (auto shape : instance->object->shapes)
 			{
 				flattenedInstanceList.emplace_back(shape, instance->xfm);
+				break;
 			}
 		}
 
@@ -1412,60 +1413,68 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 					const UINT indicesPerLoop = facesPerLoop * trianglesPerFace * indicesPerTriangle;
 					UINT vertexOffset = pTriangleMesh->vertex.size();
 					const UINT loopsPerCurve = 3;
-					float curveIntepolantIncrementPerLoop = 1.0 / (float)loopsPerCurve;
+
 
 					pTriangleMesh->material = pCurve->material;
 					pTriangleMesh->areaLight = pCurve->areaLight;
 
-					// Always assuming curves are a single cubic bezier curve
-					assert(pCurve->P.size() == 4);
+					// You need 4 points to make a single bezier curve. Any additional points merely extend
+					// the curve
+					assert(pCurve->P.size() >= 4);
+					UINT numCurves = pCurve->P.size() - 3;
 
-					pbrt::math::vec3f p0 = pCurve->P[0];
-					pbrt::math::vec3f p1 = pCurve->P[1];
-					pbrt::math::vec3f p2 = pCurve->P[2];
-					pbrt::math::vec3f p3 = pCurve->P[3];
+					float IntepolantIncrementPerCurve = 1.0 / (float)numCurves;
+					float curveIntepolantIncrementPerLoop = IntepolantIncrementPerCurve / (float)loopsPerCurve;
 
-					// Skip the first point as we always form a ring extending back to the previous point 
-					// so nothing needs to be done for the initial point
 
-					for (UINT loopIndex = 0; loopIndex < loopsPerCurve; loopIndex++)
+					for (UINT curveIndex = 0; curveIndex < numCurves; curveIndex++)
 					{
-						float curveInterpolant = loopIndex * curveIntepolantIncrementPerLoop;
-						float curveRadius = curveInterpolant * pCurve->width1 + (1.0 - curveInterpolant) * pCurve->width0;
-						pbrt::math::vec3f loopCenter = CalculatePointOnCubicBezier(p0, p1, p2, p3, curveInterpolant);
-						pbrt::math::vec3f curveForward, curveNormal0, curveNormal1;
-						CalculateObjectSpaceAxisOnCubicBezier(p0, p1, p2, p3, curveInterpolant, curveForward, curveNormal0, curveNormal1);
+						pbrt::math::vec3f p0 = pCurve->P[curveIndex + 0];
+						pbrt::math::vec3f p1 = pCurve->P[curveIndex + 1];
+						pbrt::math::vec3f p2 = pCurve->P[curveIndex + 2];
+						pbrt::math::vec3f p3 = pCurve->P[curveIndex + 3];
 
-						for (UINT vertIndex = 0; vertIndex < verticesPerLoop; vertIndex++)
+						// Skip the first point as we always form a ring extending back to the previous point 
+						// so nothing needs to be done for the initial point
+						for (UINT loopIndex = 0; loopIndex < loopsPerCurve; loopIndex++)
 						{
-							float theta = vertIndex * rotatedRadiansPerVert;
-							pbrt::math::vec3f normal = cos(theta) * curveNormal0 + sin(theta) * curveNormal1;
-							pbrt::math::vec3f vertex = loopCenter + normal * curveRadius;
-							pTriangleMesh->vertex.push_back(vertex);
-							pTriangleMesh->normal.push_back(normal);
-							pTriangleMesh->tangents.push_back(curveForward);
-						}
+							float curveInterpolant = curveIndex * IntepolantIncrementPerCurve + loopIndex * curveIntepolantIncrementPerLoop;
+							float curveRadius = curveInterpolant * pCurve->width1 + (1.0 - curveInterpolant) * pCurve->width0;
+							pbrt::math::vec3f loopCenter = CalculatePointOnCubicBezier(p0, p1, p2, p3, curveInterpolant);
+							pbrt::math::vec3f curveForward, curveNormal0, curveNormal1;
+							CalculateObjectSpaceAxisOnCubicBezier(p0, p1, p2, p3, curveInterpolant, curveForward, curveNormal0, curveNormal1);
 
-						bool bFirstLoop = loopIndex == 0;
-						// Skip generating faces for the first loop since we don't have any other edge loops
-						// to create faces with
-						if (!bFirstLoop)
-						{
-							UINT loopStartIndex = verticesPerLoop * loopIndex + vertexOffset;
-							UINT prevLoopStartIndex = verticesPerLoop * (loopIndex - 1) + vertexOffset;
-							for (UINT faceIndex = 0; faceIndex < facesPerLoop; faceIndex++)
+							for (UINT vertIndex = 0; vertIndex < verticesPerLoop; vertIndex++)
 							{
-								UINT leftIndexOffsetFromStart = faceIndex;
-								UINT rightIndexOffsetFromStart = faceIndex == facesPerLoop - 1 ? 0 : faceIndex + 1;
-								UINT leftIndex = loopStartIndex + leftIndexOffsetFromStart;
-								UINT rightIndex = loopStartIndex + rightIndexOffsetFromStart;
-								UINT prevLoopLeftIndex = prevLoopStartIndex + leftIndexOffsetFromStart;
-								UINT prevLoopRightIndex = prevLoopStartIndex + rightIndexOffsetFromStart;
-
-								pTriangleMesh->index.push_back(pbrt::vec3i(leftIndex, rightIndex, prevLoopLeftIndex));
-								pTriangleMesh->index.push_back(pbrt::vec3i(rightIndex, prevLoopLeftIndex, prevLoopRightIndex));
+								float theta = vertIndex * rotatedRadiansPerVert;
+								pbrt::math::vec3f normal = cos(theta) * curveNormal0 + sin(theta) * curveNormal1;
+								pbrt::math::vec3f vertex = loopCenter + normal * curveRadius;
+								pTriangleMesh->vertex.push_back(vertex);
+								pTriangleMesh->normal.push_back(normal);
+								pTriangleMesh->tangents.push_back(curveForward);
 							}
 
+							bool bFirstLoop = loopIndex == 0;
+							// Skip generating faces for the first loop since we don't have any other edge loops
+							// to create faces with
+							if (!bFirstLoop)
+							{
+								UINT loopStartIndex = verticesPerLoop * loopIndex + vertexOffset;
+								UINT prevLoopStartIndex = verticesPerLoop * (loopIndex - 1) + vertexOffset;
+								for (UINT faceIndex = 0; faceIndex < facesPerLoop; faceIndex++)
+								{
+									UINT leftIndexOffsetFromStart = faceIndex;
+									UINT rightIndexOffsetFromStart = faceIndex == facesPerLoop - 1 ? 0 : faceIndex + 1;
+									UINT leftIndex = loopStartIndex + leftIndexOffsetFromStart;
+									UINT rightIndex = loopStartIndex + rightIndexOffsetFromStart;
+									UINT prevLoopLeftIndex = prevLoopStartIndex + leftIndexOffsetFromStart;
+									UINT prevLoopRightIndex = prevLoopStartIndex + rightIndexOffsetFromStart;
+
+									pTriangleMesh->index.push_back(pbrt::vec3i(leftIndex, rightIndex, prevLoopLeftIndex));
+									pTriangleMesh->index.push_back(pbrt::vec3i(rightIndex, prevLoopLeftIndex, prevLoopRightIndex));
+								}
+
+							}
 						}
 					}
 				}
