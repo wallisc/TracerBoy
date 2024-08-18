@@ -1211,7 +1211,22 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 #endif
 		}
 
-		int totalSceneInstances = pScene->world->shapes.size() + pScene->world->instances.size();
+		struct FlattenedInstance
+		{
+			pbrt::Shape::SP Shape;
+			pbrt::affine3f xfm;
+		};
+		std::vector<FlattenedInstance> flattenedInstanceList;
+		for (auto instance : pScene->world->instances)
+		{
+			for (auto shape : instance->object->shapes)
+			{
+				flattenedInstanceList.emplace_back(shape, instance->xfm);
+			}
+		}
+
+
+		int totalSceneInstances = pScene->world->shapes.size() + flattenedInstanceList.size();
 		int instanceCount = std::min(totalSceneInstances, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 
 		sceneLoadStatus.State = LoadingD3D12OnCPU;
@@ -1349,9 +1364,9 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			else
 			{
 				UINT instanceIndex = i - pScene->world->shapes.size();
-				auto& pInstance = pScene->world->instances[instanceIndex];
-				transform = pInstance->xfm;
-				pGeometry = pInstance->object->shapes[0];
+				auto& pInstance = flattenedInstanceList[instanceIndex];
+				transform = pInstance.xfm;
+				pGeometry = pInstance.Shape;
 				bInsertIntoGlobalBLAS = bInsertInstancesIntoBLAS;
 			}
 
@@ -1463,10 +1478,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			if (bNeedToCreateGlobalBLAS || !bInsertIntoGlobalBLAS)
 			{
 				numInstancesCreated++;
-			}
-			if (numInstancesCreated == instanceCount)
-			{
-				break;
 			}
 
 			if (bCreateShapeCacheEntry)
@@ -1783,6 +1794,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 
 			sceneLoadStatus.InstancesLoaded++;
 			UpdateSceneLoadStatus();
+
+			if (numInstancesCreated == instanceCount)
+			{
+				break;
+			}
 		}
 
 		sceneLoadStatus.State = RecordingCommandListWork;

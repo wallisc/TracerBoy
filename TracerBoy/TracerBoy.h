@@ -645,7 +645,7 @@ private:
 		TopLevelAccelerationStructureUAV,
 #endif
 		NumReservedViewSlots,
-		NumTotalViews = 1024 * 512,
+		NumTotalViews = 1024 * 960,
 		NumAOVTextures = AOVLastUAVSlot - AOVBaseUAVSlot + 1,
 		NumSystemTextures = SystemTexturesLastSlot - SystemTexturesBaseSlot + 1,
 		NumSceneDescriptors = SceneDescriptorsLastSlot - SceneDescriptorsBaseSlot + 1
