@@ -977,8 +977,8 @@ public:
 		}
 
 		Offset += Alignment - (Offset % Alignment);
-
-		if (Offset + Size > AllocatorBlockSize || CurrentBlock == nullptr)
+		bool bCurrentBlockFull = (Offset + Size) > AllocatorBlockSize;
+		if (bCurrentBlockFull || (CurrentBlock == nullptr))
 		{
 			AllocateNewBlock();
 		}
@@ -1211,23 +1211,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 #endif
 		}
 
-		struct FlattenedInstance
-		{
-			pbrt::Shape::SP Shape;
-			pbrt::affine3f xfm;
-		};
-		std::vector<FlattenedInstance> flattenedInstanceList;
-		for (auto instance : pScene->world->instances)
-		{
-			for (auto shape : instance->object->shapes)
-			{
-				flattenedInstanceList.emplace_back(shape, instance->xfm);
-				break;
-			}
-		}
 
-
-		int totalSceneInstances = pScene->world->shapes.size() + flattenedInstanceList.size();
+		int totalSceneInstances = pScene->world->shapes.size() + pScene->world->instances.size();
 		int instanceCount = std::min(totalSceneInstances, D3D12_RAYTRACING_MAX_INSTANCES_PER_TOP_LEVEL_ACCELERATION_STRUCTURE);
 
 		sceneLoadStatus.State = LoadingD3D12OnCPU;
@@ -1326,8 +1311,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 
 		std::vector<Light> lightList;
 
-		std::map<pbrt::Shape*, ShapeCacheEntry> shapeCache;
-		pbrt::Shape* GlobalBLASKey = nullptr;
+		std::map<pbrt::Entity*, ShapeCacheEntry> shapeCache;
+		pbrt::Entity* GlobalBLASKey = nullptr;
 		struct InstanceEntry
 		{
 			pbrt::Shape* pShape;
@@ -1353,6 +1338,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		bool bInsertInstancesIntoBLAS = false;
 		for (UINT i = 0; i < totalSceneInstances; i++)
 		{
+			std::shared_ptr<pbrt::Object> pObject;
 			pbrt::Shape::SP pGeometry;
 			pbrt::affine3f transform = pbrt::affine3f::identity();
 			bool bInsertIntoGlobalBLAS = false;
@@ -1365,10 +1351,50 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			else
 			{
 				UINT instanceIndex = i - pScene->world->shapes.size();
-				auto& pInstance = flattenedInstanceList[instanceIndex];
-				transform = pInstance.xfm;
-				pGeometry = pInstance.Shape;
+				auto& pInstance = pScene->world->instances[instanceIndex];
+				transform = pInstance->xfm;
+				//pObject = pInstance->object;
+				pGeometry = pInstance->object->shapes[0];
 				bInsertIntoGlobalBLAS = bInsertInstancesIntoBLAS;
+			}
+
+			bool bNeedToCreateGlobalBLAS = bInsertIntoGlobalBLAS && !GlobalBLASKey;
+			bool bShapeAlreadyCreated = !bInsertIntoGlobalBLAS;
+			bool bCreateShapeCacheEntry = !bInsertIntoGlobalBLAS || bNeedToCreateGlobalBLAS;
+
+			if (bNeedToCreateGlobalBLAS || !bInsertIntoGlobalBLAS)
+			{
+				numInstancesCreated++;
+			}
+
+			pbrt::Entity* pKey = pGeometry.get() != nullptr ?
+				static_cast<pbrt::Entity*>(pGeometry.get()) :
+				static_cast<pbrt::Entity*>(pObject.get());
+			if (bInsertIntoGlobalBLAS && !bNeedToCreateGlobalBLAS)
+			{
+				pKey = GlobalBLASKey;
+			}
+
+			if (bCreateShapeCacheEntry)
+			{
+				auto shapeCacheEntryIter = shapeCache.find(pKey);
+				bShapeAlreadyCreated = shapeCacheEntryIter != shapeCache.end();
+				if (!bShapeAlreadyCreated)
+				{
+					shapeCache[pKey] = {};
+				}
+
+				if (bInsertIntoGlobalBLAS)
+				{
+					GlobalBLASKey = pKey;
+				}
+			}
+
+			ShapeCacheEntry& shapeCacheEntry = shapeCache.find(pKey)->second;
+
+			if (!bInsertIntoGlobalBLAS)
+			{
+				shapeCacheEntry.NumInstances++;
 			}
 
 			pbrt::TriangleMesh::SP pTriangleMesh = std::dynamic_pointer_cast<pbrt::TriangleMesh>(pGeometry);
@@ -1479,38 +1505,6 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 					}
 				}
 			}
-
-			bool bNeedToCreateGlobalBLAS = bInsertIntoGlobalBLAS && !GlobalBLASKey;
-			bool bShapeAlreadyCreated = !bInsertIntoGlobalBLAS;
-			bool bCreateShapeCacheEntry = !bInsertIntoGlobalBLAS || bNeedToCreateGlobalBLAS;
-
-			if (bNeedToCreateGlobalBLAS || !bInsertIntoGlobalBLAS)
-			{
-				numInstancesCreated++;
-			}
-
-			if (bCreateShapeCacheEntry)
-			{
-				auto shapeCacheEntryIter = shapeCache.find(pGeometry.get());
-				bShapeAlreadyCreated = shapeCacheEntryIter != shapeCache.end();
-				if (!bShapeAlreadyCreated)
-				{
-					shapeCache[pGeometry.get()] = {};
-				}
-
-				if (bInsertIntoGlobalBLAS)
-				{
-					GlobalBLASKey = pGeometry.get();
-				}
-			}
-			
-			pbrt::Shape* key = bInsertIntoGlobalBLAS ? GlobalBLASKey : pGeometry.get();
-			ShapeCacheEntry& shapeCacheEntry = shapeCache.find(key)->second;
-			
-			if (!bInsertIntoGlobalBLAS)
-			{
-				shapeCacheEntry.NumInstances++;
-			}
 			
 			pbrt::vec3f emissive(0.0f);
 			if (pTriangleMesh->areaLight)
@@ -1608,6 +1602,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
 				BufferAllocator.Allocate(positionBufferSize, &pPositionBuffer, &positionBufferOffset);
 
+				bool bBakeTransformIntoVertexBuffer = bInsertIntoGlobalBLAS;
+				pbrt::affine3f vertexBufferTransform = bBakeTransformIntoVertexBuffer ? transform : pbrt::affine3f::identity();
 				bool bNormalsProvided = pTriangleMesh->normal.size();
 				Vertex* pVertexBufferData;
 				float3* pPositionBufferData;
@@ -1621,13 +1617,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 					VERIFY_HRESULT(pUploadPositionBuffer->Map(0, nullptr, (void**)&pPositionBufferByteData));
 					pPositionBufferByteData += uploadPositionBufferOffset;
 					pPositionBufferData = (float3*)pPositionBufferByteData;
-
-					
 					for (UINT v = 0; v < pTriangleMesh->vertex.size(); v++)
 					{
-						bool bBakeTransformIntoVertexBuffer = bInsertIntoGlobalBLAS;
-						pbrt::affine3f vertexBufferTransform = bBakeTransformIntoVertexBuffer ? transform : pbrt::affine3f::identity();
 						auto parserVertex = vertexBufferTransform * pTriangleMesh->vertex[v];
+						// If normals aren't provided, this will be replaced later by a flat normal calculated
+						// when iterating through faces
 						pbrt::vec3f parserNormal(0, 1, 0); // TODO: This likely needs to be a flat normal
 						pbrt::vec3f parserTangent(0, 0, 1);
 						if (bNormalsProvided)
@@ -1695,9 +1689,19 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 						pIndexBufferData[3 * i + 2] = triangleIndices.z;
 						if (!bNormalsProvided)
 						{
-							pbrt::vec3f edge1 = pTriangleMesh->vertex[triangleIndices.y] - pTriangleMesh->vertex[triangleIndices.x];
+							pbrt::vec3f edge1 = pTriangleMesh->vertex[triangleIndices.z] - pTriangleMesh->vertex[triangleIndices.x];
 							pbrt::vec3f edge2 = pTriangleMesh->vertex[triangleIndices.z] - pTriangleMesh->vertex[triangleIndices.y];
-							pbrt::vec3f normal = pbrt::math::cross(pbrt::math::normalize(edge1), pbrt::math::normalize(edge2));
+							pbrt::vec3f normal = pbrt::math::cross(edge1, edge2);
+
+							// Check for degenerate triangles so we don't get a NaN from the normalize
+							if (pbrt::math::dot(normal, normal) <= 0.0001)
+							{
+								normal = pbrt::vec3f(0, 1, 0);
+							}
+							else
+							{
+								normal = pbrt::math::normalize(xfmNormal(vertexBufferTransform, normal));
+							}
 
 							pVertexBufferData[triangleIndices.x].Normal = { normal.x, normal.y, normal.z };
 							pVertexBufferData[triangleIndices.y].Normal = { normal.x, normal.y, normal.z };
@@ -1815,6 +1819,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 
 		for (auto& job : CopyJobs)
 		{
+			UINT DestSize = job.pDest->GetDesc().Width;
+			UINT SourceSize = job.pSource->GetDesc().Width;
+			UINT DestBufferEndOffset = job.DestOffset + job.CopySize - 1;
+			UINT SourceBufferEndOffset = job.SourceOffset + job.CopySize - 1;
+			VERIFY(DestBufferEndOffset < DestSize && SourceBufferEndOffset < SourceSize);
+
 			commandList.CopyBufferRegion(job.pDest, job.DestOffset, job.pSource, job.SourceOffset, job.CopySize);
 		}
 
@@ -1822,7 +1832,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		postCopyBarriers.reserve(BufferAllocator.GetAllocatedResources().size());
 		for (auto& resource : BufferAllocator.GetAllocatedResources())
 		{
-			D3D12_RESOURCE_BARRIER copyBarrier = CD3DX12_RESOURCE_BARRIER::Transition(resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			D3D12_RESOURCE_BARRIER copyBarrier = CD3DX12_RESOURCE_BARRIER::Transition(resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
 			postCopyBarriers.push_back(copyBarrier);
 		}
 		commandList.ResourceBarrier(postCopyBarriers.size(), postCopyBarriers.data());
