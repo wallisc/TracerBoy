@@ -1600,6 +1600,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				UploadHeapAllocator.Allocate(positionBufferSize, &pUploadPositionBuffer, &uploadPositionBufferOffset);
 
 				BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
+				VERIFY((vertexBufferOffset % D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT) == 0)
 				BufferAllocator.Allocate(positionBufferSize, &pPositionBuffer, &positionBufferOffset);
 
 				bool bBakeTransformIntoVertexBuffer = bInsertIntoGlobalBLAS;
@@ -1673,6 +1674,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				UINT32 indexBufferOffset;
 				UploadHeapAllocator.Allocate(indexBufferSize, &pUploadIndexBuffer, &uploadIndexBufferOffset);
 				BufferAllocator.Allocate(indexBufferSize, &pIndexBuffer, &indexBufferOffset);
+				VERIFY((indexBufferOffset % D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT) == 0)	
+
 				UINT IndexBufferIndex;
 				{
 					BYTE* pIndexBufferByteData;
