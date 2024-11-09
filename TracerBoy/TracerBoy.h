@@ -327,6 +327,7 @@ public:
 		UINT ActiveWaves;
 		UINT ActivePixels;
 		float SelectedPixelDistance;
+		int SelectedMaterialID;
 	};
 
 	bool RequiresGPUFlush(const OutputSettings& outputSettings);

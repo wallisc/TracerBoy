@@ -31,6 +31,7 @@ void OutputPrimaryAlbedo(vec3 Albedo, float DiffuseContribution) {}
 void OutputPrimaryNormal(vec3 Normal) {}
 void OutputPrimaryWorldPosition(vec3 WorldPosition, float DistanceToNeighbor) {}
 void OutputDistanceToFirstHit(float Distance) {}
+void OutputMaterial(int MaterialID) {}
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 #endif
@@ -1355,6 +1356,7 @@ vec4 Trace(Ray ray, Ray neighborRay)
                 OutputPrimaryWorldPosition(RayPoint, length(NeighborRayPoint - RayPoint));
 			    OutputPrimaryNormal(detailNormal);
                 OutputDistanceToFirstHit(result.x);
+                OutputMaterial(int(result.y));
                 if(TerminateAfterPrimaryHit())
                 {
                     break;

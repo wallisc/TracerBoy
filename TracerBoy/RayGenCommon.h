@@ -605,6 +605,14 @@ void OutputDistanceToFirstHit(float Distance)
 	}
 }
 
+void OutputMaterial(int MaterialID)
+{
+	if (IsSelectedPixel())
+	{
+		StatsBuffer.Store(12, MaterialID);
+	}
+}
+
 void ClearAOVs()
 {
 	OutputPrimaryAlbedo(float3(0.0, 0.0, 0.0), 1.0);

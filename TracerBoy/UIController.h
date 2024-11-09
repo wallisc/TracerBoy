@@ -10,6 +10,7 @@ public:
 	struct PixelSelection
 	{
 		float DistanceFromCamera;
+		int MaterialID;
 	};
 
 	struct PerFrameStats

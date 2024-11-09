@@ -307,6 +307,7 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	if (pPixelSelection)
 	{	ImGui::Begin("Pixel Selection");
 		ImGui::Text("Distance from camera: %.3f", pPixelSelection->DistanceFromCamera);
+		ImGui::Text("Material ID: %d", pPixelSelection->MaterialID);
 		ImGui::End();
 	}
 
