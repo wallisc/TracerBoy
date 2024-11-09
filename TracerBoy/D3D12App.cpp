@@ -261,7 +261,7 @@ void D3D12App::Render()
 		if (bPixelSelectionQueryFinished)
 		{
 			pixelSelection.DistanceFromCamera = TracerStats.SelectedPixelDistance;
-			pixelSelection.MaterialID = TracerStats.SelectedMaterialID;
+			pixelSelection.Material = m_pTracerBoy->GetMaterial(TracerStats.SelectedMaterialID);
 		}
 #endif
 		m_FramesSincePixelSelection++;

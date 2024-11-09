@@ -126,6 +126,32 @@ struct SceneLoadStatus
 	UINT TotalInstances;
 };
 
+struct MaterialTracker
+{
+	bool Exists(pbrt::Material* pMaterial)
+	{
+		const auto& iter = MaterialNameToIndex.find(pMaterial);
+		return iter != MaterialNameToIndex.end();
+	}
+
+	UINT GetMaterial(pbrt::Material* pMaterial)
+	{
+		VERIFY(Exists(pMaterial));
+		return MaterialNameToIndex[pMaterial];
+	}
+
+	UINT AddMaterial(pbrt::Material* pMaterial, const Material m)
+	{
+		UINT materialIndex = MaterialList.size();
+		MaterialNameToIndex[pMaterial] = materialIndex;
+		MaterialList.push_back(m);
+		return materialIndex;
+	}
+
+	std::vector<Material> MaterialList;
+	std::unordered_map<pbrt::Material*, UINT> MaterialNameToIndex;
+};
+
 class TracerBoy
 {
 public:
@@ -333,6 +359,8 @@ public:
 	bool RequiresGPUFlush(const OutputSettings& outputSettings);
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
+
+	const Material* GetMaterial(int MaterialID) const;
 
 	UINT GetNumberOfSamplesSinceLastInvalidate() 
 	{
@@ -656,6 +684,7 @@ private:
 #endif
 	};
 
+	MaterialTracker m_MaterialTracker;
 
 	Vector3 m_volumeMax;
 	Vector3 m_volumeMin;

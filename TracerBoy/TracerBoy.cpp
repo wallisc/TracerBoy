@@ -122,32 +122,6 @@ float ConvertSpecularToIOR(float specular)
 	return (sqrt(specular) + 1.0) / (1.0 - sqrt(specular));
 }
 
-struct MaterialTracker
-{
-	bool Exists(pbrt::Material* pMaterial)
-	{
-		const auto& iter = MaterialNameToIndex.find(pMaterial);
-		return iter != MaterialNameToIndex.end();
-	}
-
-	UINT GetMaterial(pbrt::Material* pMaterial)
-	{
-		VERIFY(Exists(pMaterial));
-		return MaterialNameToIndex[pMaterial];
-	}
-
-	UINT AddMaterial(pbrt::Material* pMaterial, const Material m)
-	{
-		UINT materialIndex = MaterialList.size();
-		MaterialNameToIndex[pMaterial] = materialIndex;
-		MaterialList.push_back(m);
-		return materialIndex;
-	}
-
-	std::vector<Material> MaterialList;
-	std::unordered_map<pbrt::Material*, UINT> MaterialNameToIndex;
-};
-
 bool IsNormalizedFormat(DXGI_FORMAT format)
 {
 	switch (format)
@@ -1259,17 +1233,15 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		VERIFY_HRESULT(commandList.QueryInterface(IID_GRAPHICS_PPV_ARGS(pCommandList.ReleaseAndGetAddressOf())));
 
 		TextureAllocator textureAllocator(*this, *pCommandList.Get());
-		MaterialTracker materialTracker;
-
 #if DISABLE_MATERIALS
 		std::shared_ptr<pbrt::UberMaterial> pMaterial = std::make_shared<pbrt::UberMaterial>();
 		pbrt::Material::SP spMaterial = pMaterial;
-		materialTracker.AddMaterial(pMaterial.get(),
+		m_MaterialTracker.AddMaterial(pMaterial.get(),
 			CreateMaterial(
 				spMaterial,
 				nullptr,
 				pbrt::vec3f(0, 0, 0),
-				materialTracker,
+				m_MaterialTracker,
 				textureAllocator));
 #endif
 
@@ -1560,17 +1532,17 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 
 			UINT materialIndex = 0;
 #if !DISABLE_MATERIALS
-			if (materialTracker.Exists(pTriangleMesh->material.get()))
+			if (m_MaterialTracker.Exists(pTriangleMesh->material.get()))
 			{
-				materialIndex = materialTracker.GetMaterial(pTriangleMesh->material.get());
+				materialIndex = m_MaterialTracker.GetMaterial(pTriangleMesh->material.get());
 			}
 			else
 			{
-				materialIndex = materialTracker.AddMaterial(pTriangleMesh->material.get(), CreateMaterial(
+				materialIndex = m_MaterialTracker.AddMaterial(pTriangleMesh->material.get(), CreateMaterial(
 					pTriangleMesh->material, 
 					pTriangleMesh->textures.find("alpha") != pTriangleMesh->textures.end() ? &pTriangleMesh->textures["alpha"] : nullptr,
 					emissive, 
-					materialTracker, 
+					m_MaterialTracker,
 					textureAllocator));
 			}
 #endif
@@ -1737,7 +1709,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				triangleCount += pTriangleMesh->index.size() / 3;
 
 #if USE_ANYHIT
-				D3D12_RAYTRACING_GEOMETRY_FLAGS GeometryFlag = (materialTracker.MaterialList[materialIndex].Flags & NO_ALPHA_MATERIAL_FLAG) ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+				D3D12_RAYTRACING_GEOMETRY_FLAGS GeometryFlag = (m_MaterialTracker.MaterialList[materialIndex].Flags & NO_ALPHA_MATERIAL_FLAG) ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
 #else
 				D3D12_RAYTRACING_GEOMETRY_FLAGS GeometryFlag = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 #endif
@@ -1846,12 +1818,12 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		resourcesToDelete.push_back(pUploadHitGroupShaderTable);
 
 		ComPtr<ID3D12Resource> pUploadMaterialList;
-		AllocateBufferWithData(commandList, materialTracker.MaterialList.data(), materialTracker.MaterialList.size() * sizeof(Material), m_pMaterialList, pUploadMaterialList);
+		AllocateBufferWithData(commandList, m_MaterialTracker.MaterialList.data(), m_MaterialTracker.MaterialList.size() * sizeof(Material), m_pMaterialList, pUploadMaterialList);
 		D3D12_SHADER_RESOURCE_VIEW_DESC materialListSRV = {};
 		materialListSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		materialListSRV.Format = DXGI_FORMAT_UNKNOWN;
 		materialListSRV.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-		materialListSRV.Buffer.NumElements =  materialTracker.MaterialList.size();
+		materialListSRV.Buffer.NumElements = m_MaterialTracker.MaterialList.size();
 		materialListSRV.Buffer.StructureByteStride = sizeof(Material);
 		m_pDevice->CreateShaderResourceView(m_pMaterialList.Get(), &materialListSRV, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MaterialListSRV));
 
@@ -2541,6 +2513,18 @@ TracerBoy::TAAUpscaler TracerBoy::GetSelectedUpscaler(const OutputSettings& outp
 	}
 
 	return selectedTAAUpscaler;
+}
+
+const Material *TracerBoy::GetMaterial(int MaterialID) const
+{
+	if (MaterialID >= 0 && MaterialID < m_MaterialTracker.MaterialList.size())
+	{
+		return &m_MaterialTracker.MaterialList[MaterialID];
+	}
+	else
+	{
+		return nullptr;
+	}
 }
 
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* pBackBuffer, ID3D12Resource* pReadbackStats, const OutputSettings& outputSettings)

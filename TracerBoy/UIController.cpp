@@ -307,7 +307,20 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	if (pPixelSelection)
 	{	ImGui::Begin("Pixel Selection");
 		ImGui::Text("Distance from camera: %.3f", pPixelSelection->DistanceFromCamera);
-		ImGui::Text("Material ID: %d", pPixelSelection->MaterialID);
+
+		if (pPixelSelection->Material)
+		{
+			ImGui::Text("Material:");
+
+			float Albedo[] = { pPixelSelection->Material->albedo.x, pPixelSelection->Material->albedo.y, pPixelSelection->Material->albedo.z };
+			ImGui::ColorPicker3("Albedo", Albedo);
+
+			float Emissive[] = { pPixelSelection->Material->emissive.x, pPixelSelection->Material->emissive.y, pPixelSelection->Material->emissive.z };
+			ImGui::ColorPicker3("Emissive", Emissive);
+
+			ImGui::Text("Roughness: %f", pPixelSelection->Material->roughness);
+		}
+
 		ImGui::End();
 	}
 
