@@ -42,7 +42,7 @@
 
 #include "wincodec.h"
 
-#define HANDLE_FAILURE() throw -1;
+#define HANDLE_FAILURE() assert(false);
 #define VERIFY(x) if(!(x)) HANDLE_FAILURE();
 #define VERIFY_HRESULT(x) VERIFY(SUCCEEDED(x))
 
