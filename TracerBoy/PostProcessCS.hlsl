@@ -80,7 +80,7 @@ float3 ProcessNormal(float4 color)
 {
 	uint frameCount = color.w;
 	float3 summedNormals = color.xyz;
-	return frameCount > 0 ? normalize(summedNormals / frameCount) : float3(0, 0, 0);
+	return frameCount > 0 ? abs(normalize(summedNormals / frameCount)) : float3(0, 0, 0);
 }
 
 float3 ProcessLuminanceVariance(float4 color)

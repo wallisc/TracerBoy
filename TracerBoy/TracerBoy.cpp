@@ -1697,7 +1697,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 							pbrt::vec3f normal = pbrt::math::cross(edge1, edge2);
 
 							// Check for degenerate triangles so we don't get a NaN from the normalize
-							if (pbrt::math::dot(normal, normal) <= 0.0001)
+							if (pbrt::math::dot(normal, normal) <= 0.0000000001f)
 							{
 								normal = pbrt::vec3f(0, 1, 0);
 							}
