@@ -1817,8 +1817,10 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		AllocateBufferWithData(commandList, hitGroupShaderTable.data(), hitGroupShaderTable.size() * sizeof(HitGroupShaderRecord), m_pHitGroupShaderTable, pUploadHitGroupShaderTable);
 		resourcesToDelete.push_back(pUploadHitGroupShaderTable);
 
-		ComPtr<ID3D12Resource> pUploadMaterialList;
-		AllocateBufferWithData(commandList, m_MaterialTracker.MaterialList.data(), m_MaterialTracker.MaterialList.size() * sizeof(Material), m_pMaterialList, pUploadMaterialList);
+		UINT MaterialBufferSize = m_MaterialTracker.MaterialList.size() * sizeof(Material);
+		AllocateBuffer(MaterialBufferSize, m_pMaterialList);
+		AllocateUploadBuffer(MaterialBufferSize, m_pUploadMaterialList);
+
 		D3D12_SHADER_RESOURCE_VIEW_DESC materialListSRV = {};
 		materialListSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		materialListSRV.Format = DXGI_FORMAT_UNKNOWN;
@@ -1827,7 +1829,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		materialListSRV.Buffer.StructureByteStride = sizeof(Material);
 		m_pDevice->CreateShaderResourceView(m_pMaterialList.Get(), &materialListSRV, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::MaterialListSRV));
 
-		resourcesToDelete.push_back(pUploadMaterialList);
+		UpdateMaterialBuffer(commandList);
 
 		if (textureAllocator.GetTextureData().size() > 0)
 		{
@@ -2247,9 +2249,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE TracerBoy::GetGPUDescriptorHandle(UINT slot)
 	return CD3DX12_GPU_DESCRIPTOR_HANDLE(descriptorHeapBase, slot, descriptorSize);
 }
 
-void TracerBoy::AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource> &pBuffer)
+void TracerBoy::AllocateBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer, D3D12_HEAP_TYPE HeapType)
 {
-	const D3D12_HEAP_PROPERTIES uploadHeapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	const D3D12_HEAP_PROPERTIES uploadHeapDesc = CD3DX12_HEAP_PROPERTIES(HeapType);
 	D3D12_RESOURCE_DESC uploadBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize);
 
 	VERIFY_HRESULT(m_pDevice->CreateCommittedResource(
@@ -2259,6 +2261,11 @@ void TracerBoy::AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource> &pB
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_GRAPHICS_PPV_ARGS(pBuffer.ReleaseAndGetAddressOf())));
+}
+
+void TracerBoy::AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource> &pBuffer)
+{
+	AllocateBuffer(bufferSize, pBuffer, D3D12_HEAP_TYPE_UPLOAD);
 }
 
 void TracerBoy::AllocateBufferWithData(const void* pData, UINT dataSize, ComPtr<ID3D12Resource>& pBuffer)
@@ -2515,15 +2522,39 @@ TracerBoy::TAAUpscaler TracerBoy::GetSelectedUpscaler(const OutputSettings& outp
 	return selectedTAAUpscaler;
 }
 
-const Material *TracerBoy::GetMaterial(int MaterialID) const
+bool TracerBoy::IsMaterialIDValid(int MaterialID) const
 {
-	if (MaterialID >= 0 && MaterialID < m_MaterialTracker.MaterialList.size())
+	return MaterialID >= 0 && MaterialID < m_MaterialTracker.MaterialList.size();
+}
+
+const Material *TracerBoy::GetMaterial(int MaterialID, const std::string** ppMaterialName) const
+{
+	if (IsMaterialIDValid(MaterialID))
 	{
+		if (ppMaterialName)
+		{
+			*ppMaterialName = &m_MaterialTracker.MaterialName[MaterialID];
+		}
 		return &m_MaterialTracker.MaterialList[MaterialID];
+
 	}
 	else
 	{
 		return nullptr;
+	}
+}
+
+void TracerBoy::SetMaterial(int MaterialID, Material material)
+{
+	if (IsMaterialIDValid(MaterialID))
+	{
+		Material& currentMaterial = m_MaterialTracker.MaterialList[MaterialID];
+		if(memcmp(&material, &currentMaterial, sizeof(material)) != 0)
+		{
+			m_MaterialTracker.MaterialList[MaterialID] = material;
+			m_bInvalidateHistory = true;
+			m_bUpdateMaterialList = true;
+		}
 	}
 }
 
@@ -2621,6 +2652,12 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		m_SamplesRendered = 0;
 		m_RenderStartTime = std::chrono::steady_clock::now();
+	}
+
+	if (m_bUpdateMaterialList)
+	{
+		UpdateMaterialBuffer(commandList);
+		m_bUpdateMaterialList = false;
 	}
 
 	const UINT ZeroValue[4] = {};
@@ -3708,3 +3745,13 @@ void TracerBoy::ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID
 		}
 	}
 }
+
+void TracerBoy::UpdateMaterialBuffer(ID3D12GraphicsCommandList& commandList)
+{
+	void* pMappedData;
+	m_pUploadMaterialList->Map(0, nullptr, &pMappedData);
+	memcpy(pMappedData, m_MaterialTracker.MaterialList.data(), m_MaterialTracker.MaterialList.size() * sizeof(Material));
+
+	commandList.CopyResource(m_pMaterialList.Get(), m_pUploadMaterialList.Get());
+}
+

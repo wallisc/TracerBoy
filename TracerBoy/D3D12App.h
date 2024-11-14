@@ -80,6 +80,15 @@ private:
 	UINT m_SamplesRendered;
 	UINT m_FramesRendered;
 
+	UIController::PixelSelection m_pixelSelection = {};
+	const Material* m_pSelectedMaterial = nullptr;
+
+	void ClearSelection()
+	{
+		m_pixelSelection = {};
+		m_pSelectedMaterial = nullptr;
+	}
+
 	bool m_MouseMovementEnabled = false;
 	int m_mouseX, m_mouseY;
 	bool m_inputArray[CHAR_MAX];

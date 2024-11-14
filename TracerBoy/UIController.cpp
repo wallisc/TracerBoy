@@ -308,17 +308,60 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	{	ImGui::Begin("Pixel Selection");
 		ImGui::Text("Distance from camera: %.3f", pPixelSelection->DistanceFromCamera);
 
-		if (pPixelSelection->Material)
+		if (pPixelSelection->MaterialName)
 		{
-			ImGui::Text("Material:");
+			::Material& Material = *((::Material*)(&pPixelSelection->Material));
 
-			float Albedo[] = { pPixelSelection->Material->albedo.x, pPixelSelection->Material->albedo.y, pPixelSelection->Material->albedo.z };
-			ImGui::ColorPicker3("Albedo", Albedo);
+			ImGui::Text("Material: %s", pPixelSelection->MaterialName->c_str());
+			
+			ImGuiColorEditFlags ColorEditFlags = ImGuiColorEditFlags_PickerHueWheel;
+			ImGui::ColorEdit3("Albedo", (float*)&pPixelSelection->Material.albedo, ColorEditFlags);
+			ImGui::ColorEdit3("Emissive", (float*)&pPixelSelection->Material.emissive, ColorEditFlags);
 
-			float Emissive[] = { pPixelSelection->Material->emissive.x, pPixelSelection->Material->emissive.y, pPixelSelection->Material->emissive.z };
-			ImGui::ColorPicker3("Emissive", Emissive);
+			ImGui::InputFloat("Roughness:", &Material.roughness, 0.01f, 0.1f, "%.2f");
+			Material.roughness = std::clamp(Material.roughness, 0.0f, 1.0f);
 
-			ImGui::Text("Roughness: %f", pPixelSelection->Material->roughness);
+			ImGui::InputFloat("Specular:", &Material.SpecularCoef, 0.01f, 0.1f, "%.2f");
+			Material.SpecularCoef = std::clamp(Material.SpecularCoef, 0.0f, 1.0f);
+
+			ImGui::InputFloat("IOR:", &Material.IOR, 0.01f, 0.1f, "%.2f");
+			Material.IOR = std::clamp(Material.IOR, 0.0f, 10.0f);
+
+			bool bIsMetal = (Material.Flags & METALLIC_MATERIAL_FLAG) != 0;
+			ImGui::Checkbox("Is Metal", &bIsMetal);
+			if (bIsMetal)
+			{
+				Material.Flags |= METALLIC_MATERIAL_FLAG;
+			}
+			else
+			{
+				Material.Flags &= ~METALLIC_MATERIAL_FLAG;
+			}
+
+			bool bIsSubsurface = (Material.Flags & SUBSURFACE_SCATTER_MATERIAL_FLAG) != 0;
+			ImGui::Checkbox("Is Subsurface", &bIsSubsurface);
+			if (bIsSubsurface)
+			{
+				ImGui::ColorEdit3("Absorption", (float*)&pPixelSelection->Material.absorption, ColorEditFlags);
+				ImGui::ColorEdit3("Scattering", (float*)&pPixelSelection->Material.scattering, ColorEditFlags);
+
+				Material.Flags |= SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			}
+			else
+			{
+				Material.Flags &= ~SUBSURFACE_SCATTER_MATERIAL_FLAG;
+			}
+
+			bool bDisableSpecular = (Material.Flags & NO_SPECULAR_MATERIAL_FLAG) != 0;
+			ImGui::Checkbox("Disable Specular", &bDisableSpecular);
+			if (bDisableSpecular)
+			{
+				Material.Flags |= NO_SPECULAR_MATERIAL_FLAG;
+			}
+			else
+			{
+				Material.Flags &= ~NO_SPECULAR_MATERIAL_FLAG;
+			}
 		}
 
 		ImGui::End();

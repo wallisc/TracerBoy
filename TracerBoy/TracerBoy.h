@@ -1,4 +1,5 @@
 #pragma once
+
 struct Vector3
 {
 	Vector3(float nX = 0.0f, float nY = 0.0f, float nZ = 0.0f) : x(nX), y(nY), z(nZ) {}
@@ -145,10 +146,12 @@ struct MaterialTracker
 		UINT materialIndex = MaterialList.size();
 		MaterialNameToIndex[pMaterial] = materialIndex;
 		MaterialList.push_back(m);
+		MaterialName.push_back(pMaterial->name);
 		return materialIndex;
 	}
 
 	std::vector<Material> MaterialList;
+	std::vector<std::string> MaterialName;
 	std::unordered_map<pbrt::Material*, UINT> MaterialNameToIndex;
 };
 
@@ -360,7 +363,9 @@ public:
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
 
-	const Material* GetMaterial(int MaterialID) const;
+	bool IsMaterialIDValid(int MaterialID) const;
+	const Material* GetMaterial(int MaterialID, const std::string **ppMaterialName = nullptr) const;
+	void SetMaterial(int MaterialID, Material material);
 
 	UINT GetNumberOfSamplesSinceLastInvalidate() 
 	{
@@ -386,6 +391,8 @@ private:
 
 	void ResizeBuffersIfNeeded(ID3D12GraphicsCommandList& commandList, ID3D12Resource *pBackBuffer);
 	void UpdateConfigConstants(UINT backBufferWidth, UINT backBufferHeight);
+
+	void UpdateMaterialBuffer(ID3D12GraphicsCommandList& commandList);
 
 	void InvalidateHistory(bool bForceRealTimeInvalidate = false);
 
@@ -414,7 +421,7 @@ private:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetNonShaderVisibleCPUDescriptorHandle(UINT slot);
 
-
+	void AllocateBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer, D3D12_HEAP_TYPE HeapType = D3D12_HEAP_TYPE_DEFAULT);
 	void AllocateUploadBuffer(UINT bufferSize, ComPtr<ID3D12Resource>& pBuffer);
 	void AllocateBufferWithData(const void *pData, UINT dataSize, ComPtr<ID3D12Resource> &pBuffer);
 	void AllocateBufferWithData(
@@ -464,7 +471,12 @@ private:
 
 	ComPtr<ID3D12Resource> m_pStatsBuffer;
 
+	// We keep the material upload heap in memory so that we can do 
+	// live updates of the material list without needing to
+	// manage the lifetime of the upload heap
+	ComPtr<ID3D12Resource> m_pUploadMaterialList;
 	ComPtr<ID3D12Resource> m_pMaterialList;
+
 	ComPtr<ID3D12Resource> m_pTextureDataList;
 
 	std::vector<ComPtr<ID3D12Resource>> m_pBuffers;
@@ -577,6 +589,7 @@ private:
 	UINT32 m_selectedPixelX, m_selectedPixelY;
 	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
+	bool m_bUpdateMaterialList = false;
 
 	ComPtr<ID3D12Resource> m_pLuminanceHistogram;
 	ComPtr<ID3D12Resource> m_pAveragedLuminance;

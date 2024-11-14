@@ -79,6 +79,8 @@ void D3D12App::LoadScene(const std::string& commandLine)
 	ExecuteAndFreeCommandListAllocatorPair(commandListAllocatorPair);
 	WaitForGPUIdle();
 	bIsSceneLoadFinished = true;
+
+	ClearSelection();
 }
 
 UINT64 D3D12App::SignalFence()
@@ -146,6 +148,7 @@ void D3D12App::NotifyLeftMouseClick()
 	m_pTracerBoy->SelectPixel(m_mouseX, m_mouseY);
 	m_FramesSincePixelSelection = 0;
 	m_bValidPixelSelection = true;
+	ClearSelection();
 }
 
 
@@ -256,12 +259,16 @@ void D3D12App::Render()
 		}
 
 #if ENABLE_UI
-		static UIController::PixelSelection pixelSelection = {};
 		bool bPixelSelectionQueryFinished = m_FramesSincePixelSelection == cNumBackBuffers;
 		if (bPixelSelectionQueryFinished)
 		{
-			pixelSelection.DistanceFromCamera = TracerStats.SelectedPixelDistance;
-			pixelSelection.Material = m_pTracerBoy->GetMaterial(TracerStats.SelectedMaterialID);
+			m_pixelSelection.DistanceFromCamera = TracerStats.SelectedPixelDistance;
+			m_pSelectedMaterial = m_pTracerBoy->GetMaterial(TracerStats.SelectedMaterialID, &m_pixelSelection.MaterialName);
+			if (m_pSelectedMaterial)
+			{
+				m_pixelSelection.Material = *m_pSelectedMaterial;
+			}
+			
 		}
 #endif
 		m_FramesSincePixelSelection++;
@@ -283,8 +290,15 @@ void D3D12App::Render()
 			stats.ElapsedTimeSinceLastInvalidate = std::chrono::duration_cast<std::chrono::milliseconds>(
 				(bConverged ? m_TimeSinceConvergence : std::chrono::steady_clock::now())
 				- m_TimeSinceLastInvalidate).count() / 1000.0f;
+			
+			bool bValidSelectedMaterial = m_pSelectedMaterial;
+			m_pUIController->Render(commandList, stats, m_bValidPixelSelection ? &m_pixelSelection : nullptr);
 
-			m_pUIController->Render(commandList, stats, m_bValidPixelSelection ? &pixelSelection : nullptr);
+			bool bMaterialHasBeenModified = bValidSelectedMaterial && memcmp(&m_pixelSelection.Material, m_pSelectedMaterial, sizeof(m_pixelSelection.Material)) != 0;
+			if (bMaterialHasBeenModified)
+			{
+				m_pTracerBoy->SetMaterial(TracerStats.SelectedMaterialID, m_pixelSelection.Material);
+			}
 		}
 #endif
 	}

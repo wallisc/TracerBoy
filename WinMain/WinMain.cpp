@@ -160,10 +160,28 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		PostQuitMessage(0);
 		return 0;
 	case WM_LBUTTONUP:
+		if (ImGui::GetCurrentContext())
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			if (io.WantCaptureMouse)
+			{
+				return 0;
+			}
+		}
+
 		g_pD3D12App->UpdateMousePosition(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		g_pD3D12App->NotifyLeftMouseClick();
 		return 0;
 	case WM_MOUSEMOVE:
+		if (ImGui::GetCurrentContext())
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			if (io.WantCaptureMouse)
+			{
+				return 0;
+			}
+		}
+
 		g_pD3D12App->UpdateMousePosition(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		return 0;
 	}
@@ -175,6 +193,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCommandLine, int nCmdShow)
 {
 	auto WindowName = L"TracerBoy";
+
+	AllocConsole();
+	FILE* file;
+	freopen_s(&file, "CONOUT$", "w", stdout);
 
 	WNDCLASSEX windowClass = { 0 };
 	windowClass.cbSize = sizeof(WNDCLASSEX);
