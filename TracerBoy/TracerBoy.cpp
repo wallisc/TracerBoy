@@ -2558,6 +2558,77 @@ void TracerBoy::SetMaterial(int MaterialID, Material material)
 	}
 }
 
+#include "dxcapi.h"
+
+void TracerBoy::RecompileShaders()
+{
+	LPCWSTR ShaderFile = L"..\\..\\TracerBoy\\RaytraceCS.hlsl";
+
+	// Load up the compiler
+	ComPtr<IDxcCompiler3> pCompiler;
+	VERIFY_HRESULT(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
+
+	// Load up DXCUtils, not strictly necessary but has lots of useful helper functions
+	ComPtr<IDxcUtils> pUtils;
+	VERIFY_HRESULT(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+	
+	// Load the HLSL file into memory
+	UINT32 CodePage = DXC_CP_UTF8;
+	ComPtr<IDxcBlobEncoding> pSourceBlob;
+	VERIFY_HRESULT(pUtils->LoadFile(ShaderFile, &CodePage, pSourceBlob.GetAddressOf()));
+	 
+	// The include handler will handle the #include's in your HLSL file so that 
+	// you don't need to handle bundling them all into a single blob. Technically
+	// the include handler is optional not specifying this will cause the compiler to 
+	ComPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+	VERIFY_HRESULT(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
+
+	DxcBuffer SourceBuffer;
+	BOOL unused;
+	SourceBuffer.Ptr = pSourceBlob->GetBufferPointer();
+	SourceBuffer.Size = pSourceBlob->GetBufferSize();
+	pSourceBlob->GetEncoding(&unused, &SourceBuffer.Encoding);
+
+	// Compiler args where you specify the entry point of your shader and what kind of shader it is (i.e. compute/pixel/vertex/etc)
+	ComPtr<IDxcCompilerArgs> pCompilerArgs;
+	VERIFY_HRESULT(pUtils->BuildArguments(ShaderFile, L"main", L"cs_6_5", nullptr, 0, nullptr, 0, pCompilerArgs.GetAddressOf()));
+
+	// Finally, time to compile!
+	ComPtr<IDxcResult> pCompiledResult;
+	HRESULT hr = pCompiler->Compile(&SourceBuffer, pCompilerArgs->GetArguments(), pCompilerArgs->GetCount(), pDefaultIncludeHandler.Get(), IID_PPV_ARGS(pCompiledResult.GetAddressOf()));
+
+	if (SUCCEEDED(hr))
+	{
+		// Output errors are all put in a buffer. Warning will also be output here, so don't assume that 
+		// the existence of an error buffer means the shader compile failed
+		ComPtr<IDxcBlobEncoding> pErrors;
+		if (SUCCEEDED(pCompiledResult->GetErrorBuffer(pErrors.GetAddressOf())))
+		{
+			std::string ErrorMessage = std::string((const char*)pErrors->GetBufferPointer());
+			OutputDebugString(ErrorMessage.c_str());
+		}
+
+		ComPtr<IDxcBlob> pOutput;
+		if (SUCCEEDED(pCompiledResult->GetResult(pOutput.GetAddressOf())))
+		{
+			// Take the compiled shader code and compile it into a PSO
+			D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+			psoDesc.pRootSignature = m_pRayTracingRootSignature.Get();
+			psoDesc.CS = CD3DX12_SHADER_BYTECODE(pOutput->GetBufferPointer(), pOutput->GetBufferSize());
+
+			// Check that the PSO compile worked, failure here could mean issues with root signature mismatches or you're using
+			// features that the driver doesn't support
+			ComPtr<ID3D12PipelineState> pNewRaytracingPSO;
+			if (SUCCEEDED(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(pNewRaytracingPSO.ReleaseAndGetAddressOf()))))
+			{
+				// Overwrite the old PSO. MAKE SURE THE OLD PSO ISN'T BEING REFERENCED ANYMORE!!
+				// Particularly ensure the GPU isn't running any shaders that are referencing it.
+				m_pRayTracingPSO = pNewRaytracingPSO;
+			}
+		}
+	}
+}
+
 void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* pBackBuffer, ID3D12Resource* pReadbackStats, const OutputSettings& outputSettings)
 {
 	bool bUnderSampleLimit = outputSettings.m_debugSettings.m_SampleLimit == 0 || m_SamplesRendered < outputSettings.m_debugSettings.m_SampleLimit;

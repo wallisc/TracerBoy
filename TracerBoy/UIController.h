@@ -37,6 +37,9 @@ public:
 	// After this has been called, HasSceneChangeRequest() will return back to false
 	const std::string& GetRequestedSceneName();
 
+	bool HasRecompileRequest() const { return m_bHasRecompileRequest; }
+	void NotifyRecompileComplete() { m_bHasRecompileRequest = false; }
+
 private:
 	void SubmitDrawData(ID3D12GraphicsCommandList& commandList, bool bClearRenderTarget);
 	void SetDefaultSettings();
@@ -49,6 +52,7 @@ private:
 
 	std::mutex m_sceneNameMutex;
 	bool m_bHasSceneChangeRequest = false;
+	bool m_bHasRecompileRequest = false;
 	std::string m_sceneName;
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;

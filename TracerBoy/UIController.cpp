@@ -175,6 +175,12 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 	
 	ImGui::InputFloat("Camera Speed", &m_cameraSpeed, 0.01f, 1.0f, "%.3f");
 	ImGui::Checkbox("Enable Normal Maps", &m_outputSettings.m_EnableNormalMaps);
+	
+	if (ImGui::Button("Recompile"))
+	{
+		m_bHasRecompileRequest = true;
+	}
+
 
 	if (ImGui::Button("Open Scene"))
 	{

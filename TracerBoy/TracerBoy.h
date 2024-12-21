@@ -363,6 +363,9 @@ public:
 
 	void Render(ID3D12GraphicsCommandList &commandList, ID3D12Resource *pBackBuffer, ID3D12Resource *pReadbackStats, const OutputSettings &outputSettings);
 
+	// GPU must be flushed before calling this
+	void RecompileShaders();
+
 	bool IsMaterialIDValid(int MaterialID) const;
 	const Material* GetMaterial(int MaterialID, const std::string **ppMaterialName = nullptr) const;
 	void SetMaterial(int MaterialID, Material material);

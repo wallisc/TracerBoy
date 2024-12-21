@@ -219,10 +219,23 @@ void D3D12App::Render()
 		auto outputSettings = TracerBoy::GetDefaultOutputSettings();
 #endif
 
-		if (m_pTracerBoy->RequiresGPUFlush(outputSettings))
+		bool bFlushGPU = m_pTracerBoy->RequiresGPUFlush(outputSettings);
+#if ENABLE_UI
+		bool bHasRecompileRequest = m_pUIController->HasRecompileRequest();
+		bFlushGPU = bFlushGPU || bHasRecompileRequest;
+#endif
+		if (bFlushGPU)
 		{
 			WaitForGPUIdle();
 		}
+
+#if ENABLE_UI
+		if (bHasRecompileRequest)
+		{
+			m_pTracerBoy->RecompileShaders();
+			m_pUIController->NotifyRecompileComplete();
+		}
+#endif
 
 		m_pTracerBoy->Render(commandList, pBackBuffer.Get(), m_pReadbackStatBuffers[backBufferIndex].Get(), outputSettings);
 
