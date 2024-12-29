@@ -1281,7 +1281,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
     vec3 accumulatedIndirectLightMultiplier = vec3(1.0, 1.0, 1.0);
     uint FirstPrimitiveID = uint(-1); 
     BlueNoiseData BlueNoise = GetBlueNoise();
-    
     bool bPrevRayWasPerfectlySpecular = false;
     
     for (int i = 0; i < perFrameConstants.MaxBounces; i++)
@@ -1333,11 +1332,24 @@ vec4 Trace(Ray ray, Ray neighborRay)
             {
                 OutputPrimaryEmissive(accumulatedColor);
             }
+            else
+            {
+                if (i > 0)
+                {
+                    OutputVisualizationRay(ray.origin, ray.direction, -1, i);
+                }
+            }
             break;
         }
 		else
         {   
             vec3 RayPoint = GetRayPoint(ray, result.x);
+
+            if (i > 0)
+            {
+                OutputVisualizationRay(ray.origin, ray.direction, result.x, i);
+            }
+
             ray.origin = RayPoint + normal * EPSILON;
 
             float RayDirectionDotN = dot(normal, ray.direction);
@@ -1429,6 +1441,8 @@ vec4 Trace(Ray ray, Ray neighborRay)
             {
 				if(lightPDF > EPSILON && dot(lightDirection, lightNormal) < 0.0)
 				{
+                    int bounceCount = i + 1;
+
 					#define SHADOW_BOUNCES 1
 					vec3 ShadowMultiplier = vec3(1.0, 1.0, 1.0);
 					Ray shadowFeeler = NewRay(RayPoint + normal * EPSILON, lightDirection);
@@ -1439,6 +1453,9 @@ vec4 Trace(Ray ray, Ray neighborRay)
 						vec2 shadowUV;
 						uint shadowPrimitiveID;
                         vec2 shadowResult = Intersect(shadowFeeler, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
+
+                        //OutputVisualizationRay(shadowFeeler.origin, shadowFeeler.direction, shadowResult.x, -bounceCount);
+
                         //vec2 shadowResult = IntersectAnything(shadowFeeler, 999999.0, shadowNormal, shadowTangent, shadowUV, shadowPrimitiveID); 
 						vec3 shadowPoint = GetRayPoint(shadowFeeler, shadowResult.x);
                      
@@ -1755,7 +1772,6 @@ vec4 Trace(Ray ray, Ray neighborRay)
             }
         }
     }
-    
     return vec4(accumulatedColor, float(FirstPrimitiveID));
 }
 

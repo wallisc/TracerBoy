@@ -595,6 +595,40 @@ bool IsSelectedPixel()
 	return all(GetDispatchIndex() == uint2(perFrameConstants.SelectedPixelX, perFrameConstants.SelectedPixelY));
 }
 
+#include "VisualizationRaysCommon.h"
+
+int RequestVisualizationRayIndex()
+{
+	int AllocatedIndex = -1;
+	VisualizationRaysBuffer.InterlockedAdd(0, 1, AllocatedIndex);
+	bool bOutOfSpace = AllocatedIndex >= MAX_VISUALIZER_RAYS;
+	if (bOutOfSpace)
+	{
+		AllocatedIndex = -1;
+	}
+
+	return AllocatedIndex;
+}
+
+bool IsValidVisualizationRayIndex(int VisualizationRayIndex)
+{
+	return VisualizationRayIndex >= 0;
+}
+
+void OutputVisualizationRay(float3 Origin, float3 Direction, float HitT, float BounceCount)
+{
+	if (IsSelectedPixel())
+	{
+		int VisualizationRayIndex = RequestVisualizationRayIndex();
+		if (IsValidVisualizationRayIndex(VisualizationRayIndex))
+		{
+			int OffsetToVisualizationRay = GetOffsetToVisualizationRay(VisualizationRayIndex);
+			VisualizationRaysBuffer.Store4(OffsetToVisualizationRay + 0, asuint(float4(Origin, Direction.x)));
+			VisualizationRaysBuffer.Store4(OffsetToVisualizationRay + 16, asuint(float4(Direction.yz, HitT, BounceCount)));
+		}
+	}
+}
+
 void OutputDistanceToFirstHit(float Distance)
 {
 	AOVDepth[GetDispatchIndex().xy] = saturate(Distance / perFrameConstants.MaxZ);

@@ -266,6 +266,10 @@ public:
 		float m_VarianceMultiplier;
 		float m_DebugValue;
 		float m_DebugValue2;
+		bool m_bVisualizeRays;
+		float m_VisualizeRayWidth;
+		float m_VisualizeRayDepth;
+		int m_VisualizeRayCount;
 	};
 
 
@@ -296,6 +300,10 @@ public:
 		debugSettings.m_TimeLimitInSeconds = 0.0f;
 		debugSettings.m_DebugValue = 1.0f;
 		debugSettings.m_DebugValue2 = 1.0f;
+		debugSettings.m_bVisualizeRays = false;
+		debugSettings.m_VisualizeRayWidth = 0.01f;
+		debugSettings.m_VisualizeRayCount = 0;
+		debugSettings.m_VisualizeRayDepth = 10.0f;
 
 		PostProcessSettings& postProcessSettings = outputSettings.m_postProcessSettings;
 		postProcessSettings.m_ExposureMultiplier = 1.0f;
@@ -385,6 +393,7 @@ public:
 	{
 		m_selectedPixelX = x;
 		m_selectedPixelY = y;
+		m_bClearVisualizationRays = true;
 	}
 
 	friend class TextureAllocator;
@@ -473,6 +482,21 @@ private:
 	UINT m_MinWaveAmount;
 
 	ComPtr<ID3D12Resource> m_pStatsBuffer;
+	
+	ComPtr<ID3D12Resource> m_pVisualizationRayBuffer;
+	UINT GetVisualizationRayBufferSize() const;
+
+	ComPtr<ID3D12PipelineState> m_pVisualizeRaysPSO;
+	ComPtr<ID3D12RootSignature> m_pVisualizeRaysRootSignature;
+
+	enum VisualizeRaysRootSignatureParameters
+	{
+		VisualizeRaysInputRays = 0,
+		VisualizeRaysWorldPosition,
+		VisualizeRaysConstantBuffer,
+		VisualizeRaysOutputColor,
+		VisualizeRaysNumParameters
+	};
 
 	// We keep the material upload heap in memory so that we can do 
 	// live updates of the material list without needing to
@@ -529,6 +553,7 @@ private:
 		LightList,
 		ShaderTable,
 		StatsBuffer,
+		VisualizationRayBuffer,
 		PreviousFrameOutput,
 		NumRayTracingParameters
 	};
@@ -592,6 +617,7 @@ private:
 	UINT32 m_selectedPixelX, m_selectedPixelY;
 	UINT m_SamplesRendered;
 	bool m_bInvalidateHistory;
+	bool m_bClearVisualizationRays = true;
 	bool m_bUpdateMaterialList = false;
 
 	ComPtr<ID3D12Resource> m_pLuminanceHistogram;
@@ -680,6 +706,7 @@ private:
 		RayIndexBufferUAV,
 		IndirectArgsUAV,
 		StatsBufferUAV,
+		VisualizationRayBufferUAV,
 		MotionVectorsSRV,
 		MotionVectorsUAV,
 		LuminanceHistogramSRV,

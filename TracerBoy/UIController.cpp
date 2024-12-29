@@ -296,6 +296,15 @@ void UIController::Render(ID3D12GraphicsCommandList& commandList, const PerFrame
 		ImGui::InputFloat("Max time to render (seconds)", &debugSettings.m_TimeLimitInSeconds, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Debug Value", &debugSettings.m_DebugValue, 0.1f, 1.0f, "%.2f");
 		ImGui::InputFloat("Debug Value 2", &debugSettings.m_DebugValue2, 0.1f, 1.0f, "%.2f");
+		ImGui::Checkbox("Visualize Rays", &debugSettings.m_bVisualizeRays);
+		if (debugSettings.m_bVisualizeRays)
+		{
+			ImGui::InputInt("Max Visualizer rays", &debugSettings.m_VisualizeRayCount, 1, 16);
+			ImGui::InputFloat("Visualize Ray Width", &debugSettings.m_VisualizeRayWidth, 0.01f, 1.0f, "%.3f");
+			debugSettings.m_VisualizeRayWidth = std::max(debugSettings.m_VisualizeRayWidth, 0.00001f);
+
+			ImGui::SliderFloat("Visualizer Ray Depth", &debugSettings.m_VisualizeRayDepth, 0.0f, 10.0f);
+		}
 		ImGui::TreePop();
 	}
 

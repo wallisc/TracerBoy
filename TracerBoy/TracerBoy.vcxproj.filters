@@ -164,6 +164,12 @@
     <ClInclude Include="HistogramSharedShaderStructs.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="VisualizeRaysSharedShaderStructs.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="VisualizationRaysCommon.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PostProcessCS.hlsl">
@@ -215,6 +221,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="CalculateAveragedLuminanceCS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="VisualizeRaysCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

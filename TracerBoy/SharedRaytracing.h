@@ -20,6 +20,7 @@ RWTexture2D<float> AOVDepth : register(u6);
 RWTexture2D<float4> AOVEmissive : register(u7);
 
 RWByteAddressBuffer StatsBuffer : register(u10);
+RWByteAddressBuffer VisualizationRaysBuffer : register(u11);
 
 void OutputGlobalStats(uint NumActiveWaves)
 {

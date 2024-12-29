@@ -12,6 +12,9 @@
 #include "GenerateHistogramSharedShaderStructs.h"
 #include "GenerateHistogramCS.h"
 #include "RaytraceCS.h"
+#include "VisualizeRaysSharedShaderStructs.h"
+#include "VisualizationRaysCommon.h"
+#include "VisualizeRaysCS.h"
 #if SUPPORT_SW_RAYTRACING
 #include "SoftwareRaytraceCS.h"
 #endif
@@ -610,6 +613,7 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 
 		Parameters[RayTracingRootSignatureParameters::ShaderTable].InitAsShaderResourceView(11);
 		Parameters[RayTracingRootSignatureParameters::StatsBuffer].InitAsUnorderedAccessView(10);
+		Parameters[RayTracingRootSignatureParameters::VisualizationRayBuffer].InitAsUnorderedAccessView(11);
 
 		D3D12_STATIC_SAMPLER_DESC StaticSamplers[] =
 		{
@@ -715,6 +719,47 @@ TracerBoy::TracerBoy(ID3D12CommandQueue *pQueue) :
 	D3D12_CPU_DESCRIPTOR_HANDLE NonShaderVisibleStatsUavHandle = GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV);
 	m_pDevice->CreateUnorderedAccessView(m_pStatsBuffer.Get(), nullptr, &StatsUavDesc,  NonShaderVisibleStatsUavHandle);
 	m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::StatsBufferUAV), NonShaderVisibleStatsUavHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_RESOURCE_DESC visualizationRaysBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(GetVisualizationRayBufferSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	m_pVisualizationRayBuffer = CreateUAV(
+		L"VisualiationRays",
+		visualizationRaysBufferDesc,
+		nullptr,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC VisualizationRaysUavDesc = {};
+	VisualizationRaysUavDesc.Format = DXGI_FORMAT_R32_UINT;
+	VisualizationRaysUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	VisualizationRaysUavDesc.Buffer.NumElements = GetVisualizationRayBufferSize() / sizeof(UINT32);
+	D3D12_CPU_DESCRIPTOR_HANDLE NonShaderVisibleVisualizationRaysUavHandle = GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::VisualizationRayBufferUAV);
+	m_pDevice->CreateUnorderedAccessView(m_pVisualizationRayBuffer.Get(), nullptr, &VisualizationRaysUavDesc, NonShaderVisibleVisualizationRaysUavHandle);
+	m_pDevice->CopyDescriptorsSimple(1, GetCPUDescriptorHandle(ViewDescriptorHeapSlots::VisualizationRayBufferUAV), NonShaderVisibleVisualizationRaysUavHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	{
+		CD3DX12_ROOT_PARAMETER1 Parameters[VisualizeRaysRootSignatureParameters::VisualizeRaysNumParameters];
+		CD3DX12_DESCRIPTOR_RANGE1 WorldPositionDescriptor;
+		WorldPositionDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+		CD3DX12_DESCRIPTOR_RANGE1 outputTextureDescriptor;
+		outputTextureDescriptor.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+		Parameters[VisualizeRaysRootSignatureParameters::VisualizeRaysInputRays].InitAsShaderResourceView(0);
+		Parameters[VisualizeRaysRootSignatureParameters::VisualizeRaysWorldPosition].InitAsDescriptorTable(1, &WorldPositionDescriptor);
+		Parameters[VisualizeRaysRootSignatureParameters::VisualizeRaysOutputColor].InitAsDescriptorTable(1, &outputTextureDescriptor);
+		Parameters[VisualizeRaysRootSignatureParameters::VisualizeRaysConstantBuffer].InitAsConstants(sizeof(VisualizationRaysConstants) / sizeof(UINT32), 0);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.NumParameters = ARRAYSIZE(Parameters);
+		rootSignatureDesc.pParameters = Parameters;
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC versionedRSDesc(rootSignatureDesc);
+
+		ComPtr<ID3DBlob> pRootSignatureBlob;
+		VERIFY_HRESULT(D3D12SerializeVersionedRootSignature(&versionedRSDesc, &pRootSignatureBlob, nullptr));
+		VERIFY_HRESULT(m_pDevice->CreateRootSignature(0, pRootSignatureBlob->GetBufferPointer(), pRootSignatureBlob->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_pVisualizeRaysRootSignature.ReleaseAndGetAddressOf())));
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_pVisualizeRaysRootSignature.Get();
+		psoDesc.CS = CD3DX12_SHADER_BYTECODE(g_VisualizeRaysCS, ARRAYSIZE(g_VisualizeRaysCS));
+		VERIFY_HRESULT(m_pDevice->CreateComputePipelineState(&psoDesc, IID_GRAPHICS_PPV_ARGS(m_pVisualizeRaysPSO.ReleaseAndGetAddressOf())));
+	}
 
 	if(m_bSupportsInlineRaytracing && m_bSupportsHardwareRaytracing)
 	{
@@ -2723,8 +2768,22 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	{
 		m_SamplesRendered = 0;
 		m_RenderStartTime = std::chrono::steady_clock::now();
+		m_bClearVisualizationRays = true;
 	}
 
+	if(m_bClearVisualizationRays)
+	{
+		const UINT ZeroValue[4] = {};
+		commandList.ClearUnorderedAccessViewUint(
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::VisualizationRayBufferUAV),
+			GetNonShaderVisibleCPUDescriptorHandle(ViewDescriptorHeapSlots::VisualizationRayBufferUAV),
+			m_pVisualizationRayBuffer.Get(),
+			ZeroValue,
+			0,
+			nullptr);
+		m_bClearVisualizationRays = false;
+	}
+	
 	if (m_bUpdateMaterialList)
 	{
 		UpdateMaterialBuffer(commandList);
@@ -2834,6 +2893,7 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 	SetRootDescriptorTable(bIsGraphics, commandList, RayTracingRootSignatureParameters::AOVDescriptorTable, GetGPUDescriptorHandle(ViewDescriptorHeapSlots::AOVBaseUAVSlot));
 	SetRootShaderResourceView(bIsGraphics, commandList, RayTracingRootSignatureParameters::ShaderTable, m_pHitGroupShaderTable->GetGPUVirtualAddress());
 	SetRootUnorderedAccessView(bIsGraphics, commandList, RayTracingRootSignatureParameters::StatsBuffer, m_pStatsBuffer->GetGPUVirtualAddress());
+	SetRootUnorderedAccessView(bIsGraphics, commandList, RayTracingRootSignatureParameters::VisualizationRayBuffer, m_pVisualizationRayBuffer->GetGPUVirtualAddress());
 
 	if (bRender)
 	{
@@ -3138,6 +3198,51 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 		FinalBuffer = m_pPostProcessOutput;
 	}
 
+	bool bVisualizeRays = outputSettings.m_debugSettings.m_bVisualizeRays;
+	if (bVisualizeRays)
+	{
+		ScopedResourceBarrier visualizationRayBarrier(commandList, m_pVisualizationRayBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+		// Post process just wrote to the UAV so need to do a UAV barrier before writing on top of it
+		D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
+		commandList.ResourceBarrier(1, &uavBarrier);
+
+		PIXScopedEvent(&commandList, PIX_COLOR_DEFAULT, L"Visualize Rays");
+
+		commandList.SetComputeRootSignature(m_pVisualizeRaysRootSignature.Get());
+		commandList.SetPipelineState(m_pVisualizeRaysPSO.Get());
+
+		auto outputDesc = m_pPostProcessOutput->GetDesc();
+		VisualizationRaysConstants visualizationRaysConstants;
+		visualizationRaysConstants.Resolution.x = static_cast<UINT32>(outputDesc.Width);
+		visualizationRaysConstants.Resolution.y = static_cast<UINT32>(outputDesc.Height);
+
+		visualizationRaysConstants.CylinderRadius = outputSettings.m_debugSettings.m_VisualizeRayWidth;
+		visualizationRaysConstants.RayDepth = outputSettings.m_debugSettings.m_VisualizeRayDepth;
+		visualizationRaysConstants.RayCount = outputSettings.m_debugSettings.m_VisualizeRayCount > 0 ? outputSettings.m_debugSettings.m_VisualizeRayCount : 999999;
+		visualizationRaysConstants.FocalLength = m_camera.FocalDistance;
+		visualizationRaysConstants.CameraPosition = { m_camera.Position.x, m_camera.Position.y, m_camera.Position.z };
+		visualizationRaysConstants.LensHeight = m_camera.LensHeight;
+		visualizationRaysConstants.CameraLookAt = { m_camera.LookAt.x, m_camera.LookAt.y, m_camera.LookAt.z };
+		visualizationRaysConstants.CameraRight = { m_camera.Right.x, m_camera.Right.y, m_camera.Right.z };
+		visualizationRaysConstants.CameraUp = { m_camera.Up.x, m_camera.Up.y, m_camera.Up.z };
+
+		commandList.SetComputeRoot32BitConstants(VisualizeRaysRootSignatureParameters::VisualizeRaysConstantBuffer, sizeof(visualizationRaysConstants) / sizeof(UINT32), &visualizationRaysConstants, 0);
+		commandList.SetComputeRootDescriptorTable(
+			VisualizeRaysRootSignatureParameters::VisualizeRaysWorldPosition,
+			GetGPUDescriptorHandle(GetWorldPositionSRV()));
+		commandList.SetComputeRootShaderResourceView(VisualizeRaysRootSignatureParameters::VisualizeRaysInputRays, m_pVisualizationRayBuffer->GetGPUVirtualAddress());
+		commandList.SetComputeRootDescriptorTable(
+			VisualizeRaysRootSignatureParameters::VisualizeRaysOutputColor,
+			GetGPUDescriptorHandle(ViewDescriptorHeapSlots::PostProcessOutputUAV));
+
+		UINT DispatchWidth = (visualizationRaysConstants.Resolution.x - 1) / VISUALIZE_RAYS_THREAD_GROUP_WIDTH + 1;
+		UINT DispatchHeight = (visualizationRaysConstants.Resolution.y - 1) / VISUALIZE_RAYS_THREAD_GROUP_HEIGHT + 1;
+
+		commandList.Dispatch(DispatchWidth, DispatchHeight, 1);
+		FinalBuffer = m_pPostProcessOutput;
+	}
+
 
 	switch (selectedTAAUpscaler)
 	{
@@ -3230,8 +3335,6 @@ void TracerBoy::Render(ID3D12GraphicsCommandList& commandList, ID3D12Resource* p
 			break;
 		}
 	}
-
-
 
 	{
 		D3D12_RESOURCE_BARRIER preCopyBarriers[] =
@@ -3394,6 +3497,14 @@ void TracerBoy::Update(int mouseX, int mouseY, bool keyboardInput[CHAR_MAX], flo
 		m_camera.Up = { XMVectorGetX(UpAxis),  XMVectorGetY(UpAxis), XMVectorGetZ(UpAxis) };
 		InvalidateHistory();
 	}
+}
+
+UINT TracerBoy::GetVisualizationRayBufferSize() const
+{
+	// VISUALIZER_RAY_SIZE_IN_BYTES is stale and needs to be updated because VisualizerRay was modified
+	static_assert(sizeof(VisualizerRay) == VISUALIZER_RAY_SIZE_IN_BYTES);
+
+	return MAX_VISUALIZER_RAYS * VISUALIZER_RAY_SIZE_IN_BYTES + VISUALIZER_RAY_COUNTER_SIZE_IN_BYTES;
 }
 
 ComPtr<ID3D12Resource> TracerBoy::CreateUAV(
