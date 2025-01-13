@@ -33,7 +33,7 @@ struct HitGroupShaderRecord
 	BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES]; // 32
 	UINT MaterialIndex; // 4
 	UINT VertexBufferIndex; // 4
-	UINT VertexBufferOffset; // 4
+	UINT VertexBufferOffsetInVertices; // 4
 	UINT IndexBufferIndex; // 4
 	UINT IndexBufferOffset; // 4
 	UINT GeometryIndex; // 4
@@ -973,7 +973,7 @@ public:
 	{
 	}
 
-	D3D12_GPU_VIRTUAL_ADDRESS Allocate(UINT Size, ComPtr<ID3D12Resource>* ppResource = nullptr, UINT* pOffset = nullptr)
+	D3D12_GPU_VIRTUAL_ADDRESS Allocate(UINT Size, ComPtr<ID3D12Resource>* ppResource = nullptr, UINT* pOffset = nullptr, UINT RequiredAlignment = 0)
 	{
 		// If it's too big to fit into an allocator block, just make a one-off resource just for this allocation request
 		if (Size > AllocatorBlockSize)
@@ -995,7 +995,24 @@ public:
 			return pResource->GetGPUVirtualAddress();
 		}
 
-		Offset += Alignment - (Offset % Alignment);
+		UINT CommonAlignment = Alignment;
+		if (RequiredAlignment > 0 && RequiredAlignment != Alignment)
+		{
+			UINT LowerAlignment = RequiredAlignment > Alignment ? Alignment : RequiredAlignment;
+			UINT HigherAlignment = RequiredAlignment > Alignment ? RequiredAlignment : Alignment;
+			
+			if ((HigherAlignment % LowerAlignment) == 0)
+			{
+				CommonAlignment = HigherAlignment;
+			}
+			// TODO: Probably could do better by finding a common denominator 
+			else
+			{
+				CommonAlignment = HigherAlignment * LowerAlignment;
+			}
+		}
+
+		Offset += CommonAlignment - (Offset % CommonAlignment);
 		bool bCurrentBlockFull = (Offset + Size) > AllocatorBlockSize;
 		if (bCurrentBlockFull || (CurrentBlock == nullptr))
 		{
@@ -1339,7 +1356,8 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 		std::vector<InstanceEntry> instanceList;
 		instanceList.reserve(instanceCount);
 
-		std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, UINT32> ResourceToSRVIndex;
+		std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, UINT32> VertexBufferToSRVIndex;
+		std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, UINT32> IndexBufferToSRVIndex;
 
 		struct CopyJob
 		{
@@ -1616,7 +1634,7 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 				UploadHeapAllocator.Allocate(vertexBufferSize, &pUploadVertexBuffer, &uploadVertexBufferOffset);				
 				UploadHeapAllocator.Allocate(positionBufferSize, &pUploadPositionBuffer, &uploadPositionBufferOffset);
 
-				BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset);
+				BufferAllocator.Allocate(vertexBufferSize, &pVertexBuffer, &vertexBufferOffset, sizeof(Vertex));
 				VERIFY((vertexBufferOffset % D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT) == 0)
 				BufferAllocator.Allocate(positionBufferSize, &pPositionBuffer, &positionBufferOffset);
 
@@ -1656,23 +1674,25 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 							uv = pTriangleMesh->texcoord[v];
 						}
 						pVertexBufferData[v].Normal = { parserNormal.x, parserNormal.y, parserNormal.z };
-						pVertexBufferData[v].UV = { uv.x, uv.y };
+						pVertexBufferData[v].UV0 = uv.x;
+						pVertexBufferData[v].UV1 = uv.y;
 						pVertexBufferData[v].Tangent = { parserTangent.x, parserTangent.y, parserTangent.z };
 						pPositionBufferData[v] = { parserVertex.x, parserVertex.y, parserVertex.z };
 					}
 
-					auto SRVIndexIter = ResourceToSRVIndex.find(pVertexBuffer->GetGPUVirtualAddress());
-					if (SRVIndexIter == ResourceToSRVIndex.end())
+					auto SRVIndexIter = VertexBufferToSRVIndex.find(pVertexBuffer->GetGPUVirtualAddress());
+					if (SRVIndexIter == VertexBufferToSRVIndex.end())
 					{
 						VertexBufferIndex = AllocateDescriptorHeapSlot();
-						ResourceToSRVIndex[pVertexBuffer->GetGPUVirtualAddress()] = VertexBufferIndex;
+						VertexBufferToSRVIndex[pVertexBuffer->GetGPUVirtualAddress()] = VertexBufferIndex;
 
 						D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
 						D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 						SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-						SRVDesc.Format = DXGI_FORMAT_R32_FLOAT;
+						SRVDesc.Format = DXGI_FORMAT_UNKNOWN;
 						SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-						SRVDesc.Buffer.NumElements = pVertexBuffer->GetDesc().Width / 4;
+						SRVDesc.Buffer.StructureByteStride = sizeof(Vertex);
+						SRVDesc.Buffer.NumElements = pVertexBuffer->GetDesc().Width / sizeof(Vertex);
 						SRVDesc.Buffer.FirstElement = 0;
 
 						m_pDevice->CreateShaderResourceView(pVertexBuffer.Get(), &SRVDesc, GetCPUDescriptorHandle(VertexBufferIndex));
@@ -1729,11 +1749,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 						}
 					}
 
-					auto SRVIndexIter = ResourceToSRVIndex.find(pIndexBuffer->GetGPUVirtualAddress());
-					if (SRVIndexIter == ResourceToSRVIndex.end())
+					auto SRVIndexIter = IndexBufferToSRVIndex.find(pIndexBuffer->GetGPUVirtualAddress());
+					if (SRVIndexIter == IndexBufferToSRVIndex.end())
 					{
 						IndexBufferIndex = AllocateDescriptorHeapSlot();
-						ResourceToSRVIndex[pIndexBuffer->GetGPUVirtualAddress()] = IndexBufferIndex;
+						IndexBufferToSRVIndex[pIndexBuffer->GetGPUVirtualAddress()] = IndexBufferIndex;
 
 						D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
 						D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
@@ -1805,9 +1825,11 @@ void TracerBoy::LoadScene(ID3D12GraphicsCommandList& commandList,
 			shaderRecord.GeometryIndex = geometryCount++;
 			shaderRecord.MaterialIndex = materialIndex;
 			shaderRecord.VertexBufferIndex = shapeCacheEntry.Buffers.back().VertexBufferIndex;
-			shaderRecord.VertexBufferOffset = shapeCacheEntry.Buffers.back().VertexBufferOffset;
 			shaderRecord.IndexBufferIndex = shapeCacheEntry.Buffers.back().IndexBufferIndex;
 			shaderRecord.IndexBufferOffset = shapeCacheEntry.Buffers.back().IndexBufferOffset;
+
+			VERIFY(shapeCacheEntry.Buffers.back().VertexBufferOffset % sizeof(Vertex) == 0);
+			shaderRecord.VertexBufferOffsetInVertices = shapeCacheEntry.Buffers.back().VertexBufferOffset / sizeof(Vertex);
 
 			if (m_bSupportsHardwareRaytracing)
 			{

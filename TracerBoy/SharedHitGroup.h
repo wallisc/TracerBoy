@@ -15,7 +15,7 @@ struct HitGroupShaderRecord
 	uint ShaderIdentifier[8]; // 32
 	uint MaterialIndex; // 4
 	uint VertexBufferIndex; // 4
-	uint VertexBufferOffset; // 4
+	uint VertexBufferOffsetInVertices; // 4
 	uint IndexBufferIndex; // 4
 	uint IndexBufferOffset; // 4
 	uint GeometryIndex; // 4
@@ -24,7 +24,7 @@ struct HitGroupShaderRecord
 
 StructuredBuffer<HitGroupShaderRecord> ShaderTable: register(t11);
 Buffer<uint> IndexBuffers[] : register(t0, space2);
-Buffer<float> VertexBuffers[] : register(t0, space3);
+StructuredBuffer<Vertex> VertexBuffers[] : register(t0, space3);
 
 struct GeometryInfo
 {
@@ -35,7 +35,7 @@ struct GeometryInfo
 	uint VertexBufferFirstElement;
 };
 
-Buffer<float> GetVertexBuffer(uint Index)
+StructuredBuffer<Vertex> GetVertexBuffer(uint Index)
 {
 	return VertexBuffers[NonUniformResourceIndex(Index)];
 }
@@ -55,7 +55,7 @@ GeometryInfo GetGeometryInfo(uint GeometryIndex)
 	GeometryInfo info;
 	info.MaterialIndex = ShaderRecord.MaterialIndex;
 	info.VertexBufferIndex = ShaderRecord.VertexBufferIndex;
-	info.VertexBufferFirstElement = ShaderRecord.VertexBufferOffset / VertexBufferElementSize;
+	info.VertexBufferFirstElement = ShaderRecord.VertexBufferOffsetInVertices;
 	info.IndexBufferIndex = ShaderRecord.IndexBufferIndex;
 	info.IndexBufferFirstElement = ShaderRecord.IndexBufferOffset / IndexBufferElementSize;
 	return info;
@@ -68,21 +68,10 @@ struct HitInfo
 	float3 tangent;
 };
 
-float3 GetFloat3FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint dataOffset)
+Vertex GetVertex(GeometryInfo Geometry, uint vertexIndex)
 {
-	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
-	return float3(
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 1],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 2]);
-}
-
-float2 GetFloat2FromVertexBuffer(GeometryInfo Geometry, uint vertexIndex, uint dataOffset)
-{
-	Buffer<float> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
-	return float2(
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset],
-		VertexBuffer[VertexStride * vertexIndex + Geometry.VertexBufferFirstElement + dataOffset + 1]);
+	StructuredBuffer<Vertex> VertexBuffer = GetVertexBuffer(Geometry.VertexBufferIndex);
+	return VertexBuffer[vertexIndex + Geometry.VertexBufferFirstElement];
 }
 
 uint3 GetIndices(GeometryInfo Geometry, uint PrimitiveIndex)
@@ -94,12 +83,18 @@ uint3 GetIndices(GeometryInfo Geometry, uint PrimitiveIndex)
 		IndexBuffer[Geometry.IndexBufferFirstElement + PrimitiveIndex * 3 + 2]);
 }
 
+float2 GetVertexUV(GeometryInfo Geometry, uint vertexIndex)
+{
+	Vertex vertex = GetVertex(Geometry, vertexIndex);
+	return float2(vertex.UV0, vertex.UV1);
+}
+
+
 float2 GetUV(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint uvOffset = 3;
-	float2 uv0 = GetFloat2FromVertexBuffer(Geometry, indices.x, uvOffset);
-	float2 uv1 = GetFloat2FromVertexBuffer(Geometry, indices.y, uvOffset);
-	float2 uv2 = GetFloat2FromVertexBuffer(Geometry, indices.z, uvOffset);
+	float2 uv0 = GetVertexUV(Geometry, indices.x);
+	float2 uv1 = GetVertexUV(Geometry, indices.y);
+	float2 uv2 = GetVertexUV(Geometry, indices.z);
 
 	return
 		barycentrics.x * uv0 +
@@ -109,10 +104,9 @@ float2 GetUV(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 
 float3 GetNormal(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint normalOffset = 0;
-	float3 n0 = GetFloat3FromVertexBuffer(Geometry, indices.x, normalOffset);
-	float3 n1 = GetFloat3FromVertexBuffer(Geometry, indices.y, normalOffset);
-	float3 n2 = GetFloat3FromVertexBuffer(Geometry, indices.z, normalOffset);
+	float3 n0 = GetVertex(Geometry, indices.x).Normal;
+	float3 n1 = GetVertex(Geometry, indices.y).Normal;
+	float3 n2 = GetVertex(Geometry, indices.z).Normal;
 
 	return normalize(
 		barycentrics.x * n0 +
@@ -122,10 +116,10 @@ float3 GetNormal(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 
 float3 GetTangent(GeometryInfo Geometry, uint3 indices, float3 barycentrics)
 {
-	const uint tangentOffset = 5;
-	float3 t0 = GetFloat3FromVertexBuffer(Geometry, indices.x, tangentOffset);
-	float3 t1 = GetFloat3FromVertexBuffer(Geometry, indices.y, tangentOffset);
-	float3 t2 = GetFloat3FromVertexBuffer(Geometry, indices.z, tangentOffset);
+	float3 t0 = GetVertex(Geometry, indices.x).Tangent;
+	float3 t1 = GetVertex(Geometry, indices.y).Tangent;
+	float3 t2 = GetVertex(Geometry, indices.z).Tangent;
+
 	return normalize(
 		barycentrics.x * t0 +
 		barycentrics.y * t1 +

@@ -84,9 +84,11 @@ struct ConfigConstants
 
 struct Vertex
 {
-	float3 Normal;
-	float2 UV;
-	float3 Tangent;
+	float3 Normal;  // 3
+	float UV0;      // 1
+
+	float UV1;      // 1
+	float3 Tangent; // 3
 };
 
 struct Light
